@@ -48,7 +48,7 @@ public class Http2PingEvent extends AbstractHttp2Event {
      * Creates a PING event with an empty 8-byte payload.
      * @param streamId the associated stream ID
      */
-    public Http2PingEvent(int streamId) {
+    public Http2PingEvent(long streamId) {
         this.streamId(streamId);
         this.data = ByteBuf.wrap(new byte[8]);
     }
@@ -58,7 +58,7 @@ public class Http2PingEvent extends AbstractHttp2Event {
      * @param streamId the associated stream ID
      * @param data the PING payload, which must be exactly 8 bytes
      */
-    public Http2PingEvent(int streamId, ByteBuf data) {
+    public Http2PingEvent(long streamId, ByteBuf data) {
         this.streamId(streamId);
 
         if (data == null) {

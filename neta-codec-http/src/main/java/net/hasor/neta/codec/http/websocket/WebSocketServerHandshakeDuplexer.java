@@ -48,7 +48,7 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
         private       long                      attemptSeq;
         private       HttpVersion               httpVersion;
         private       HttpMethod                method;
-        private       int                       streamId;
+        private       long                      streamId;
         private       WebSocketVersion          version;
         private       String                    path;
         private       String                    host;

@@ -35,22 +35,23 @@ import net.hasor.cobble.function.Release;
  * <p>
  * In HTTP/2 pass-through scenarios, objects decoded from HTTP/2 carry their source stream identifier through {@link #streamId()} so protocol-agnostic proxying and routing can preserve stream affinity.
  * HTTP/1.x objects usually return {@code 0}.
+ * The semantic stream identifier is modeled as {@code long} so higher-level code can remain compatible with protocols whose native stream space exceeds HTTP/2.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-03
  */
 public interface HttpObject extends Release {
     /**
-     * Returns the HTTP/2 stream identifier associated with this object, or {@code 0} when no stream is attached.
+     * Returns the semantic stream identifier associated with this object, or {@code 0} when no stream is attached.
      * @return stream identifier
      */
-    int streamId();
+    long streamId();
 
     /**
-     * Associates an HTTP/2 stream identifier with this object and returns the current object for chaining.
+     * Associates a semantic stream identifier with this object and returns the current object for chaining.
      * @param streamId stream identifier
      * @return this object
      */
-    HttpObject streamId(int streamId);
+    HttpObject streamId(long streamId);
 
     /**
      * Returns whether this object belongs to a malformed HTTP message.

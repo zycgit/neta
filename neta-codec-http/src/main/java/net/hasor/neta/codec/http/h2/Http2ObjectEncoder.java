@@ -282,7 +282,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
     }
 
     private void bindRequest(Http2EncoderContent state, HttpRequest request) {
-        int streamId = request.streamId();
+        long streamId = request.streamId();
         if (streamId > 0) {
             state.setCurrentStreamId(streamId);
         } else if (!this.serverMode) {
@@ -295,7 +295,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
     }
 
     private void bindResponse(Http2EncoderContent state, ProtoContext context, HttpResponse response) {
-        int streamId = this.resolveResponseStreamId(state, context, response);
+        long streamId = this.resolveResponseStreamId(state, context, response);
         response.streamId(streamId);
         state.pendingResponse(response);
         state.pendingRequest(null);
@@ -303,7 +303,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
     }
 
     private void encodeFullResponse(Http2EncoderContent state, ProtoContext context, FullHttpResponse response, ProtoSndQueue<Http2Frame> dst) {
-        int streamId = this.resolveResponseStreamId(state, context, response);
+        long streamId = this.resolveResponseStreamId(state, context, response);
         ByteBuf body = response.content();
         boolean hasBody = body != null && body.readableBytes() > 0;
         this.encodeHeaders(state, this.buildResponseHeaders(response, response), streamId, !hasBody, dst);
@@ -317,7 +317,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
     }
 
     private void encodeFullRequest(Http2EncoderContent state, ProtoContext context, FullHttpRequest request, ProtoSndQueue<Http2Frame> dst) {
-        int streamId = request.streamId() > 0 ? request.streamId() : state.allocateNextStreamId();
+        long streamId = request.streamId() > 0 ? request.streamId() : state.allocateNextStreamId();
         request.streamId(streamId);
         ByteBuf body = request.content();
         boolean hasBody = body != null && body.readableBytes() > 0;
@@ -333,14 +333,14 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
 
     private void encodeHeaderBlock(Http2EncoderContent state, ProtoContext context, HttpHeaders headers, ProtoSndQueue<Http2Frame> dst) {
         if (state.pendingRequest() != null) {
-            int streamId = this.resolveActiveStreamId(state, headers);
+            long streamId = this.resolveActiveStreamId(state, headers);
             this.encodeHeaders(state, this.buildRequestHeaders(state.pendingRequest(), headers), streamId, false, dst);
             state.clearPendingStartLine();
             return;
         }
 
         if (state.pendingResponse() != null) {
-            int streamId = this.resolveActiveStreamId(state, headers);
+            long streamId = this.resolveActiveStreamId(state, headers);
             this.encodeHeaders(state, this.buildResponseHeaders(state.pendingResponse(), headers), streamId, false, dst);
             state.clearPendingStartLine();
             return;
@@ -351,7 +351,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
     }
 
     private void encodeTrailerHeaders(Http2EncoderContent state, ProtoContext context, TrailerHttpHeaders headers, ProtoSndQueue<Http2Frame> dst) {
-        int streamId = this.resolveActiveStreamId(state, headers);
+        long streamId = this.resolveActiveStreamId(state, headers);
         this.encodeHeaders(state, this.buildTrailerHeaders(headers), streamId, true, dst);
         this.recordOutboundHalfClosed(context, streamId);
         state.trailingHeadersSent(true);
@@ -364,7 +364,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
             return;
         }
 
-        int streamId = this.ensureHeaderBlock(state, context, content, dst);
+        long streamId = this.ensureHeaderBlock(state, context, content, dst);
         this.encodeData(context, streamId, body, false, dst);
     }
 
@@ -374,12 +374,12 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
             return;
         }
 
-        int streamId = this.ensureHeaderBlock(state, context, content, dst);
+        long streamId = this.ensureHeaderBlock(state, context, content, dst);
         this.encodeData(context, streamId, body, false, dst);
     }
 
     private void encodeLastContent(Http2EncoderContent state, ProtoContext context, LastHttpContent lastContent, ProtoSndQueue<Http2Frame> dst) {
-        int streamId = this.ensureHeaderBlock(state, context, lastContent, dst);
+        long streamId = this.ensureHeaderBlock(state, context, lastContent, dst);
         ByteBuf body = lastContent.content();
         int bodyLen = body != null ? body.readableBytes() : 0;
         if (state.trailingHeadersSent()) {
@@ -396,12 +396,12 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
         state.trailingHeadersSent(false);
     }
 
-    private void recordOutboundHalfClosed(ProtoContext context, int streamId) {
+    private void recordOutboundHalfClosed(ProtoContext context, long streamId) {
         this.fireEventRcv(context, Http2StreamCloseEvent.class, new Http2StreamCloseEvent(streamId, false).remote(false));
     }
 
-    private int ensureHeaderBlock(Http2EncoderContent state, ProtoContext context, HttpObject content, ProtoSndQueue<Http2Frame> dst) {
-        int streamId = this.resolveActiveStreamId(state, content);
+    private long ensureHeaderBlock(Http2EncoderContent state, ProtoContext context, HttpObject content, ProtoSndQueue<Http2Frame> dst) {
+        long streamId = this.resolveActiveStreamId(state, content);
         if (state.pendingRequest() != null) {
             this.encodeHeaders(state, this.buildRequestHeaders(state.pendingRequest(), null), streamId, false, dst);
             state.clearPendingStartLine();
@@ -412,8 +412,8 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
         return streamId;
     }
 
-    private int resolveResponseStreamId(Http2EncoderContent state, ProtoContext context, HttpObject responseObject) {
-        int streamId = responseObject.streamId();
+    private long resolveResponseStreamId(Http2EncoderContent state, ProtoContext context, HttpObject responseObject) {
+        long streamId = responseObject.streamId();
         Http2DecoderContent decoderState = context.context(Http2DecoderContent.class);
         if (streamId > 0) {
             state.setCurrentStreamId(streamId);
@@ -423,33 +423,38 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
             return streamId;
         }
         if (decoderState != null) {
-            streamId = decoderState.pollResponseStreamId();
+            long queuedStreamId = decoderState.pollResponseStreamId();
+            streamId = queuedStreamId;
             if (streamId > 0) {
-                state.setCurrentStreamId(streamId);
-                responseObject.streamId(streamId);
-                return streamId;
+                state.setCurrentStreamId(queuedStreamId);
+                responseObject.streamId(queuedStreamId);
+                return queuedStreamId;
             }
         }
-        streamId = state.currentStreamId();
+
+        long currentStreamId = state.currentStreamId();
+        streamId = currentStreamId;
         if (streamId > 0) {
-            responseObject.streamId(streamId);
-            return streamId;
+            responseObject.streamId(currentStreamId);
+            return currentStreamId;
         }
 
         String msg = "HTTP/2: missing response streamId";
         throw new HttpProtocolConnectionException(Http2ErrorCode.PROTOCOL_ERROR, msg);
     }
 
-    private int resolveActiveStreamId(Http2EncoderContent state, HttpObject httpObject) {
-        int streamId = httpObject.streamId();
+    private long resolveActiveStreamId(Http2EncoderContent state, HttpObject httpObject) {
+        long streamId = httpObject.streamId();
         if (streamId > 0) {
             state.setCurrentStreamId(streamId);
             return streamId;
         }
-        streamId = state.currentStreamId();
+
+        long currentStreamId = state.currentStreamId();
+        streamId = currentStreamId;
         if (streamId > 0) {
-            httpObject.streamId(streamId);
-            return streamId;
+            httpObject.streamId(currentStreamId);
+            return currentStreamId;
         }
 
         String msg = "HTTP/2: missing active streamId";
@@ -504,7 +509,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
         }
     }
 
-    private void encodeHeaders(Http2EncoderContent state, HttpHeaders headers, int streamId, boolean endStream, ProtoSndQueue<Http2Frame> dst) {
+    private void encodeHeaders(Http2EncoderContent state, HttpHeaders headers, long streamId, boolean endStream, ProtoSndQueue<Http2Frame> dst) {
         state.beginHeaderEncode();
         for (String headerName : headers.headerNames()) {
             for (String value : headers.getValues(headerName)) {
@@ -531,7 +536,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
         }
     }
 
-    private void encodeData(ProtoContext context, int streamId, ByteBuf body, boolean endStream, ProtoSndQueue<Http2Frame> dst) {
+    private void encodeData(ProtoContext context, long streamId, ByteBuf body, boolean endStream, ProtoSndQueue<Http2Frame> dst) {
         int bodyLen = body != null ? body.readableBytes() : 0;
         if (bodyLen == 0) {
             dst.offerMessage(Http2Frame.data(streamId, endStream ? Http2Flags.END_STREAM : Http2Flags.NONE, new byte[0]));
@@ -568,7 +573,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
     }
 
     private void sendGoaway(ProtoContext context, Http2GoawayEvent event) {
-        Http2Frame frame = goawayFrame((int) event.lastAcceptedId(), event.errorCode(), event.debugData());
+        Http2Frame frame = goawayFrame(event.lastAcceptedId(), event.errorCode(), event.debugData());
         this.queueControlFrame(context, frame);
         this.fireEventRcv(context, Http2GoawayEvent.class, event);
     }
@@ -580,13 +585,13 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
         }
 
         long code = normalizeResetErrorCode(resetEvent.errorCode());
-        Http2Frame frame = resetStreamFrame((int) streamId, code);
+        Http2Frame frame = resetStreamFrame(streamId, code);
         this.queueControlFrame(context, frame);
         this.fireEventRcv(context, Http2ResetEvent.class, resetEvent);
     }
 
     private void sendPriority(ProtoContext context, Http2PriorityEvent event) {
-        Http2Frame frame = priorityFrame(Math.toIntExact(event.streamId()), event.streamDependency(), event.weight(), event.exclusive());
+        Http2Frame frame = priorityFrame(event.streamId(), event.streamDependency(), event.weight(), event.exclusive());
         this.queueControlFrame(context, frame);
     }
 
@@ -597,7 +602,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
         }
 
         int maxFrameSize = this.resolvePeerMaxFrameSize(context);
-        List<Http2Frame> frames = pushPromiseFrames(Math.toIntExact(event.streamId()), event.promisedStreamId(), event.headers(), (int) this.localSettings.headerTableSize(), maxFrameSize);
+        List<Http2Frame> frames = pushPromiseFrames(event.streamId(), event.promisedStreamId(), event.headers(), (int) this.localSettings.headerTableSize(), maxFrameSize);
         this.queueControlFrames(context, frames);
     }
 
@@ -638,7 +643,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
     }
 
     private void handleStreamError(ProtoContext context, HttpProtocolException protocolError) {
-        int streamId = protocolError.getStreamId();
+        long streamId = protocolError.getStreamId();
         Http2DecoderContent state = context.context(Http2DecoderContent.class);
         if (state != null) {
             state.closeStream(streamId);
@@ -655,7 +660,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
 
     private void handleConnectionError(ProtoContext context, HttpProtocolException protocolError) {
         Http2DecoderContent state = context.context(Http2DecoderContent.class);
-        int lastAcceptedStreamId = state != null ? Math.max(state.lastEmittedStreamId(), 0) : 0;
+        long lastAcceptedStreamId = state != null ? Math.max(state.lastEmittedStreamId(), 0) : 0;
         byte[] debugData = buildDebugData(protocolError);
         long errorCode = resolveErrorCode(protocolError.errorCode(), Http2ErrorCode.INTERNAL_ERROR);
         Http2Frame frame = goawayFrame(lastAcceptedStreamId, errorCode, debugData);
@@ -681,7 +686,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
         }
     }
 
-    private static Http2Frame buildWindowUpdateFrame(int streamId, int increment) {
+    private static Http2Frame buildWindowUpdateFrame(long streamId, int increment) {
         byte[] payload = new byte[4];
         payload[0] = (byte) ((increment >> 24) & 0x7F);
         payload[1] = (byte) ((increment >> 16) & 0xFF);
@@ -751,11 +756,11 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
         }
     }
 
-    private static Http2Frame resetStreamFrame(int streamId, long errorCode) {
+    private static Http2Frame resetStreamFrame(long streamId, long errorCode) {
         return Http2Frame.rstStream(streamId, int32(errorCode));
     }
 
-    private static Http2Frame priorityFrame(int streamId, int streamDependency, int weight, boolean exclusive) {
+    private static Http2Frame priorityFrame(long streamId, long streamDependency, int weight, boolean exclusive) {
         if (streamId <= 0) {
             String msg = "HTTP/2: PRIORITY streamId must be positive";
             throw new HttpProtocolConnectionException(streamId, Http2ErrorCode.PROTOCOL_ERROR, msg);
@@ -774,13 +779,14 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
         }
 
         byte[] payload = new byte[5];
-        long encodedDependency = exclusive ? (((long) streamDependency) | 0x80000000L) : streamDependency;
+        int wireDependency = Http2Frame.requireWireStreamId(streamDependency);
+        long encodedDependency = exclusive ? (((long) wireDependency) | 0x80000000L) : wireDependency;
         write32Bits(payload, 0, encodedDependency);
         payload[4] = (byte) (weight - 1);
         return Http2Frame.priority(streamId, payload);
     }
 
-    private static Http2Frame goawayFrame(int lastStreamId, long errorCode, byte[] debugData) {
+    private static Http2Frame goawayFrame(long lastStreamId, long errorCode, byte[] debugData) {
         byte[] safeDebugData = debugData == null ? new byte[0] : debugData.clone();
         byte[] payload = new byte[8 + safeDebugData.length];
         write31Bits(payload, lastStreamId);
@@ -789,7 +795,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
         return Http2Frame.goaway(payload);
     }
 
-    private static List<Http2Frame> pushPromiseFrames(int streamId, int promisedStreamId, HttpHeaders headers, int maxHeaderTableSize, int maxFrameSize) {
+    private static List<Http2Frame> pushPromiseFrames(long streamId, long promisedStreamId, HttpHeaders headers, int maxHeaderTableSize, int maxFrameSize) {
         if (streamId <= 0 || promisedStreamId <= 0) {
             String msg = "HTTP/2: PUSH_PROMISE streamId and promisedStreamId must be positive";
             throw new HttpProtocolConnectionException(streamId, Http2ErrorCode.PROTOCOL_ERROR, msg);

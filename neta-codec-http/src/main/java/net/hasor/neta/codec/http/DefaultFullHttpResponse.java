@@ -122,7 +122,7 @@ public class DefaultFullHttpResponse extends AbstractHttpObject<FullHttpResponse
     }
 
     @Override
-    public FullHttpResponse streamId(int streamId) {
+    public FullHttpResponse streamId(long streamId) {
         super.streamId(streamId);
         this.responseLine.streamId(streamId);
         this.headers.streamId(streamId);

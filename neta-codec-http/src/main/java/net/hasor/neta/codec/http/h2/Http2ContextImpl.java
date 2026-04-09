@@ -50,7 +50,7 @@ class Http2ContextImpl implements Http2Context {
     }
 
     @Override
-    public int lastStreamId() {
+    public long lastStreamId() {
         return this.state.lastStreamId();
     }
 

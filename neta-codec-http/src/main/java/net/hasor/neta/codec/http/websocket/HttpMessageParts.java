@@ -32,7 +32,7 @@ final class HttpMessageParts {
     private HttpMethod         method;
     private HttpStatus         status;
     private String             uri;
-    private int                streamId;
+    private long               streamId;
     private DefaultHttpHeaders headers;
     private CompositeByteBuf   body;
     private boolean            active;
@@ -139,7 +139,7 @@ final class HttpMessageParts {
      * Return the stream identifier associated with the aggregated message.
      * @return stream identifier
      */
-    public int streamId() {
+    public long streamId() {
         return this.streamId;
     }
 

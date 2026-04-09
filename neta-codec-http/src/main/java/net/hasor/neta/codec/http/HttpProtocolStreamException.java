@@ -27,7 +27,7 @@ public class HttpProtocolStreamException extends HttpProtocolException {
      * @param errorCode protocol error code
      * @param message exception description
      */
-    public HttpProtocolStreamException(int streamId, long errorCode, String message) {
+    public HttpProtocolStreamException(long streamId, long errorCode, String message) {
         super(errorCode, message);
         this.setStreamId(streamId);
     }
@@ -39,7 +39,7 @@ public class HttpProtocolStreamException extends HttpProtocolException {
      * @param message exception description
      * @param cause root cause exception
      */
-    public HttpProtocolStreamException(int streamId, long errorCode, String message, Throwable cause) {
+    public HttpProtocolStreamException(long streamId, long errorCode, String message, Throwable cause) {
         super(errorCode, message, cause);
         this.setStreamId(streamId);
     }

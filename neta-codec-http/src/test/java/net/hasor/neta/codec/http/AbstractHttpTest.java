@@ -148,7 +148,7 @@ public class AbstractHttpTest {
         return request;
     }
 
-    protected static FullHttpResponse textResponse(int streamId, String bodyText) {
+    protected static FullHttpResponse textResponse(long streamId, String bodyText) {
         byte[] data = bodyText.getBytes(StandardCharsets.UTF_8);
         DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK, ByteBuf.wrap(data));
         response.streamId(streamId);

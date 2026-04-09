@@ -22,6 +22,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
@@ -110,7 +111,7 @@ public class WebSocketHandshakeLifecycleTest extends AbstractWebSocketTest {
     @Test
     public void testServerRfc6455HandshakeCreatesReadyContextAndAuthorizerSeesRequest() throws Throwable {
         autoCloseNeta(neta -> {
-            AtomicInteger requestStreamId = new AtomicInteger(-1);
+            AtomicLong requestStreamId = new AtomicLong(-1);
             AtomicReference<WebSocketVersion> requestVersion = new AtomicReference<>();
             AtomicReference<String> requestPath = new AtomicReference<>();
             AtomicReference<String> requestProtocols = new AtomicReference<>();
@@ -144,7 +145,7 @@ public class WebSocketHandshakeLifecycleTest extends AbstractWebSocketTest {
             WebSocketHandshakeEvent handshakeEvent = handshakeEvent(pipe.channelEvents());
 
             assertTrue(inbound.isEmpty());
-            assertEquals(7, requestStreamId.get());
+            assertEquals(7L, requestStreamId.get());
             assertEquals(WebSocketVersion.V13, requestVersion.get());
             assertEquals("/chat", requestPath.get());
             assertEquals("graphql-ws", requestProtocols.get());

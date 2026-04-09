@@ -40,7 +40,7 @@ class Http2EncoderContent {
     private final AtomicInteger     nextStreamId;
     private final Queue<Http2Frame> pendingOutboundFrames;
     private       boolean           prefaceSent;
-    private       int               currentStreamId = 0;
+    private       long              currentStreamId = 0;
     private       HttpRequest       pendingRequest;
     private       HttpResponse      pendingResponse;
     private       boolean           trailingHeadersSent;
@@ -79,14 +79,14 @@ class Http2EncoderContent {
     /**
      * Returns the stream ID that should be used for the current outbound message.
      */
-    public int currentStreamId() {
+    public long currentStreamId() {
         return currentStreamId;
     }
 
     /**
      * Sets the stream ID that the next outbound message fragment sequence should reuse.
      */
-    public void setCurrentStreamId(int streamId) {
+    public void setCurrentStreamId(long streamId) {
         this.currentStreamId = streamId;
     }
 

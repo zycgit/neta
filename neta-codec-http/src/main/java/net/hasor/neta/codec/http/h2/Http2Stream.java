@@ -24,7 +24,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @version : 2026-02-20
  */
 class Http2Stream {
-    private final int              streamId;
+    private final long             streamId;
     private       Http2StreamState state;
     private       ByteBuf          accumulatedHeaderBlock;
     private       boolean          endStreamPending;
@@ -35,7 +35,7 @@ class Http2Stream {
      * Creates a new HTTP/2 stream.
      * @param streamId the stream identifier; client-initiated streams are odd and server-initiated streams are even
      */
-    public Http2Stream(int streamId) {
+    public Http2Stream(long streamId) {
         this.streamId = streamId;
         this.state = Http2StreamState.IDLE;
     }
@@ -43,7 +43,7 @@ class Http2Stream {
     /**
      * Returns the stream ID.
      */
-    public int streamId() {
+    public long streamId() {
         return streamId;
     }
 

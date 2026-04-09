@@ -62,7 +62,7 @@ public class Http2StreamCloseEvent extends AbstractHttp2Event {
      * @param streamId the stream ID
      * @param inbound whether the closed direction is inbound
      */
-    public Http2StreamCloseEvent(int streamId, boolean inbound) {
+    public Http2StreamCloseEvent(long streamId, boolean inbound) {
         this.streamId(streamId);
         this.inbound = inbound;
     }

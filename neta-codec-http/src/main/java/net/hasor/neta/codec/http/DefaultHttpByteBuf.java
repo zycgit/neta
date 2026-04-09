@@ -39,7 +39,7 @@ public class DefaultHttpByteBuf extends AbstractHttpObject<HttpByteBuf> implemen
      * @param content chunk payload
      * @param streamId stream identifier
      */
-    public DefaultHttpByteBuf(ByteBuf content, int streamId) {
+    public DefaultHttpByteBuf(ByteBuf content, long streamId) {
         this.content = content == null ? ByteBuf.EMPTY : content;
         this.streamId(streamId);
     }

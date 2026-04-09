@@ -146,7 +146,8 @@ public class Http2FrameDecoder implements ProtoHandler<ByteBuf, Http2Frame> {
             int payloadLength = ((headerBuf[0] & 0xFF) << 16) | ((headerBuf[1] & 0xFF) << 8) | (headerBuf[2] & 0xFF);
             int type = headerBuf[3] & 0xFF;
             int flags = headerBuf[4] & 0xFF;
-            int streamId = ((headerBuf[5] & 0x7F) << 24) | ((headerBuf[6] & 0xFF) << 16) | ((headerBuf[7] & 0xFF) << 8) | (headerBuf[8] & 0xFF);
+            int rawStreamId = ((headerBuf[5] & 0x7F) << 24) | ((headerBuf[6] & 0xFF) << 16) | ((headerBuf[7] & 0xFF) << 8) | (headerBuf[8] & 0xFF);
+            long streamId = Http2Frame.decodeWireStreamId(rawStreamId);
 
             // Validate the frame size.
             if (payloadLength > this.maxFrameSize) {

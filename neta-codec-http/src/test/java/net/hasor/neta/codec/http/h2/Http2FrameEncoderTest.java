@@ -19,8 +19,7 @@ import java.util.List;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import org.junit.Test;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.*;
 
 public class Http2FrameEncoderTest extends AbstractHttp2Test {
     @Test
@@ -64,15 +63,17 @@ public class Http2FrameEncoderTest extends AbstractHttp2Test {
     }
 
     @Test
-    public void testEncoderStripsReservedBitFromStreamIdentifier() throws Throwable {
+    public void testEncoderRejectsOutOfRangeStreamIdentifier() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
                 ctx.addLastEncoder("h2-frame-encoder", new Http2FrameEncoder());
             }, VrtSoConfig.asClient());
 
-            List<ByteBuf> outbound = sendAndOutBound(pipe, new Http2Frame(Http2FrameType.HEADERS, Http2Flags.END_HEADERS, 0x92345678));
-            assertEquals(1, outbound.size());
-            assertArrayEquals(frame(0, Http2FrameType.HEADERS, Http2Flags.END_HEADERS, 0x12345678), bytes(outbound.toArray(new ByteBuf[0])));
+            List<Throwable> outboundErrors = sendAndOutError(pipe, new Http2Frame(Http2FrameType.HEADERS, Http2Flags.END_HEADERS, 0x92345678L));
+            assertTrue(pipe.channelOutbound().isEmpty());
+            assertEquals(1, outboundErrors.size());
+            assertTrue(outboundErrors.get(0) instanceof IllegalArgumentException);
+            assertTrue(outboundErrors.get(0).getMessage().contains("31-bit range"));
         });
     }
 

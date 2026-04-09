@@ -65,7 +65,7 @@ public interface Http2Context {
     /**
      * Returns the largest stream ID currently being tracked.
      */
-    int lastStreamId();
+    long lastStreamId();
 
     /**
      * Returns the currently effective remote SETTINGS_MAX_CONCURRENT_STREAMS value.

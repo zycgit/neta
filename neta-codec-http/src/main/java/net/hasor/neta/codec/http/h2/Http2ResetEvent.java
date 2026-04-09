@@ -71,7 +71,7 @@ public class Http2ResetEvent extends AbstractHttp2Event {
      * @param streamId the stream ID being reset
      * @param errorCode the reset reason code
      */
-    public Http2ResetEvent(int streamId, long errorCode) {
+    public Http2ResetEvent(long streamId, long errorCode) {
         this.streamId(streamId);
         this.errorCode = errorCode;
     }

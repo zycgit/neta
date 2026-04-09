@@ -26,7 +26,7 @@ import net.hasor.neta.codec.http.HttpHeaders;
  * @version : 2026-03-22
  */
 public class WebSocketHandshakeRequest {
-    private       int                streamId;
+    private       long               streamId;
     private       boolean            released;
     private final WebSocketVersion   version;
     private final String             requestPath;
@@ -70,7 +70,7 @@ public class WebSocketHandshakeRequest {
     /**
      * Return the HTTP stream ID.
      */
-    public int streamId() {
+    public long streamId() {
         return this.streamId;
     }
 
@@ -79,7 +79,7 @@ public class WebSocketHandshakeRequest {
      * @param streamId stream ID
      * @return current request object
      */
-    public WebSocketHandshakeRequest streamId(int streamId) {
+    public WebSocketHandshakeRequest streamId(long streamId) {
         this.streamId = streamId;
         return this;
     }

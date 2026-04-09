@@ -120,7 +120,7 @@ public class Http2FrameEncoder implements ProtoHandler<Http2Frame, ByteBuf> {
         buf.writeInt24(payloadLength);
         buf.writeByte((byte) frame.type());
         buf.writeByte((byte) frame.flags());
-        buf.writeInt32(frame.streamId() & 0x7FFFFFFF);
+        buf.writeInt32(Http2Frame.requireWireStreamId(frame.streamId()));
 
         // Write the payload.
         if (payloadLength > 0) {

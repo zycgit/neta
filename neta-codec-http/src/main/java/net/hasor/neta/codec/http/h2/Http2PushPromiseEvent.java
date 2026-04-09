@@ -52,7 +52,7 @@ import net.hasor.neta.codec.http.HttpHeaders;
  * @version : 2026-03-25
  */
 public class Http2PushPromiseEvent extends AbstractHttp2Event {
-    private final int         promisedStreamId;
+    private final long        promisedStreamId;
     private final HttpHeaders headers;
 
     /**
@@ -61,7 +61,7 @@ public class Http2PushPromiseEvent extends AbstractHttp2Event {
      * @param promisedStreamId the promised stream ID
      * @param headers the decoded request headers
      */
-    public Http2PushPromiseEvent(int streamId, int promisedStreamId, HttpHeaders headers) {
+    public Http2PushPromiseEvent(long streamId, long promisedStreamId, HttpHeaders headers) {
         this.streamId(streamId);
         this.promisedStreamId = promisedStreamId;
         this.headers = headers;
@@ -70,7 +70,7 @@ public class Http2PushPromiseEvent extends AbstractHttp2Event {
     /**
      * Returns the promised stream ID.
      */
-    public int promisedStreamId() {
+    public long promisedStreamId() {
         return this.promisedStreamId;
     }
 

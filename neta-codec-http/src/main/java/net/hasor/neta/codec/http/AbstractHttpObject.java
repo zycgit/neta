@@ -21,7 +21,7 @@ package net.hasor.neta.codec.http;
  * @author 赵永春 (zyc@hasor.net)
  */
 public abstract class AbstractHttpObject<T extends HttpObject> implements HttpObject {
-    private int     streamId;
+    private long    streamId;
     private boolean bad;
     private String  badReason;
 
@@ -32,12 +32,12 @@ public abstract class AbstractHttpObject<T extends HttpObject> implements HttpOb
     protected abstract T self();
 
     @Override
-    public int streamId() {
+    public long streamId() {
         return this.streamId;
     }
 
     @Override
-    public T streamId(int streamId) {
+    public T streamId(long streamId) {
         this.streamId = streamId;
         return this.self();
     }

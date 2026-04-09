@@ -41,10 +41,11 @@ package net.hasor.neta.codec.http.h2;
  * @see Http2Flags
  */
 public class Http2Frame {
-    private static final byte[] EMPTY = new byte[0];
+    public static final  long   MAX_STREAM_ID = 0x7FFFFFFFL;
+    private static final byte[] EMPTY         = new byte[0];
     private final        int    type;
     private final        int    flags;
-    private final        int    streamId;
+    private final        long   streamId;
     private final        byte[] payload;
     private final        int    payloadOffset;
     private final        int    payloadLength;
@@ -58,7 +59,7 @@ public class Http2Frame {
      * @param payloadOffset the starting offset within the payload array
      * @param payloadLength the payload length in bytes
      */
-    public Http2Frame(int type, int flags, int streamId, byte[] payload, int payloadOffset, int payloadLength) {
+    public Http2Frame(int type, int flags, long streamId, byte[] payload, int payloadOffset, int payloadLength) {
         this.type = type;
         this.flags = flags;
         this.streamId = streamId;
@@ -74,7 +75,7 @@ public class Http2Frame {
      * @param streamId the stream identifier
      * @param payload the full payload
      */
-    public Http2Frame(int type, int flags, int streamId, byte[] payload) {
+    public Http2Frame(int type, int flags, long streamId, byte[] payload) {
         this(type, flags, streamId, payload, 0, payload != null ? payload.length : 0);
     }
 
@@ -84,7 +85,7 @@ public class Http2Frame {
      * @param flags the frame flags
      * @param streamId the stream identifier
      */
-    public Http2Frame(int type, int flags, int streamId) {
+    public Http2Frame(int type, int flags, long streamId) {
         this(type, flags, streamId, EMPTY, 0, 0);
     }
 
@@ -105,7 +106,7 @@ public class Http2Frame {
     /**
      * Returns the stream identifier; 0 denotes a connection-level frame.
      */
-    public int streamId() {
+    public long streamId() {
         return streamId;
     }
 
@@ -140,28 +141,28 @@ public class Http2Frame {
     /**
      * Creates a DATA frame.
      */
-    public static Http2Frame data(int streamId, int flags, byte[] payload, int offset, int length) {
+    public static Http2Frame data(long streamId, int flags, byte[] payload, int offset, int length) {
         return new Http2Frame(Http2FrameType.DATA, flags, streamId, payload, offset, length);
     }
 
     /**
      * Creates a DATA frame using the full payload.
      */
-    public static Http2Frame data(int streamId, int flags, byte[] payload) {
+    public static Http2Frame data(long streamId, int flags, byte[] payload) {
         return new Http2Frame(Http2FrameType.DATA, flags, streamId, payload);
     }
 
     /**
      * Creates a HEADERS frame.
      */
-    public static Http2Frame headers(int streamId, int flags, byte[] headerBlock, int offset, int length) {
+    public static Http2Frame headers(long streamId, int flags, byte[] headerBlock, int offset, int length) {
         return new Http2Frame(Http2FrameType.HEADERS, flags, streamId, headerBlock, offset, length);
     }
 
     /**
      * Creates a HEADERS frame using the full payload.
      */
-    public static Http2Frame headers(int streamId, int flags, byte[] headerBlock) {
+    public static Http2Frame headers(long streamId, int flags, byte[] headerBlock) {
         return new Http2Frame(Http2FrameType.HEADERS, flags, streamId, headerBlock);
     }
 
@@ -196,14 +197,14 @@ public class Http2Frame {
     /**
      * Creates a WINDOW_UPDATE frame.
      */
-    public static Http2Frame windowUpdate(int streamId, byte[] payload) {
+    public static Http2Frame windowUpdate(long streamId, byte[] payload) {
         return new Http2Frame(Http2FrameType.WINDOW_UPDATE, Http2Flags.NONE, streamId, payload);
     }
 
     /**
      * Creates an RST_STREAM frame.
      */
-    public static Http2Frame rstStream(int streamId, byte[] payload) {
+    public static Http2Frame rstStream(long streamId, byte[] payload) {
         return new Http2Frame(Http2FrameType.RST_STREAM, Http2Flags.NONE, streamId, payload);
     }
 
@@ -217,28 +218,39 @@ public class Http2Frame {
     /**
      * Creates a CONTINUATION frame.
      */
-    public static Http2Frame continuation(int streamId, int flags, byte[] payload) {
+    public static Http2Frame continuation(long streamId, int flags, byte[] payload) {
         return new Http2Frame(Http2FrameType.CONTINUATION, flags, streamId, payload);
     }
 
     /**
      * Creates a PRIORITY frame.
      */
-    public static Http2Frame priority(int streamId, byte[] payload) {
+    public static Http2Frame priority(long streamId, byte[] payload) {
         return new Http2Frame(Http2FrameType.PRIORITY, Http2Flags.NONE, streamId, payload);
     }
 
     /**
      * Creates a PUSH_PROMISE frame.
      */
-    public static Http2Frame pushPromise(int streamId, int flags, byte[] payload, int offset, int length) {
+    public static Http2Frame pushPromise(long streamId, int flags, byte[] payload, int offset, int length) {
         return new Http2Frame(Http2FrameType.PUSH_PROMISE, flags, streamId, payload, offset, length);
     }
 
     /**
      * Creates a PUSH_PROMISE frame using the full payload.
      */
-    public static Http2Frame pushPromise(int streamId, int flags, byte[] payload) {
+    public static Http2Frame pushPromise(long streamId, int flags, byte[] payload) {
         return new Http2Frame(Http2FrameType.PUSH_PROMISE, flags, streamId, payload);
+    }
+
+    public static int requireWireStreamId(long streamId) {
+        if (streamId < 0 || streamId > MAX_STREAM_ID) {
+            throw new IllegalArgumentException("HTTP/2 streamId out of 31-bit range: " + streamId);
+        }
+        return (int) streamId;
+    }
+
+    public static long decodeWireStreamId(int rawStreamId) {
+        return rawStreamId & MAX_STREAM_ID;
     }
 }

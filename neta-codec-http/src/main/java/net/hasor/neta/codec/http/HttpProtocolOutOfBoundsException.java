@@ -34,7 +34,7 @@ public class HttpProtocolOutOfBoundsException extends HttpProtocolException {
      * @param streamId stream identifier
      * @param message exception description
      */
-    public HttpProtocolOutOfBoundsException(int streamId, String message) {
+    public HttpProtocolOutOfBoundsException(long streamId, String message) {
         super(message);
         this.setStreamId(streamId);
     }

@@ -30,7 +30,7 @@ import static org.junit.Assert.*;
 public class Http2LifecycleTest extends AbstractHttp2Test {
     private static class HoldingRequestHandler implements ProtoHandler<HttpObject, Object> {
         private final Map<String, ProtoContext> pendingContexts  = new LinkedHashMap<>();
-        private final Map<String, Integer>      pendingStreamIds = new LinkedHashMap<>();
+        private final Map<String, Long>         pendingStreamIds = new LinkedHashMap<>();
         private final Map<String, String>       pendingBodies    = new LinkedHashMap<>();
         private final Queue<String>             seenUris;
         private final Queue<Class<?>>           seenEvents;
@@ -81,14 +81,14 @@ public class Http2LifecycleTest extends AbstractHttp2Test {
             return this.pendingContexts.containsKey(uri);
         }
 
-        protected synchronized int streamId(String uri) {
-            Integer streamId = this.pendingStreamIds.get(uri);
+        protected synchronized long streamId(String uri) {
+            Long streamId = this.pendingStreamIds.get(uri);
             return streamId != null ? streamId : -1;
         }
 
         protected synchronized void sendResponse(String uri, String prefix) throws Throwable {
             ProtoContext context = this.pendingContexts.remove(uri);
-            Integer streamId = this.pendingStreamIds.remove(uri);
+            Long streamId = this.pendingStreamIds.remove(uri);
             String body = this.pendingBodies.remove(uri);
             if (context == null || streamId == null || body == null) {
                 return;
@@ -233,8 +233,8 @@ public class Http2LifecycleTest extends AbstractHttp2Test {
 
             assertTrue(waitUntil(() -> handler.contains("/ok") && handler.contains("/cancel") && serverControl[0] != null && activeStreamPartitionCount(serverControl[0]) == 2, 1000L));
 
-            int okStreamId = handler.streamId("/ok");
-            int cancelStreamId = handler.streamId("/cancel");
+            long okStreamId = handler.streamId("/ok");
+            long cancelStreamId = handler.streamId("/cancel");
             pipe.server().fireEvent(Http2ResetEvent.class, new Http2ResetEvent(cancelStreamId, Http2ResetEvent.CANCEL));
             handler.sendResponse("/ok", "ok:");
 

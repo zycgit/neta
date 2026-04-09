@@ -119,7 +119,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
             if (context.getConfig().isPrintLog()) {
                 int type = frame.type();
                 int flags = frame.flags();
-                int streamId = frame.streamId();
+                long streamId = frame.streamId();
                 int payloadLength = frame.payloadLength();
                 long channelID = context.getChannel().getChannelId();
                 logger.info("[H2-RCV] ch=" + channelID + " " + Http2FrameType.name(type) +//
@@ -189,7 +189,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
         }
 
         Http2DecoderContent state = context.context(Http2DecoderContent.class);
-        int lastAcceptedStreamId = state != null ? Math.max(state.lastEmittedStreamId(), 0) : 0;
+        long lastAcceptedStreamId = state != null ? state.lastEmittedStreamId() : 0;
         String message = protocolError.getMessage();
         byte[] debugData = message == null ? null : message.getBytes(StandardCharsets.UTF_8);
 
@@ -207,7 +207,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
 
     private void processDataFrame(Http2DecoderContent state, ProtoContext context, ProtoSndQueue<HttpObject> dst, Http2Frame frame) {
         int flags = frame.flags();
-        int streamId = frame.streamId();
+        long streamId = frame.streamId();
         byte[] payload = frame.payload();
         int payloadOffset = frame.payloadOffset();
         int payloadLength = frame.payloadLength();
@@ -268,7 +268,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
 
     private void processHeadersFrame(Http2DecoderContent state, ProtoContext context, ProtoSndQueue<HttpObject> dst, Http2Frame frame) {
         int flags = frame.flags();
-        int streamId = frame.streamId();
+        long streamId = frame.streamId();
         byte[] payload = frame.payload();
         int payloadOffset = frame.payloadOffset();
         int payloadLength = frame.payloadLength();
@@ -322,7 +322,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
     }
 
     private void processPriorityFrame(ProtoContext context, Http2Frame frame) {
-        int streamId = frame.streamId();
+        long streamId = frame.streamId();
         byte[] payload = frame.payload();
         int payloadOffset = frame.payloadOffset();
         // @formatter:off
@@ -332,7 +332,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
                             (payload[payloadOffset + 3] & 0xFF);
         // @formatter:on
         boolean exclusive = (rawDependency & 0x80000000) != 0;
-        int streamDependency = rawDependency & 0x7FFFFFFF;
+        long streamDependency = Http2Frame.decodeWireStreamId(rawDependency);
         if (streamDependency == streamId) {
             String msg = "HTTP/2: PRIORITY frame cannot depend on itself for stream " + streamId;
             throw new HttpProtocolStreamException(streamId, Http2ErrorCode.PROTOCOL_ERROR, msg);
@@ -343,7 +343,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
     }
 
     private void processRstStream(Http2DecoderContent state, ProtoContext context, ProtoSndQueue<HttpObject> dst, Http2Frame frame) {
-        int streamId = frame.streamId();
+        long streamId = frame.streamId();
         byte[] payload = frame.payload();
         int payloadOffset = frame.payloadOffset();
         int payloadLength = frame.payloadLength();
@@ -407,7 +407,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
 
     private void processPushPromiseFrame(Http2DecoderContent state, ProtoContext context, Http2Frame frame) {
         int flags = frame.flags();
-        int streamId = frame.streamId();
+        long streamId = frame.streamId();
         byte[] payload = frame.payload();
         int payloadOffset = frame.payloadOffset();
         int payloadLength = frame.payloadLength();
@@ -444,11 +444,12 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
         }
 
         // @formatter:off
-        int promisedStreamId = ((payload[offset] & 0x7F) << 24) |
-                               ((payload[offset + 1] & 0xFF) << 16) |
-                               ((payload[offset + 2] & 0xFF) << 8) |
-                               (payload[offset + 3] & 0xFF);
+        int rawPromisedStreamId = ((payload[offset] & 0x7F) << 24) |
+                      ((payload[offset + 1] & 0xFF) << 16) |
+                      ((payload[offset + 2] & 0xFF) << 8) |
+                      (payload[offset + 3] & 0xFF);
         // @formatter:on
+        long promisedStreamId = Http2Frame.decodeWireStreamId(rawPromisedStreamId);
         if (promisedStreamId == 0) {
             String msg = "HTTP/2: PUSH_PROMISE promised stream id must be non-zero";
             throw new HttpProtocolConnectionException(streamId, Http2ErrorCode.PROTOCOL_ERROR, msg);
@@ -458,7 +459,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
             throw new HttpProtocolConnectionException(promisedStreamId, Http2ErrorCode.PROTOCOL_ERROR, msg);
         }
 
-        int lastRemoteInitiatedStreamId = state.lastRemoteInitiatedStreamId(this.serverMode);
+        long lastRemoteInitiatedStreamId = state.lastRemoteInitiatedStreamId(this.serverMode);
         if (promisedStreamId <= lastRemoteInitiatedStreamId) {
             String msg = "HTTP/2: PUSH_PROMISE promised stream id must be greater than prior remote stream ids, got " + promisedStreamId + " after " + lastRemoteInitiatedStreamId;
             throw new HttpProtocolConnectionException(promisedStreamId, Http2ErrorCode.PROTOCOL_ERROR, msg);
@@ -485,7 +486,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
     }
 
     private void processPing(Http2DecoderContent state, ProtoContext context, Http2Frame frame) {
-        int streamId = frame.streamId();
+        long streamId = frame.streamId();
         int flags = frame.flags();
         byte[] payload = frame.payload();
         int payloadOffset = frame.payloadOffset();
@@ -505,7 +506,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
     }
 
     private void processGoaway(ProtoContext context, Http2Frame frame) {
-        int streamId = frame.streamId();
+        long streamId = frame.streamId();
         byte[] payload = frame.payload();
         int payloadOffset = frame.payloadOffset();
         int payloadLength = frame.payloadLength();
@@ -515,15 +516,16 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
         }
 
         // @formatter:off
-        int lastStreamId = ((payload[payloadOffset] & 0x7F) << 24) |
-                           ((payload[payloadOffset + 1] & 0xFF) << 16) |
-                           ((payload[payloadOffset + 2] & 0xFF) << 8) |
-                           (payload[payloadOffset + 3] & 0xFF);
+        int rawLastStreamId = ((payload[payloadOffset] & 0x7F) << 24) |
+                      ((payload[payloadOffset + 1] & 0xFF) << 16) |
+                      ((payload[payloadOffset + 2] & 0xFF) << 8) |
+                      (payload[payloadOffset + 3] & 0xFF);
         long errorCode = ((long) (payload[payloadOffset + 4] & 0xFF) << 24) |
                          ((long) (payload[payloadOffset + 5] & 0xFF) << 16) |
                          ((long) (payload[payloadOffset + 6] & 0xFF) << 8) |
                          (payload[payloadOffset + 7] & 0xFF);
         // @formatter:on
+        long lastStreamId = Http2Frame.decodeWireStreamId(rawLastStreamId);
 
         int debugLength = payloadLength - 8;
         byte[] debugData = new byte[Math.max(debugLength, 0)];
@@ -535,7 +537,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
     }
 
     private void processWindowUpdate(Http2DecoderContent state, ProtoContext context, Http2Frame frame) {
-        int streamId = frame.streamId();
+        long streamId = frame.streamId();
         byte[] payload = frame.payload();
         int payloadOffset = frame.payloadOffset();
         int payloadLength = frame.payloadLength();
@@ -563,7 +565,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
 
     private void processContinuationFrame(Http2DecoderContent state, ProtoContext context, ProtoSndQueue<HttpObject> dst, Http2Frame frame) {
         int flags = frame.flags();
-        int streamId = frame.streamId();
+        long streamId = frame.streamId();
         byte[] payload = frame.payload();
         int payloadOffset = frame.payloadOffset();
         int payloadLength = frame.payloadLength();
@@ -586,7 +588,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
             headerBlock.getBytes(0, allHeaders, 0, readable);
             boolean endStream = stream.isEndStreamPending();
             int openHeaderBlockType = state.openHeaderBlockType();
-            int promisedStreamId = state.openPromisedStreamId();
+            long promisedStreamId = state.openPromisedStreamId();
             headerBlock.free();
             stream.accumulatedHeaderBlock(null);
             state.closeOpenHeaderBlock();
@@ -602,7 +604,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
         }
     }
 
-    private void emitHeaders(Http2DecoderContent state, ProtoContext context, ProtoSndQueue<HttpObject> dst, Http2Stream stream, int streamId, HttpHeaders headers, boolean endStream) {
+    private void emitHeaders(Http2DecoderContent state, ProtoContext context, ProtoSndQueue<HttpObject> dst, Http2Stream stream, long streamId, HttpHeaders headers, boolean endStream) {
         if (stream != null && stream.isInitialHeadersEmitted()) {
             emitTrailerHeaders(state, dst, streamId, headers, endStream);
         } else {
@@ -620,11 +622,11 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
         }
     }
 
-    private void recordInboundHalfClosed(ProtoContext context, int streamId) {
+    private void recordInboundHalfClosed(ProtoContext context, long streamId) {
         this.fireEvent(context, Http2StreamCloseEvent.class, new Http2StreamCloseEvent(streamId, true).remote(true));
     }
 
-    private void emitInitialHeaders(ProtoContext context, Http2DecoderContent state, ProtoSndQueue<HttpObject> dst, int streamId, HttpHeaders headers, boolean endStream) {
+    private void emitInitialHeaders(ProtoContext context, Http2DecoderContent state, ProtoSndQueue<HttpObject> dst, long streamId, HttpHeaders headers, boolean endStream) {
         LastHttpHeaders regularHeaders = new DefaultLastHttpHeaders();
         String status = headers.getString(HttpHeaderNames.PSEUDO_STATUS);
         state.setLastEmittedStreamId(streamId);
@@ -685,7 +687,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
     }
 
     private void emitTrailerHeaders(Http2DecoderContent state, ProtoSndQueue<HttpObject> dst, //
-            int streamId, HttpHeaders headers, boolean endStream) {
+            long streamId, HttpHeaders headers, boolean endStream) {
         TrailerHttpHeaders trailerHeaders = new DefaultTrailerHttpHeaders();
         trailerHeaders.streamId(streamId);
 
@@ -738,7 +740,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
     }
 
     private void handleStreamError(ProtoContext context, HttpProtocolException protocolError) {
-        int streamId = protocolError.getStreamId();
+        long streamId = protocolError.getStreamId();
         Http2DecoderContent state = context.context(Http2DecoderContent.class);
         if (state != null) {
             state.closeStream(streamId);
@@ -755,14 +757,14 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
         return stream != null && stream.isInitialHeadersEmitted() && !stream.isTerminalObjectEmitted();
     }
 
-    private LastHttpContent newResetLastContent(int streamId, long errorCode) {
+    private LastHttpContent newResetLastContent(long streamId, long errorCode) {
         LastHttpContent lastContent = new DefaultLastHttpContent(ByteBuf.EMPTY);
         lastContent.streamId(streamId);
         lastContent.markBad("HTTP/2 stream reset: " + Http2ErrorCode.name(errorCode));
         return lastContent;
     }
 
-    private static Http2Frame buildWindowUpdateFrame(int streamId, int increment) {
+    private static Http2Frame buildWindowUpdateFrame(long streamId, int increment) {
         byte[] payload = new byte[4];
         payload[0] = (byte) ((increment >> 24) & 0x7F);
         payload[1] = (byte) ((increment >> 16) & 0xFF);
@@ -771,22 +773,27 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
         return Http2Frame.windowUpdate(streamId, payload);
     }
 
-    private static Http2Frame resetStreamFrame(int streamId, long errorCode) {
+    private static Http2Frame resetStreamFrame(long streamId, long errorCode) {
         byte[] payload = new byte[4];
         write32Bits(payload, 0, errorCode);
         return Http2Frame.rstStream(streamId, payload);
     }
 
-    private static Http2Frame goAwayFrame(int lastStreamId, long errorCode, byte[] debugData) {
+    private static Http2Frame goAwayFrame(long lastStreamId, long errorCode, byte[] debugData) {
         byte[] safeDebugData = debugData == null ? new byte[0] : debugData.clone();
         byte[] payload = new byte[8 + safeDebugData.length];
-        payload[0] = (byte) ((lastStreamId >> 24) & 0x7F);
-        payload[1] = (byte) ((lastStreamId >> 16) & 0xFF);
-        payload[2] = (byte) ((lastStreamId >> 8) & 0xFF);
-        payload[3] = (byte) (lastStreamId & 0xFF);
+        write31Bits(payload, lastStreamId);
         write32Bits(payload, 4, errorCode);
         System.arraycopy(safeDebugData, 0, payload, 8, safeDebugData.length);
         return Http2Frame.goaway(payload);
+    }
+
+    private static void write31Bits(byte[] target, long value) {
+        int narrowed = Http2Frame.requireWireStreamId(value);
+        target[0] = (byte) ((narrowed >> 24) & 0x7F);
+        target[1] = (byte) ((narrowed >> 16) & 0xFF);
+        target[2] = (byte) ((narrowed >> 8) & 0xFF);
+        target[3] = (byte) (narrowed & 0xFF);
     }
 
     private static void write32Bits(byte[] target, int offset, long value) {

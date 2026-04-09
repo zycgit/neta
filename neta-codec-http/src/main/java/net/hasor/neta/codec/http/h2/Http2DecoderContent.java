@@ -35,19 +35,19 @@ import net.hasor.neta.codec.http.DefaultHttpHeaders;
  * @version : 2026-02-28
  */
 class Http2DecoderContent {
-    private final Queue<Integer>            responseStreamIdQueue   = new LinkedList<>();
-    private final Queue<byte[]>             pendingPingAcks         = new LinkedList<>();
-    private final Queue<Http2Frame>         pendingWindowUpdates    = new LinkedList<>();
-    private final Map<Integer, Http2Stream> streams                 = new HashMap<>();
-    private final HpackDecoder              hpackDecoder;
-    private final Http2Settings             localSettings;
-    private final Http2Settings             remoteSettings          = new Http2Settings();
-    private       boolean                   prefaceReceived;
-    private       boolean                   pendingSettingsAck;
-    private       int                       openHeaderBlockStreamId = -1;
-    private       int                       openHeaderBlockType     = -1;
-    private       int                       openPromisedStreamId    = -1;
-    private       int                       lastEmittedStreamId     = 0;
+    private final Queue<Long>            responseStreamIdQueue   = new LinkedList<>();
+    private final Queue<byte[]>          pendingPingAcks         = new LinkedList<>();
+    private final Queue<Http2Frame>      pendingWindowUpdates    = new LinkedList<>();
+    private final Map<Long, Http2Stream> streams                 = new HashMap<>();
+    private final HpackDecoder           hpackDecoder;
+    private final Http2Settings          localSettings;
+    private final Http2Settings          remoteSettings          = new Http2Settings();
+    private       boolean                prefaceReceived;
+    private       boolean                pendingSettingsAck;
+    private       long                   openHeaderBlockStreamId = -1;
+    private       int                    openHeaderBlockType     = -1;
+    private       long                   openPromisedStreamId    = -1;
+    private       long                   lastEmittedStreamId     = 0;
 
     /**
      * Creates the decoder-side connection state container.
@@ -72,21 +72,21 @@ class Http2DecoderContent {
     /**
      * Returns the stream for the given stream ID, creating it if necessary.
      */
-    public Http2Stream getOrCreateStream(int streamId) {
-        return streams.computeIfAbsent(streamId, id -> new Http2Stream(id));
+    public Http2Stream getOrCreateStream(long streamId) {
+        return streams.computeIfAbsent(streamId, Http2Stream::new);
     }
 
     /**
      * Returns the stream for the given stream ID, or {@code null} if it does not exist.
      */
-    public Http2Stream getStream(int streamId) {
+    public Http2Stream getStream(long streamId) {
         return streams.get(streamId);
     }
 
     /**
      * Closes and releases the stream for the given stream ID.
      */
-    public void closeStream(int streamId) {
+    public void closeStream(long streamId) {
         Http2Stream stream = streams.remove(streamId);
         if (stream != null) {
             stream.state(Http2StreamState.CLOSED);
@@ -102,7 +102,7 @@ class Http2DecoderContent {
     /**
      * Removes queued response stream-ID entries for the given stream from the FIFO queue.
      */
-    public void removeFromResponseQueue(int streamId) {
+    public void removeFromResponseQueue(long streamId) {
         responseStreamIdQueue.removeIf(id -> id == streamId);
     }
 
@@ -130,7 +130,7 @@ class Http2DecoderContent {
     /**
      * Records the stream ID of a completed request for later response association.
      */
-    public void offerResponseStreamId(int streamId) {
+    public void offerResponseStreamId(long streamId) {
         responseStreamIdQueue.offer(streamId);
     }
 
@@ -144,7 +144,7 @@ class Http2DecoderContent {
     /**
      * Marks that the given stream currently owns an open fragmented header block.
      */
-    public void openHeaderBlockOn(int streamId, int frameType, int promisedStreamId) {
+    public void openHeaderBlockOn(long streamId, int frameType, long promisedStreamId) {
         this.openHeaderBlockStreamId = streamId;
         this.openHeaderBlockType = frameType;
         this.openPromisedStreamId = promisedStreamId;
@@ -170,7 +170,7 @@ class Http2DecoderContent {
     /**
      * Records the stream ID of the most recently emitted {@link net.hasor.neta.codec.http.HttpObject}.
      */
-    public void setLastEmittedStreamId(int streamId) {
+    public void setLastEmittedStreamId(long streamId) {
         this.lastEmittedStreamId = streamId;
     }
 
@@ -198,7 +198,7 @@ class Http2DecoderContent {
     /**
      * Returns the stream ID that currently owns the open header block, or -1 if none exists.
      */
-    public int openHeaderBlockStreamId() {
+    public long openHeaderBlockStreamId() {
         return this.openHeaderBlockStreamId;
     }
 
@@ -212,7 +212,7 @@ class Http2DecoderContent {
     /**
      * Returns the promised stream ID associated with the currently open PUSH_PROMISE block, or -1 if none exists.
      */
-    public int openPromisedStreamId() {
+    public long openPromisedStreamId() {
         return this.openPromisedStreamId;
     }
 
@@ -221,8 +221,8 @@ class Http2DecoderContent {
     /**
      * Polls the next response stream ID, or -1 when the queue is empty.
      */
-    public int pollResponseStreamId() {
-        Integer id = this.responseStreamIdQueue.poll();
+    public long pollResponseStreamId() {
+        Long id = this.responseStreamIdQueue.poll();
         return id != null ? id : -1;
     }
 
@@ -263,9 +263,9 @@ class Http2DecoderContent {
     /**
      * Returns the highest stream ID currently being tracked.
      */
-    public int lastStreamId() {
-        int max = 0;
-        for (Integer id : this.streams.keySet()) {
+    public long lastStreamId() {
+        long max = 0;
+        for (Long id : this.streams.keySet()) {
             if (id > max) {
                 max = id;
             }
@@ -276,10 +276,10 @@ class Http2DecoderContent {
     /**
      * Returns the highest stream ID initiated by the remote peer.
      */
-    public int lastRemoteInitiatedStreamId(boolean serverMode) {
-        int max = 0;
+    public long lastRemoteInitiatedStreamId(boolean serverMode) {
+        long max = 0;
         int remoteParity = serverMode ? 1 : 0;
-        for (Integer id : this.streams.keySet()) {
+        for (Long id : this.streams.keySet()) {
             if (id != null && id > max && (id & 1) == remoteParity) {
                 max = id;
             }
@@ -290,7 +290,7 @@ class Http2DecoderContent {
     /**
      * Returns the stream ID of the most recently emitted HttpObject.
      */
-    public int lastEmittedStreamId() {
+    public long lastEmittedStreamId() {
         return lastEmittedStreamId;
     }
 

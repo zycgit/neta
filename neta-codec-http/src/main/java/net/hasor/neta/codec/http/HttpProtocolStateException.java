@@ -34,7 +34,7 @@ public class HttpProtocolStateException extends HttpProtocolException {
      * @param streamId stream identifier
      * @param message exception description
      */
-    public HttpProtocolStateException(int streamId, String message) {
+    public HttpProtocolStateException(long streamId, String message) {
         super(message);
         this.setStreamId(streamId);
     }

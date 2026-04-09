@@ -63,7 +63,7 @@ public class AbstractHttp2Test extends AbstractHttpTest {
         return encoder.encode(headers);
     }
 
-    protected static void sendResponse(ProtoContext context, int streamId, String uri, String body, String prefix) throws Throwable {
+    protected static void sendResponse(ProtoContext context, long streamId, String uri, String body, String prefix) throws Throwable {
         context.sendData(textResponse(streamId, prefix + uri + ":" + body)).get();
     }
 

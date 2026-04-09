@@ -74,7 +74,7 @@ public class Http2GoawayEvent extends AbstractHttp2Event {
      * @param errorCode the protocol error code
      * @param debugData the optional debug payload
      */
-    public Http2GoawayEvent(int streamId, long lastAcceptedId, long errorCode, byte[] debugData) {
+    public Http2GoawayEvent(long streamId, long lastAcceptedId, long errorCode, byte[] debugData) {
         this.streamId(streamId);
         this.lastAcceptedId = lastAcceptedId;
         this.errorCode = errorCode;

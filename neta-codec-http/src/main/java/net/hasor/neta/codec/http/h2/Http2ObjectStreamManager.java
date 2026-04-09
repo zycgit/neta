@@ -187,7 +187,7 @@ public class Http2ObjectStreamManager implements ProtoDuplexer<HttpObject, HttpO
 
     private HttpProtocolStateException forwardFailure(HttpObject message) {
         String msg = "HTTP/2 lifecycle duplexer failed to forward stream message.";
-        int streamId = message != null ? message.streamId() : 0;
+        long streamId = message != null ? message.streamId() : 0;
         return streamId > 0 ? new HttpProtocolStateException(streamId, msg) : new HttpProtocolStateException(msg);
     }
 

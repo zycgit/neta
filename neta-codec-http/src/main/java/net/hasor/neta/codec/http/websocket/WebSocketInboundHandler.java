@@ -43,7 +43,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
     private              int              fragmentSequence;
     private              boolean          closeReceived;
     private              CompositeByteBuf aggregatedContent;
-    private              int              aggregatedStreamId;
+    private              long             aggregatedStreamId;
     private              CharsetDecoder   textDecoder;
     private              byte[]           utf8CarryBytes = EMPTY_BYTES;
 
@@ -225,7 +225,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
         return createMessage(opcode, sequence, frame.content(), frame.streamId());
     }
 
-    private WebSocketMessage createMessage(WebSocketOpcode opcode, int sequence, ByteBuf content, int streamId) {
+    private WebSocketMessage createMessage(WebSocketOpcode opcode, int sequence, ByteBuf content, long streamId) {
         if (opcode == WebSocketOpcode.TEXT) {
             return WebSocketUtils.textMessage(sequence, content).streamId(streamId);
         } else if (opcode == WebSocketOpcode.BINARY) {
@@ -252,7 +252,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
     private WebSocketMessage finishAggregation() {
         CompositeByteBuf content = this.aggregatedContent;
         WebSocketOpcode opcode = this.fragmentType;
-        int streamId = this.aggregatedStreamId;
+        long streamId = this.aggregatedStreamId;
 
         this.aggregatedContent = null;
         this.aggregatedStreamId = 0;

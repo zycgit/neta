@@ -171,7 +171,7 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
         this.sendAutoResponse(context, request.protocolVersion(), request.streamId(), status, this.isKeepAlive(request));
     }
 
-    private void sendAutoResponse(ProtoContext context, HttpVersion protocolVersion, int streamId, HttpStatus status, boolean keepAlive) {
+    private void sendAutoResponse(ProtoContext context, HttpVersion protocolVersion, long streamId, HttpStatus status, boolean keepAlive) {
         DefaultFullHttpResponse response = new DefaultFullHttpResponse(protocolVersion, status);
         response.streamId(streamId);
         response.setHeader(HttpHeaderNames.CONTENT_LENGTH, HttpHeaderValues.ZERO);

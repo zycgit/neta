@@ -121,7 +121,7 @@ public class DefaultFullHttpRequest extends AbstractHttpObject<FullHttpRequest> 
     }
 
     @Override
-    public FullHttpRequest streamId(int streamId) {
+    public FullHttpRequest streamId(long streamId) {
         super.streamId(streamId);
         this.requestLine.streamId(streamId);
         this.headers.streamId(streamId);

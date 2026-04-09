@@ -48,7 +48,7 @@ package net.hasor.neta.codec.http.h2;
  * @version : 2026-03-25
  */
 public class Http2PriorityEvent extends AbstractHttp2Event {
-    private final int     streamDependency;
+    private final long    streamDependency;
     private final int     weight;
     private final boolean exclusive;
 
@@ -59,7 +59,7 @@ public class Http2PriorityEvent extends AbstractHttp2Event {
      * @param weight the weight value
      * @param exclusive whether the dependency is exclusive
      */
-    public Http2PriorityEvent(int streamId, int streamDependency, int weight, boolean exclusive) {
+    public Http2PriorityEvent(long streamId, long streamDependency, int weight, boolean exclusive) {
         this.streamId(streamId);
         this.streamDependency = streamDependency;
         this.weight = weight;
@@ -69,7 +69,7 @@ public class Http2PriorityEvent extends AbstractHttp2Event {
     /**
      * Returns the dependent stream ID.
      */
-    public int streamDependency() {
+    public long streamDependency() {
         return this.streamDependency;
     }
 

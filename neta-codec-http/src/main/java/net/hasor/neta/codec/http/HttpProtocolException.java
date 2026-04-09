@@ -43,7 +43,7 @@ package net.hasor.neta.codec.http;
 public class HttpProtocolException extends RuntimeException {
     private final HttpStatus status;
     private final long       errorCode;
-    private       int        streamId = -1;
+    private       long       streamId = -1;
 
     /**
      * Creates a protocol exception that uses the default status {@link HttpStatus#BAD_REQUEST 400}.
@@ -160,7 +160,7 @@ public class HttpProtocolException extends RuntimeException {
      * Returns the associated stream identifier, or {@code -1} if the current error is not stream-scoped.
      * @return stream identifier
      */
-    public int getStreamId() {
+    public long getStreamId() {
         return this.streamId;
     }
 
@@ -168,7 +168,7 @@ public class HttpProtocolException extends RuntimeException {
      * Updates the associated stream identifier for protocol stacks that can determine it at a later stage.
      * @param streamId stream identifier
      */
-    public void setStreamId(int streamId) {
+    public void setStreamId(long streamId) {
         this.streamId = streamId;
     }
 
@@ -177,7 +177,7 @@ public class HttpProtocolException extends RuntimeException {
      * @param streamId stream identifier
      * @return current exception instance
      */
-    public HttpProtocolException streamId(int streamId) {
+    public HttpProtocolException streamId(long streamId) {
         this.streamId = streamId;
         return this;
     }
@@ -186,7 +186,7 @@ public class HttpProtocolException extends RuntimeException {
      * Returns the stream identifier in a style consistent with other HTTP objects in this module.
      * @return stream identifier
      */
-    public int streamId() {
+    public long streamId() {
         return this.streamId;
     }
 }

@@ -69,8 +69,8 @@ import net.hasor.neta.codec.http.*;
  * @see CorsUtil
  */
 public class CorsHandler implements ProtoHandler<HttpObject, Object> {
-    private final CorsConfig                config;
-    private final Map<Integer, StreamState> streamState = new HashMap<Integer, StreamState>();
+    private final CorsConfig             config;
+    private final Map<Long, StreamState> streamState = new HashMap<Long, StreamState>();
 
     /**
      * Creates a new {@code CorsHandler} with the given configuration.
@@ -108,7 +108,7 @@ public class CorsHandler implements ProtoHandler<HttpObject, Object> {
     }
 
     private void processObject(HttpObject object, ProtoSndQueue<Object> dst) {
-        int streamId = object.streamId();
+        long streamId = object.streamId();
         StreamState state = this.streamState.get(streamId);
 
         if (state != null && state.discarding) {
@@ -209,7 +209,7 @@ public class CorsHandler implements ProtoHandler<HttpObject, Object> {
         return object instanceof LastHttpContent;
     }
 
-    private void removeState(int streamId) {
+    private void removeState(long streamId) {
         StreamState removed = this.streamState.remove(streamId);
         if (removed != null) {
             removed.requestHeaders.release();
@@ -217,7 +217,7 @@ public class CorsHandler implements ProtoHandler<HttpObject, Object> {
     }
 
     private static class StreamState {
-        private final int                streamId;
+        private final long               streamId;
         private final HttpRequest        requestLine;
         private final DefaultHttpHeaders requestHeaders = new DefaultHttpHeaders();
         private final List<HttpObject>   buffered       = new ArrayList<HttpObject>();

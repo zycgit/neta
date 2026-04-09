@@ -45,7 +45,7 @@ public class Http2PongEvent extends AbstractHttp2Event {
      * Creates a PONG event with an empty 8-byte payload.
      * @param streamId the associated stream ID
      */
-    public Http2PongEvent(int streamId) {
+    public Http2PongEvent(long streamId) {
         this.streamId(streamId);
         this.data = ByteBuf.wrap(new byte[8]);
     }
@@ -55,7 +55,7 @@ public class Http2PongEvent extends AbstractHttp2Event {
      * @param streamId the associated stream ID
      * @param data the PONG payload, which must be exactly 8 bytes
      */
-    public Http2PongEvent(int streamId, ByteBuf data) {
+    public Http2PongEvent(long streamId, ByteBuf data) {
         this.streamId(streamId);
 
         if (data == null) {

@@ -33,42 +33,42 @@ import static org.junit.Assert.assertTrue;
 
 public class Http2RealPipelineTest extends AbstractHttp2Test {
     private static class RequestSnapshot {
-        private final int    streamId;
+        private final long   streamId;
         private final String uri;
         private final String body;
 
-        private RequestSnapshot(int streamId, String uri, String body) {
+        private RequestSnapshot(long streamId, String uri, String body) {
             this.streamId = streamId;
             this.uri = uri;
             this.body = body;
         }
     }
 
-    private HttpRequest postStreamRequest(int streamId, String uri) {
+    private HttpRequest postStreamRequest(long streamId, String uri) {
         DefaultHttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.POST, uri);
         request.streamId(streamId);
         return request;
     }
 
-    private HttpByteBuf streamContent(int streamId, String bodyText) {
+    private HttpByteBuf streamContent(long streamId, String bodyText) {
         DefaultHttpByteBuf content = new DefaultHttpByteBuf(ByteBuf.wrap(bodyText.getBytes(StandardCharsets.UTF_8)));
         content.streamId(streamId);
         return content;
     }
 
-    private LastHttpContent lastStreamContent(int streamId, String bodyText) {
+    private LastHttpContent lastStreamContent(long streamId, String bodyText) {
         DefaultLastHttpContent content = new DefaultLastHttpContent(ByteBuf.wrap(bodyText.getBytes(StandardCharsets.UTF_8)));
         content.streamId(streamId);
         return content;
     }
 
-    private HttpResponse streamResponse(int streamId) {
+    private HttpResponse streamResponse(long streamId) {
         DefaultHttpResponse response = new DefaultHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK);
         response.streamId(streamId);
         return response;
     }
 
-    private LastHttpHeaders streamResponseHeaders(int streamId, int contentLength) {
+    private LastHttpHeaders streamResponseHeaders(long streamId, int contentLength) {
         DefaultLastHttpHeaders headers = new DefaultLastHttpHeaders();
         headers.streamId(streamId);
         headers.setHeader(HttpHeaderNames.CONTENT_LENGTH, String.valueOf(contentLength));
@@ -128,9 +128,9 @@ public class Http2RealPipelineTest extends AbstractHttp2Test {
 
             List<RequestSnapshot> requests = drainQueue(received);
             assertEquals(3, requests.size());
-            assertEquals(1, requests.get(0).streamId);
-            assertEquals(3, requests.get(1).streamId);
-            assertEquals(5, requests.get(2).streamId);
+            assertEquals(1L, requests.get(0).streamId);
+            assertEquals(3L, requests.get(1).streamId);
+            assertEquals(5L, requests.get(2).streamId);
             assertEquals("/alpha", requests.get(0).uri);
             assertEquals("/beta", requests.get(1).uri);
             assertEquals("/gamma", requests.get(2).uri);
@@ -173,14 +173,14 @@ public class Http2RealPipelineTest extends AbstractHttp2Test {
             assertTrue(pipe.serverOutboundErrors().isEmpty());
 
             List<RequestSnapshot> requests = drainQueue(received);
-            Map<Integer, String> byStream = new LinkedHashMap<>();
+            Map<Long, String> byStream = new LinkedHashMap<>();
             assertEquals(2, requests.size());
             for (RequestSnapshot request : requests) {
                 byStream.put(request.streamId, request.body);
             }
 
-            assertEquals("ABCD", byStream.get(1));
-            assertEquals("1234", byStream.get(3));
+            assertEquals("ABCD", byStream.get(1L));
+            assertEquals("1234", byStream.get(3L));
         });
     }
 
@@ -220,16 +220,16 @@ public class Http2RealPipelineTest extends AbstractHttp2Test {
             List<HttpObject> responses = castHttpObjects(drainQueue(pipe.clientInbound()));
             try {
                 assertEquals(3, responses.size());
-                Map<Integer, String> byStream = new LinkedHashMap<>();
+                Map<Long, String> byStream = new LinkedHashMap<>();
                 for (HttpObject item : responses) {
                     assertTrue(item instanceof FullHttpResponse);
                     FullHttpResponse response = (FullHttpResponse) item;
                     byStream.put(response.streamId(), utf8(response.content()));
                 }
 
-                assertEquals("client:/alpha:A", byStream.get(1));
-                assertEquals("client:/beta:BB", byStream.get(3));
-                assertEquals("client:/gamma:CCC", byStream.get(5));
+                assertEquals("client:/alpha:A", byStream.get(1L));
+                assertEquals("client:/beta:BB", byStream.get(3L));
+                assertEquals("client:/gamma:CCC", byStream.get(5L));
             } finally {
                 free(responses);
             }
@@ -239,8 +239,8 @@ public class Http2RealPipelineTest extends AbstractHttp2Test {
     @Test
     public void testClientInterleavedResponses() throws Throwable {
         autoCloseNeta(neta -> {
-            AtomicReference<Integer> alphaStreamId = new AtomicReference<>();
-            AtomicReference<Integer> betaStreamId = new AtomicReference<>();
+            AtomicReference<Long> alphaStreamId = new AtomicReference<>();
+            AtomicReference<Long> betaStreamId = new AtomicReference<>();
             VirtualPipe pipe = openHttp2VirtualPipeAsClientStream(neta, (context, src, dst) -> {
                 while (src.hasMore()) {
                     HttpObject item = src.takeMessage();
@@ -263,8 +263,8 @@ public class Http2RealPipelineTest extends AbstractHttp2Test {
 
             assertTrue(waitUntil(() -> alphaStreamId.get() != null && betaStreamId.get() != null, 1000L));
 
-            int alpha = alphaStreamId.get();
-            int beta = betaStreamId.get();
+            long alpha = alphaStreamId.get();
+            long beta = betaStreamId.get();
             pipe.server().sendData(streamResponse(alpha)).get();
             pipe.server().sendData(streamResponseHeaders(alpha, 4)).get();
             pipe.server().sendData(streamResponse(beta)).get();
@@ -292,9 +292,9 @@ public class Http2RealPipelineTest extends AbstractHttp2Test {
 
             List<HttpObject> responses = castHttpObjects(drainQueue(pipe.clientInbound()));
             try {
-                Map<Integer, HttpStatus> statusByStream = new LinkedHashMap<>();
-                Map<Integer, StringBuilder> bodyByStream = new LinkedHashMap<>();
-                Map<Integer, Integer> endByStream = new LinkedHashMap<>();
+                Map<Long, HttpStatus> statusByStream = new LinkedHashMap<>();
+                Map<Long, StringBuilder> bodyByStream = new LinkedHashMap<>();
+                Map<Long, Integer> endByStream = new LinkedHashMap<>();
                 for (HttpObject item : responses) {
                     if (item instanceof HttpResponse) {
                         HttpResponse response = (HttpResponse) item;
@@ -309,12 +309,12 @@ public class Http2RealPipelineTest extends AbstractHttp2Test {
                     }
                 }
 
-                assertEquals(HttpStatus.OK, statusByStream.get(1));
-                assertEquals(HttpStatus.OK, statusByStream.get(3));
-                assertEquals("ABCD", bodyByStream.get(1).toString());
-                assertEquals("1234", bodyByStream.get(3).toString());
-                assertEquals(Integer.valueOf(1), endByStream.get(1));
-                assertEquals(Integer.valueOf(1), endByStream.get(3));
+                assertEquals(HttpStatus.OK, statusByStream.get(1L));
+                assertEquals(HttpStatus.OK, statusByStream.get(3L));
+                assertEquals("ABCD", bodyByStream.get(1L).toString());
+                assertEquals("1234", bodyByStream.get(3L).toString());
+                assertEquals(Integer.valueOf(1), endByStream.get(1L));
+                assertEquals(Integer.valueOf(1), endByStream.get(3L));
             } finally {
                 free(responses);
             }
