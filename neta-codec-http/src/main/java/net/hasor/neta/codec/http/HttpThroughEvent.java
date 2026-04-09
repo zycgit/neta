@@ -31,30 +31,24 @@ public final class HttpThroughEvent extends AbstractHttpEvent {
      * @param enabled whether transparent mode should be enabled
      */
     public HttpThroughEvent(boolean enabled) {
+        this(enabled, 0L);
+    }
+
+    /**
+     * Create a transparent-mode toggle event with an explicit stream identifier.
+     * @param enabled whether transparent mode should be enabled
+     * @param streamId stream identifier to preserve during transparent pass-through
+     */
+    public HttpThroughEvent(boolean enabled, long streamId) {
         this.enabled = enabled;
-    }
-
-    /**
-     * Create an event that enables transparent mode.
-     * @return an event that enables transparent mode
-     */
-    public static HttpThroughEvent enable() {
-        return new HttpThroughEvent(true);
-    }
-
-    /**
-     * Create an event that disables transparent mode.
-     * @return an event that disables transparent mode
-     */
-    public static HttpThroughEvent disable() {
-        return new HttpThroughEvent(false);
+        super.streamId(streamId);
     }
 
     /**
      * Return whether this event enables transparent mode.
      * @return whether transparent mode is enabled
      */
-    public boolean enabled() {
+    public boolean isEnabled() {
         return this.enabled;
     }
 

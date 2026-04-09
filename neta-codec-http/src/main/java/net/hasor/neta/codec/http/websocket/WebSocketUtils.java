@@ -14,10 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
-import java.nio.ByteBuffer;
-import java.nio.charset.CharacterCodingException;
-import java.nio.charset.CharsetDecoder;
-import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -25,7 +21,6 @@ import java.util.Collections;
 import java.util.List;
 import net.hasor.cobble.RandomUtils;
 import net.hasor.cobble.StringUtils;
-import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.ProtoContext;

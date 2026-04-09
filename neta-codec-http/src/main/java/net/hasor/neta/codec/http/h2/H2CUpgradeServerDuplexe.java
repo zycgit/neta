@@ -314,7 +314,7 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
         byte[] settingsPayload = decodeSettingsPayload(request.getString(HttpHeaderNames.HTTP2_SETTINGS));
         applyRemoteSettings(context, settingsPayload);
         sendSwitchingProtocols(context);
-        context.fireEventSnd(HttpThroughEvent.class, HttpThroughEvent.enable());
+        context.fireEventSnd(HttpThroughEvent.class, new HttpThroughEvent(true, request.streamId()));
         sendServerPreface(context);
         this.upgraded = true;
 

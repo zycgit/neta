@@ -117,10 +117,10 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
 
         HttpThroughEvent modeEvent = (HttpThroughEvent) event.getData();
         HttpContext httpCtx = HttpContext.getOrCreate(context);
-        boolean changed = httpCtx.switchTransparentMode(modeEvent.enabled());
+        boolean changed = httpCtx.switchTransparentMode(modeEvent.isEnabled(), modeEvent.streamId());
         if (context.getConfig().isPrintLog()) {
             long channelId = context.getChannel().getChannelId();
-            logger.info("[HTTP-RESP] channel=" + channelId + " transparent-mode=" + modeEvent.enabled() + (changed ? "" : " (unchanged)"));
+            logger.info("[HTTP-RESP] channel=" + channelId + " transparent-mode=" + modeEvent.isEnabled() + (changed ? "" : " (unchanged)"));
         }
         return true;
     }
@@ -135,7 +135,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
             while (src.hasMore()) {
                 ByteBuf msg = src.takeMessage();
                 if (msg != null) {
-                    dst.offerMessage(new DefaultHttpByteBuf(msg));
+                    dst.offerMessage(new DefaultHttpByteBuf(msg, Math.toIntExact(httpCtx.transparentStreamId())));
                 }
             }
             return ProtoStatus.Next;

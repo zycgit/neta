@@ -505,7 +505,7 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
             List<WebSocketExtensionRuntime> runtimeExtensions = InnelUtils.resolveRuntimeExtensions(extensionResults, this.settings);
             WebSocketContextImpl socketContext = new WebSocketContextImpl(true, negotiatedProtocol, versionCode, state.path, extensionResults, runtimeExtensions);
 
-            this.finishWebSocketUpgrade(context, socketContext);
+            this.finishWebSocketUpgrade(context, socketContext, state.streamId);
             state.ready = true;
         } catch (WebSocketHandshakeException e) {
             logger.warn("Websocket server handshake protocol violation: " + e.getMessage());

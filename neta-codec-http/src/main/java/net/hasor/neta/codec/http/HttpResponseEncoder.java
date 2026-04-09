@@ -88,10 +88,10 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
 
         HttpThroughEvent modeEvent = (HttpThroughEvent) event.getData();
         HttpContext httpCtx = HttpContext.getOrCreate(context);
-        boolean changed = httpCtx.switchTransparentMode(modeEvent.enabled());
+        boolean changed = httpCtx.switchTransparentMode(modeEvent.isEnabled(), modeEvent.streamId());
         if (context.getConfig().isPrintLog()) {
             long channelId = context.getChannel().getChannelId();
-            logger.info("[HTTP-RESP-ENC] channel=" + channelId + " transparent-mode=" + modeEvent.enabled() + (changed ? "" : " (unchanged)"));
+            logger.info("[HTTP-RESP-ENC] channel=" + channelId + " transparent-mode=" + modeEvent.isEnabled() + (changed ? "" : " (unchanged)"));
         }
         return true;
     }

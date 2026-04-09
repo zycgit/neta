@@ -75,7 +75,7 @@ public class HttpRoleAggregatorTest extends AbstractHttpTest {
                 ctx.addLast("server-agg", new HttpServerDuplexeAggregator());
             }, VrtSoConfig.asServer());
 
-            serverPipe.channel().fireEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
+            serverPipe.channel().fireEvent(HttpThroughEvent.class, new HttpThroughEvent(true));
             HttpContext serverContext = serverPipe.channel().findProtoContext(HttpContext.class);
             assertNotNull(serverContext);
             assertTrue(serverContext.isTransparentMode());
@@ -99,8 +99,8 @@ public class HttpRoleAggregatorTest extends AbstractHttpTest {
                 ctx.addLast("server-agg", new HttpServerDuplexeAggregator());
             }, VrtSoConfig.asServer());
 
-            serverPipe.channel().fireEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
-            serverPipe.channel().fireEvent(HttpThroughEvent.class, HttpThroughEvent.disable());
+            serverPipe.channel().fireEvent(HttpThroughEvent.class, new HttpThroughEvent(true));
+            serverPipe.channel().fireEvent(HttpThroughEvent.class, new HttpThroughEvent(false));
             HttpContext serverContext = serverPipe.channel().findProtoContext(HttpContext.class);
             assertNotNull(serverContext);
             assertFalse(serverContext.isTransparentMode());
@@ -129,8 +129,8 @@ public class HttpRoleAggregatorTest extends AbstractHttpTest {
                 ctx.addLast("server-agg", new HttpServerDuplexeAggregator());
             }, VrtSoConfig.asServer());
 
-            serverPipe.channel().fireEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
-            serverPipe.channel().fireEvent(HttpThroughEvent.class, HttpThroughEvent.disable());
+            serverPipe.channel().fireEvent(HttpThroughEvent.class, new HttpThroughEvent(true));
+            serverPipe.channel().fireEvent(HttpThroughEvent.class, new HttpThroughEvent(false));
             HttpContext serverContext = serverPipe.channel().findProtoContext(HttpContext.class);
             assertNotNull(serverContext);
             assertFalse(serverContext.isTransparentMode());
@@ -201,7 +201,7 @@ public class HttpRoleAggregatorTest extends AbstractHttpTest {
                 ctx.addLast("client-agg", new HttpClientDuplexeAggregator());
             }, VrtSoConfig.asClient());
 
-            clientPipe.channel().fireEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
+            clientPipe.channel().fireEvent(HttpThroughEvent.class, new HttpThroughEvent(true));
             HttpContext clientContext = clientPipe.channel().findProtoContext(HttpContext.class);
             assertNotNull(clientContext);
             assertTrue(clientContext.isTransparentMode());
@@ -224,8 +224,8 @@ public class HttpRoleAggregatorTest extends AbstractHttpTest {
                 ctx.addLast("client-agg", new HttpClientDuplexeAggregator());
             }, VrtSoConfig.asClient());
 
-            clientPipe.channel().fireEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
-            clientPipe.channel().fireEvent(HttpThroughEvent.class, HttpThroughEvent.disable());
+            clientPipe.channel().fireEvent(HttpThroughEvent.class, new HttpThroughEvent(true));
+            clientPipe.channel().fireEvent(HttpThroughEvent.class, new HttpThroughEvent(false));
             HttpContext clientContext = clientPipe.channel().findProtoContext(HttpContext.class);
             assertNotNull(clientContext);
             assertFalse(clientContext.isTransparentMode());
@@ -254,8 +254,8 @@ public class HttpRoleAggregatorTest extends AbstractHttpTest {
                 ctx.addLast("client-agg", new HttpClientDuplexeAggregator());
             }, VrtSoConfig.asClient());
 
-            clientPipe.channel().fireEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
-            clientPipe.channel().fireEvent(HttpThroughEvent.class, HttpThroughEvent.disable());
+            clientPipe.channel().fireEvent(HttpThroughEvent.class, new HttpThroughEvent(true));
+            clientPipe.channel().fireEvent(HttpThroughEvent.class, new HttpThroughEvent(false));
             HttpContext clientContext = clientPipe.channel().findProtoContext(HttpContext.class);
             assertNotNull(clientContext);
             assertFalse(clientContext.isTransparentMode());

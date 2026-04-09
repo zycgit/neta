@@ -313,7 +313,8 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
                     List<WebSocketExtensionResult> extResults = InnelUtils.parseExtensions(extStr);
                     List<WebSocketExtensionRuntime> runtimeExt = InnelUtils.resolveRuntimeExtensions(extResults, this.settings);
 
-                    this.finishWebSocketUpgrade(context, new WebSocketContextImpl(false, subProtocol, versionCode, acceptedPath, extResults, runtimeExt));
+                    WebSocketContext wsContext = new WebSocketContextImpl(false, subProtocol, versionCode, acceptedPath, extResults, runtimeExt);
+                    this.finishWebSocketUpgrade(context, wsContext, state.requestParts.streamId());
                     state.ready = true;
                     discardHandshakeRequestSnapshot(state);
                 } catch (Throwable e) {

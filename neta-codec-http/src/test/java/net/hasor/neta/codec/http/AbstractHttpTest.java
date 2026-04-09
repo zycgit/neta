@@ -481,7 +481,7 @@ public class AbstractHttpTest {
     }
 
     private DefaultHttpByteBuf snapshotHttpByteBuf(HttpByteBuf content) {
-        DefaultHttpByteBuf copy = new DefaultHttpByteBuf(retainContent(content.content()));
+        DefaultHttpByteBuf copy = new DefaultHttpByteBuf(retainContent(content.content()), content.streamId());
         return inheritHttpObjectState(copy, content);
     }
 

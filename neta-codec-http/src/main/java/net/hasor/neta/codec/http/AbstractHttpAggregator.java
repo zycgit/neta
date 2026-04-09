@@ -80,12 +80,12 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
             return true;
         }
 
-        HttpThroughEvent modeEvent = (HttpThroughEvent) event.getData();
-        HttpContext.getOrCreate(context).switchTransparentMode(modeEvent.enabled());
+        HttpThroughEvent throughEvent = (HttpThroughEvent) event.getData();
+        HttpContext.getOrCreate(context).switchTransparentMode(throughEvent.isEnabled(), throughEvent.streamId());
         this.resetAggregation();
         if (context.getConfig().isPrintLog()) {
             long channelID = context.getChannel().getChannelId();
-            logger.info(this.logPrefix() + " channel=" + channelID + " transparent-mode=" + modeEvent.enabled() + ", aggregation reset");
+            logger.info(this.logPrefix() + " channel=" + channelID + " transparent-mode=" + throughEvent.isEnabled() + ", aggregation reset");
         }
         return true;
     }

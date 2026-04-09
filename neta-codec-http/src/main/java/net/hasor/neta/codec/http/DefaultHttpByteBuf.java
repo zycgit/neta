@@ -31,7 +31,17 @@ public class DefaultHttpByteBuf extends AbstractHttpObject<HttpByteBuf> implemen
      * @param content chunk payload
      */
     public DefaultHttpByteBuf(ByteBuf content) {
+        this(content, 0);
+    }
+
+    /**
+     * Create a raw byte wrapper with the specified payload and stream identifier.
+     * @param content chunk payload
+     * @param streamId stream identifier
+     */
+    public DefaultHttpByteBuf(ByteBuf content, int streamId) {
         this.content = content == null ? ByteBuf.EMPTY : content;
+        this.streamId(streamId);
     }
 
     @Override

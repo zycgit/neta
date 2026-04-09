@@ -32,6 +32,7 @@ class HttpContext {
     final EncodeState         reqEnc  = new EncodeState();
     final EncodeState         respEnc = new EncodeState();
     boolean            transparentMode;
+    long               transparentStreamId;
     InboundMessageType inboundErrorType;
 
     /** Returns the HttpContext for the current connection, creating one if necessary. */
@@ -40,6 +41,7 @@ class HttpContext {
         if (existing != null) {
             return existing;
         }
+
         HttpContext impl = new HttpContext();
         context.context(HttpContext.class, impl);
         return impl;
@@ -52,14 +54,25 @@ class HttpContext {
 
     /** Switches transparent pass-through mode and resets the HTTP state for the current connection. */
     public boolean switchTransparentMode(boolean enabled) {
+        return this.switchTransparentMode(enabled, 0L);
+    }
+
+    /** Switches transparent pass-through mode and remembers the stream identifier associated with the mode switch. */
+    public boolean switchTransparentMode(boolean enabled, long streamId) {
         boolean changed = this.transparentMode != enabled;
         this.transparentMode = enabled;
+        this.transparentStreamId = streamId;
         this.req.releaseAndReset();
         this.resp.releaseAndReset();
         this.reqEnc.reset();
         this.respEnc.reset();
         this.inboundErrorType = null;
         return changed;
+    }
+
+    /** Returns the stream identifier that should be applied to transparent-mode HTTP objects. */
+    public long transparentStreamId() {
+        return this.transparentStreamId;
     }
 
     /** Records the message type associated with the most recent inbound decode error on the current connection. */

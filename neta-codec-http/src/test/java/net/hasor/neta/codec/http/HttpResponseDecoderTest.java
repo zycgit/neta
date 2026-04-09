@@ -62,15 +62,17 @@ public class HttpResponseDecoderTest extends AbstractHttpTest {
                 ctx.addLastDecoder("resp-decoder", new HttpResponseDecoder());
             }, VrtSoConfig.asClient());
 
-            pipe.channel().fireEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
+            pipe.channel().fireEvent(HttpThroughEvent.class, new HttpThroughEvent(true, 23));
             HttpContext httpContext = pipe.channel().findProtoContext(HttpContext.class);
             assertNotNull(httpContext);
             assertTrue(httpContext.isTransparentMode());
+            assertEquals(23, httpContext.transparentStreamId());
 
             List<HttpObject> res = receiveAndIntBound(pipe, ascii("raw-response-frame"));
             assertEquals(1, res.size());
             assertTrue(res.get(0) instanceof HttpByteBuf);
             assertEquals("raw-response-frame", text(((HttpByteBuf) res.get(0)).content()));
+            assertEquals(23, res.get(0).streamId());
         });
     }
 
@@ -81,8 +83,8 @@ public class HttpResponseDecoderTest extends AbstractHttpTest {
                 ctx.addLastDecoder("resp-decoder", new HttpResponseDecoder());
             }, VrtSoConfig.asClient());
 
-            pipe.channel().fireEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
-            pipe.channel().fireEvent(HttpThroughEvent.class, HttpThroughEvent.disable());
+            pipe.channel().fireEvent(HttpThroughEvent.class, new HttpThroughEvent(true));
+            pipe.channel().fireEvent(HttpThroughEvent.class, new HttpThroughEvent(false));
             HttpContext httpContext = pipe.channel().findProtoContext(HttpContext.class);
             assertNotNull(httpContext);
             assertFalse(httpContext.isTransparentMode());
