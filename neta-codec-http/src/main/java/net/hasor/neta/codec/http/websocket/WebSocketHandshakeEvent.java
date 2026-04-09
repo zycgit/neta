@@ -54,12 +54,14 @@ public class WebSocketHandshakeEvent extends AbstractHttpEvent {
 
     /**
      * Create the event from the parsed handshake context.
+     * @param streamId streamId
      * @param webSocketContext context produced by the completed handshake
      */
-    public WebSocketHandshakeEvent(WebSocketContext webSocketContext) {
+    public WebSocketHandshakeEvent(long streamId, WebSocketContext webSocketContext) {
         if (webSocketContext == null) {
             throw new IllegalArgumentException("webSocketContext must not be null");
         }
+        this.streamId(streamId);
         this.context = webSocketContext;
     }
 

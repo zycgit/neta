@@ -132,7 +132,12 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
 
     private void sendControlEventFrame(ProtoContext context, HttpEvent event, ByteBuf content, boolean ping) {
         try {
-            WebSocketMessage controlMessage = InternalWebSocketMessage.of(ping ? WebSocketOpcode.PING : WebSocketOpcode.PONG, content).streamId(Math.toIntExact(event.streamId()));
+            WebSocketMessage controlMessage;
+            if (ping) {
+                controlMessage = InternalWebSocketMessage.of(event.streamId(), WebSocketOpcode.PING, content);
+            } else {
+                controlMessage = InternalWebSocketMessage.of(event.streamId(), WebSocketOpcode.PONG, content);
+            }
             context.sendData(controlMessage);
         } finally {
             event.release();

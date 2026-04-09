@@ -298,7 +298,7 @@ public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
             completeHandshake(pipe);
 
             ByteBuf localPayload = ByteBuf.wrap(new byte[] { (byte) ((WebSocketCode.NORMAL_CLOSURE >> 8) & 0xFF), (byte) (WebSocketCode.NORMAL_CLOSURE & 0xFF) });
-            pipe.server().sendData(InternalWebSocketMessage.of(WebSocketOpcode.CLOSE, localPayload)).get();
+            pipe.server().sendData(InternalWebSocketMessage.of(event.streamId(), WebSocketOpcode.CLOSE, localPayload)).get();
             assertTrue(waitUntil(() -> !pipe.clientInbound().isEmpty(), 1000L));
 
             List<HttpObject> firstOutbound = drainQueue(pipe.clientInbound());

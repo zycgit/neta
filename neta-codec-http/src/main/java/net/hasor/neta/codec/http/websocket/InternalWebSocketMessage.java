@@ -36,7 +36,7 @@ final class InternalWebSocketMessage extends AbstractWebSocketMessage {
      * @param content optional payload content; {@code null} is normalized to an empty buffer
      * @return internal message instance
      */
-    static InternalWebSocketMessage of(WebSocketOpcode opcode, ByteBuf content) {
+    static InternalWebSocketMessage of(long streamId, WebSocketOpcode opcode, ByteBuf content) {
         if (opcode != WebSocketOpcode.PING && opcode != WebSocketOpcode.PONG && opcode != WebSocketOpcode.CLOSE) {
             throw new IllegalArgumentException("unsupported control opcode: " + opcode);
         }
@@ -44,6 +44,7 @@ final class InternalWebSocketMessage extends AbstractWebSocketMessage {
         InternalWebSocketMessage message = new InternalWebSocketMessage();
         message.opcode = opcode;
         message.initMessage(WebSocketMessage.FINAL_SEQUENCE, content == null ? ByteBuf.EMPTY : content);
+        message.streamId(streamId);
         return message;
     }
 

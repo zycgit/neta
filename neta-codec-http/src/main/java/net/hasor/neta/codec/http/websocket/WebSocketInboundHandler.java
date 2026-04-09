@@ -264,7 +264,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
     }
 
     private void handlePing(ProtoContext context, WebSocketFrame frame) {
-        WebSocketMessage pong = InternalWebSocketMessage.of(WebSocketOpcode.PONG, retainContent(frame.content())).streamId(frame.streamId());
+        WebSocketMessage pong = InternalWebSocketMessage.of(frame.streamId(), WebSocketOpcode.PONG, retainContent(frame.content()));
         context.sendData(pong);
     }
 
@@ -284,7 +284,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
             return;
         }
 
-        WebSocketMessage closeReply = InternalWebSocketMessage.of(WebSocketOpcode.CLOSE, closePayload(e.closeStatusCode())).streamId(frame.streamId());
+        WebSocketMessage closeReply = InternalWebSocketMessage.of(frame.streamId(), WebSocketOpcode.CLOSE, closePayload(e.closeStatusCode()));
         InnelUtils.markCloseSent(context);
         InnelUtils.executeCloseAction(context, WebSocketCloseType.SEND_CLOSE_AND_TERMINATE, context.sendData(closeReply));
     }
@@ -330,14 +330,19 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
         }
 
         ByteBuf replyContent = buildCloseReplyContent(context, content);
-        WebSocketMessage closeReply = InternalWebSocketMessage.of(WebSocketOpcode.CLOSE, replyContent).streamId(frame.streamId());
+        WebSocketMessage closeReply = InternalWebSocketMessage.of(frame.streamId(), WebSocketOpcode.CLOSE, replyContent);
         InnelUtils.markCloseSent(context);
         InnelUtils.executeCloseAction(context, WebSocketCloseType.SEND_CLOSE_AND_TERMINATE, context.sendData(closeReply));
     }
 
     private void sendControlEventFrame(ProtoContext context, HttpEvent event, ByteBuf content, boolean ping) {
         try {
-            WebSocketMessage controlMessage = InternalWebSocketMessage.of(ping ? WebSocketOpcode.PING : WebSocketOpcode.PONG, content).streamId(Math.toIntExact(event.streamId()));
+            WebSocketMessage controlMessage;
+            if (ping) {
+                controlMessage = InternalWebSocketMessage.of(event.streamId(), WebSocketOpcode.PING, content);
+            } else {
+                controlMessage = InternalWebSocketMessage.of(event.streamId(), WebSocketOpcode.PONG, content);
+            }
             context.sendData(controlMessage);
         } finally {
             event.release();
