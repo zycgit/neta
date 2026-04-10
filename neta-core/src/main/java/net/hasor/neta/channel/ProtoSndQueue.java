@@ -14,85 +14,49 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import java.util.Collections;
 import java.util.List;
 
 /**
- * Outbound data queue at one stage boundary of the protocol pipeline.
- * <p>It stores outbound messages already produced by the current stage. Downstream handlers offer
- * messages here, and the upstream boundary or transport layer takes them away and continues sending.</p>
- * <h3>Offer methods</h3>
- * <ul>
- *   <li>{@link #offerMessage(Object[])}, {@link #offerMessage(List)}, and {@link #offerMessage(ProtoRcvQueue)} are used for bulk message offers.</li>
- *   <li>{@link #offerMessage(Object)} is used to offer a single message.</li>
- *   <li>Bulk offers use all-or-nothing semantics. If there are not enough slots, the method returns {@code false} and the queue remains unchanged.</li>
- * </ul>
- * <h3>Slots</h3>
- * <ul>
- *   <li>{@link #slotSize()} reports the current number of remaining writable slots.</li>
- *   <li>{@link #hasSlot()} reports whether more writes are currently possible.</li>
- *   <li>When the queue becomes full, {@link #offerMessage} returns {@code false}.</li>
- * </ul>
- * <h3>Ownership</h3>
- * <ul>
- *   <li>After a successful offer, message ownership transfers to the queue.</li>
- *   <li>When an offer fails, ownership remains with the caller.</li>
- *   <li>When messages are transferred successfully from another {@link ProtoRcvQueue}, ownership of the source queue's messages moves to the current queue in one step.</li>
- * </ul>
- * @param <T> outbound message type
- * @author 赵永春 (zyc@hasor.net)
+ * Main send-side queue interface.
+ * <p>On top of the write semantics defined by {@link ProtoSndData}, it adds capacity management and named send views.</p>
+ * <p>A main send queue can maintain multiple named send views, and the data inside those views can eventually be pushed back into the main send queue for continued sending as defined by the implementation.</p>
+ * <p>The main send queue and these named send views share the same capacity limit. In other words, after data is written into a view,
+ * it still consumes the shared capacity of the entire send-container system rather than gaining extra slots simply because it entered a view.</p>
+ * <p>This shared-capacity model is the foundation of send-side backpressure: backpressure decisions are based on the total amount of data currently held by the main queue and all named views together,
+ * rather than only by the number of elements in the main queue itself.</p>
+ * @param <T> send message type
+ * @author Yongchun Zhao (zyc@hasor.net)
  * @version : 2023-10-17
- * @see ProtoRcvQueue
+ * @see ProtoSndData
+ * @see ProtoSndQueueView
  * @see ProtoQueue
  */
-public interface ProtoSndQueue<T> {
+public interface ProtoSndQueue<T> extends ProtoSndData<T> {
     /**
-     * Return the queue capacity.
+     * Returns the capacity limit of the current main send queue.
+     * <p>The returned value is the total capacity shared by the main send queue and all of its named send views.</p>
      */
     int getCapacity();
 
-    /** Return the number of remaining writable slots. */
-    int slotSize();
-
-    default boolean wasFull() {
-        return this.slotSize() == 0;
-    }
-
-    /** Return {@code true} when at least one more message can still be written immediately. */
-    default boolean hasSlot() {
-        return slotSize() > 0;
-    }
+    /**
+     * Returns the send view with the specified name.
+     * <p>If the view does not yet exist, whether it is created automatically is implementation-specific.</p>
+     * <p>Whether newly created or not, the view shares the same capacity constraint as the current main send queue.</p>
+     * @param key send view name
+     * @return the corresponding send view
+     */
+    ProtoSndQueueView<T> newSub(String key);
 
     /**
-     * Offer an array of messages.
-     * <p>This operation is atomic: if remaining slots are insufficient for the entire array, no
-     * element is accepted and {@code false} is returned.</p>
-     * <p>On success, ownership of all offered messages transfers to the queue.</p>
+     * Returns the names of all send views that currently exist under this main send queue.
+     * @return list of all send view names
      */
-    boolean offerMessage(T[] offerList);
+    List<String> subKeys();
 
     /**
-     * Offer one message and return whether it was accepted.
-     * <p>On success, ownership transfers to the queue immediately.</p>
+     * Determines whether a send view with the specified name already exists.
+     * @param key send view name
+     * @return {@code true} if the view exists
      */
-    default boolean offerMessage(T offerMessage) {
-        return this.offerMessage(Collections.singletonList(offerMessage));
-    }
-
-    /**
-     * Offer a list of messages.
-     * <p>This operation is atomic: if remaining slots are insufficient for the entire list, no
-     * element is accepted and {@code false} is returned.</p>
-     * <p>On success, ownership of all offered messages transfers to the queue.</p>
-     */
-    boolean offerMessage(List<T> offerList);
-
-    /**
-     * Transfer messages from another receive queue.
-     * <p>This operation is atomic: if remaining slots are insufficient for all readable elements in
-     * {@code offerList}, nothing is taken from the source queue and {@code false} is returned.</p>
-     * <p>On success, the method drains the source queue by calling {@link ProtoRcvQueue#takeMessage(int)},
-     * so ownership transfers from the source queue to the current queue in one step.</p>
-     */
-    boolean offerMessage(ProtoRcvQueue<T> offerList);
+    boolean hasSub(String key);
 }

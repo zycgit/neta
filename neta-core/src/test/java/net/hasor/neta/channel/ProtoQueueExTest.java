@@ -258,6 +258,94 @@ public class ProtoQueueExTest {
         assert dst.queueSize() == 3;
     }
 
+    @Test
+    public void drainToQueue_autoCreatesAndAutoRemovesEmptyReceiveView() {
+        ProtoQueue<Integer> q = new ProtoQueue<>(10);
+        q.offerMessage(1);
+        q.offerMessage(2);
+
+        assert !q.hasQueue("rcv-A");
+        q.drainToQueue("rcv-A", 2);
+
+        assert q.hasQueue("rcv-A");
+        assert q.queueSize() == 0;
+
+        ProtoRcvQueueView<Integer> view = q.queueView("rcv-A");
+        List<Integer> drained = view.takeMessage(2);
+        assert drained.size() == 2;
+        assert drained.get(0) == 1;
+        assert drained.get(1) == 2;
+        assert !q.hasQueue("rcv-A");
+    }
+
+    @Test
+    public void emptyReceiveView_isRemovedAfterReplay() {
+        ProtoQueue<Integer> q = new ProtoQueue<>(10);
+        q.offerMessage(10);
+        q.offerMessage(20);
+
+        q.drainToQueue("rcv-B", 2);
+        ProtoRcvQueueView<Integer> view = q.queueView("rcv-B");
+        view.returnToTail();
+
+        assert !q.hasQueue("rcv-B");
+        assert q.queueSize() == 2;
+        assert q.takeMessage().equals(10);
+        assert q.takeMessage().equals(20);
+    }
+
+    @Test
+    public void emptySendView_isRemovedAfterPush() {
+        ProtoQueue<Integer> q = new ProtoQueue<>(10);
+        ProtoSndQueueView<Integer> sub = q.newSub("snd-A");
+
+        assert !q.hasSub("snd-A");
+        assert sub.offerMessage(7);
+        assert sub.offerMessage(8);
+        assert q.hasSub("snd-A");
+
+        sub.push();
+
+        assert !q.hasSub("snd-A");
+        assert q.queueSize() == 2;
+        assert q.takeMessage().equals(7);
+        assert q.takeMessage().equals(8);
+    }
+
+    @Test
+    public void newSub_isLazyUntilFirstAcceptedMessage() {
+        ProtoQueue<Integer> q = new ProtoQueue<>(10);
+        ProtoSndQueueView<Integer> sub = q.newSub("snd-B");
+
+        assert !q.hasSub("snd-B");
+        assert sub.slotSize() == 10;
+
+        sub.push();
+        sub.discard();
+
+        assert !q.hasSub("snd-B");
+        assert sub.offerMessage(9);
+        assert q.hasSub("snd-B");
+    }
+
+    @Test
+    public void lazySendViewCanRecreateSubQueueAfterAutoClose() {
+        ProtoQueue<Integer> q = new ProtoQueue<>(10);
+        ProtoSndQueueView<Integer> sub = q.newSub("snd-C");
+
+        assert sub.offerMessage(9);
+        sub.discard();
+
+        assert !q.hasSub("snd-C");
+        assert sub.offerMessage(10);
+        assert q.hasSub("snd-C");
+
+        ProtoSndQueueView<Integer> recreated = q.newSub("snd-C");
+        assert recreated != sub;
+        assert recreated.offerMessage(11);
+        assert q.hasSub("snd-C");
+    }
+
     // --- immediate semantics ---
 
     @Test

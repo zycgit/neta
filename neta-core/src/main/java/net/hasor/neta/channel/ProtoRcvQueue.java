@@ -14,90 +14,67 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import java.io.Closeable;
 import java.util.List;
-import net.hasor.cobble.function.Release;
-import net.hasor.neta.bytebuf.ReferenceHolder;
 
 /**
- * Inbound data queue at one stage boundary of the protocol pipeline.
- * <p>It stores inbound messages already produced by the current stage. Upstream handlers put
- * messages into the queue, and downstream handlers read them back out.</p>
- * <h3>Consumption methods</h3>
- * <ul>
- *   <li>{@link #takeMessage(int)}: removes messages from the queue, so they no longer remain there.</li>
- *   <li>{@link #peekMessage(int)}: inspects messages without changing the queue contents or order.</li>
- *   <li>{@link #skipMessage(int)}: discards messages, and the queue is responsible for cleanup of discarded objects.</li>
- * </ul>
- * <h3>Ownership</h3>
- * <ul>
- *   <li>While messages remain in the queue, ownership belongs to the queue.</li>
- *   <li>After {@link #takeMessage(int)}, ownership of extracted messages transfers to the caller.</li>
- *   <li>During {@link #peekMessage(int)}, ownership remains with the queue.</li>
- *   <li>During {@link #skipMessage(int)}, discarded messages are released or closed by the queue.</li>
- * </ul>
- * @param <T> received message type
- * @author 赵永春 (zyc@hasor.net)
+ * Main receive-side queue interface.
+ * <p>On top of the read semantics defined by {@link ProtoRcvData}, it adds capacity management, named views, and the ability to transfer data from the main queue into a view.</p>
+ * <p>A main receive queue can maintain multiple named receive views so that data currently in the main queue can be transferred by key into a local view for further processing.</p>
+ * <p>The main queue and these named receive views share the same capacity limit. In other words, even after data has been moved from the main queue into a view,
+ * it still consumes the same shared capacity and does not release capacity simply because it entered a view.</p>
+ * <p>This shared-capacity model is the foundation of receive-side backpressure: backpressure decisions are based on the total amount of data currently held by the entire receive-container system,
+ * not just by the number of elements currently present in the main queue itself.</p>
+ * @param <T> receive message type
+ * @author Yongchun Zhao (zyc@hasor.net)
  * @version : 2023-10-17
- * @see ProtoSndQueue
+ * @see ProtoRcvData
+ * @see ProtoRcvQueueView
  * @see ProtoQueue
  */
-public interface ProtoRcvQueue<T> {
+public interface ProtoRcvQueue<T> extends ProtoRcvData<T> {
     /**
-     * Return the queue capacity.
-     * <p>A negative capacity passed during construction is normalized by implementations to an
-     * effectively unbounded queue.</p>
+     * Returns the capacity limit of the current main queue.
+     * <p>If the implementation allows negative values to represent "unlimited capacity", it should usually normalize that internally to an equivalent unbounded limit.</p>
+     * <p>The returned value is the total capacity shared by the main queue and all of its named receive views, rather than capacity reserved exclusively for the main queue itself.</p>
      */
     int getCapacity();
 
     /**
-     * Return the current number of readable messages.
+     * Transfers one data item from the main queue into the receive view identified by the specified key.
+     * <p>This is the single-item convenience form of {@link #drainToQueue(String, int)}.</p>
+     * @param key target receive view name
      */
-    int queueSize();
-
-    /** Return {@code true} when at least one message can be read immediately. */
-    default boolean hasMore() {
-        return queueSize() > 0;
+    default void drainToQueue(String key) {
+        this.drainToQueue(key, 1);
     }
 
     /**
-     * Remove one message from the queue and transfer ownership to the caller.
+     * Transfers up to {@code cnt} data items from the current main queue into the receive view identified by the specified key.
+     * <p>After the transfer, the data is no longer kept in the main queue, but it still remains within the ownership scope of the same receive-container system.</p>
+     * @param key target receive view name
+     * @param cnt maximum number of items to transfer; whether values less than 0 are supported is implementation-specific
      */
-    default T takeMessage() {
-        List<T> msg = this.takeMessage(1);
-        return msg == null || msg.isEmpty() ? null : msg.get(0);
-    }
+    void drainToQueue(String key, int cnt);
 
     /**
-     * Remove up to {@code cnt} messages from the queue and transfer ownership to the caller.
-     * <p>These messages are removed from the queue before return. Once extracted, the queue no
-     * longer releases or manages them.</p>
-     * @param cnt maximum number of messages to remove; a negative value means all currently readable messages
+     * Returns the names of all receive views that currently exist under this main queue.
+     * @return list of all receive view names
      */
-    List<T> takeMessage(int cnt);
+    List<String> queueNames();
 
     /**
-     * Inspect the most recent message in the queue.
-     * <p>Ownership remains with the queue.</p>
+     * Determines whether a receive view with the specified name already exists.
+     * @param key receive view name
+     * @return {@code true} if the view exists
      */
-    default T peekMessage() {
-        List<T> msg = this.peekMessage(1);
-        return msg == null || msg.isEmpty() ? null : msg.get(0);
-    }
+    boolean hasQueue(String key);
 
     /**
-     * Inspect up to {@code cnt} messages in the queue.
-     * <p>The returned result is a copy. Deleting or modifying that list does not affect queue state.</p>
-     * <p>Ownership remains with the queue.</p>
-     * @param cnt maximum number of messages to inspect; a negative value means all currently readable messages
+     * Returns the receive view with the specified name.
+     * <p>If the view does not yet exist, whether it is created automatically is implementation-specific.</p>
+     * <p>Whether newly created or not, the view shares the same capacity constraint as the current main queue.</p>
+     * @param key receive view name
+     * @return the corresponding receive view
      */
-    List<T> peekMessage(int cnt);
-
-    /**
-     * Skip up to {@code cnt} messages still owned by the queue.
-     * <p>If a skipped object implements {@link ReferenceHolder}, {@link Release}, or
-     * {@link Closeable}, the queue releases it during discard.</p>
-     * @param cnt maximum number of messages to discard
-     */
-    void skipMessage(int cnt);
+    ProtoRcvQueueView<T> queueView(String key);
 }

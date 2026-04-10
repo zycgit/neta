@@ -82,6 +82,41 @@ class ProtoQueueView implements ProtoRcvQueue<Object>, ProtoSndQueue<Object> {
         this.fireWritableIfRecovered(wasFull);
     }
 
+    @Override
+    public void drainToQueue(String key, int cnt) {
+        this.queue.drainToQueue(key, cnt);
+    }
+
+    @Override
+    public List<String> queueNames() {
+        return this.queue.queueNames();
+    }
+
+    @Override
+    public boolean hasQueue(String key) {
+        return this.queue.hasQueue(key);
+    }
+
+    @Override
+    public ProtoRcvQueueView<Object> queueView(String key) {
+        return this.queue.queueView(key);
+    }
+
+    @Override
+    public ProtoSndQueueView<Object> newSub(String key) {
+        return this.queue.newSub(key);
+    }
+
+    @Override
+    public List<String> subKeys() {
+        return this.queue.subKeys();
+    }
+
+    @Override
+    public boolean hasSub(String key) {
+        return this.queue.hasSub(key);
+    }
+
     private void fireWritableIfRecovered(boolean wasFull) {
         if (!wasFull || this.queue.slotSize() <= 0 || this.writableCallback == null) {
             return;

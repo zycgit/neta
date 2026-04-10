@@ -49,4 +49,9 @@ final class SoEventObject implements SoEvent {
     public Object getData() {
         return this.data;
     }
+
+    @Override
+    public String toString() {
+        return "SoEventObject{" + "eventType=" + (this.eventType != null ? this.eventType.getSimpleName() : "null") + ", data=" + this.data + '}';
+    }
 }
