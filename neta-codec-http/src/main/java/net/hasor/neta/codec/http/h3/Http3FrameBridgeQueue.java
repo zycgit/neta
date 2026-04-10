@@ -17,9 +17,11 @@ package net.hasor.neta.codec.http.h3;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import net.hasor.neta.channel.ProtoRcvQueue;
-import net.hasor.neta.channel.ProtoSndQueue;
 import net.hasor.neta.channel.SoUtils;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoRcvQueueView;
+import net.hasor.neta.channel.data.ProtoSndQueue;
+import net.hasor.neta.channel.data.ProtoSndQueueView;
 
 /**
  * 一个轻量级桥接队列，同时实现了 {@link ProtoRcvQueue} 和 {@link ProtoSndQueue}。
@@ -124,6 +126,41 @@ final class Http3FrameBridgeQueue implements ProtoRcvQueue<Http3Frame>, ProtoSnd
             }
             list.subList(0, skip).clear();
         }
+    }
+
+    @Override
+    public void drainToQueue(String key, int cnt) {
+        throw new UnsupportedOperationException("bridge queue does not support receive views.");
+    }
+
+    @Override
+    public List<String> queueNames() {
+        return Collections.emptyList();
+    }
+
+    @Override
+    public boolean hasQueue(String key) {
+        return false;
+    }
+
+    @Override
+    public ProtoRcvQueueView<Http3Frame> queueView(String key) {
+        throw new UnsupportedOperationException("bridge queue does not support receive views.");
+    }
+
+    @Override
+    public ProtoSndQueueView<Http3Frame> newSub(String key) {
+        throw new UnsupportedOperationException("bridge queue does not support send views.");
+    }
+
+    @Override
+    public List<String> subKeys() {
+        return Collections.emptyList();
+    }
+
+    @Override
+    public boolean hasSub(String key) {
+        return false;
     }
 
     /**

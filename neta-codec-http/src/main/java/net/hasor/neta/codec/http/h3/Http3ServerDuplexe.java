@@ -17,7 +17,9 @@ package net.hasor.neta.codec.http.h3;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.channel.quic.QuicStreamChannel;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
+import net.hasor.neta.channel.transport.quic.QuicStreamChannel;
 import net.hasor.neta.codec.http.HttpObject;
 
 /**

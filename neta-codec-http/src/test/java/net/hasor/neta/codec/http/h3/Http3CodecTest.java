@@ -12,7 +12,9 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.NetConfig;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoRcvQueueView;
 import net.hasor.neta.channel.data.ProtoSndQueue;
+import net.hasor.neta.channel.data.ProtoSndQueueView;
 import net.hasor.neta.channel.transport.quic.QuicVarInt;
 import net.hasor.neta.codec.http.*;
 import org.junit.Test;
@@ -1293,6 +1295,26 @@ public class Http3CodecTest {
             int skip = Math.min(cnt, list.size());
             list.subList(0, skip).clear();
         }
+
+        @Override
+        public void drainToQueue(String key, int cnt) {
+            throw new UnsupportedOperationException("test receive queue does not support named views.");
+        }
+
+        @Override
+        public List<String> queueNames() {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public boolean hasQueue(String key) {
+            return false;
+        }
+
+        @Override
+        public ProtoRcvQueueView<T> queueView(String key) {
+            throw new UnsupportedOperationException("test receive queue does not support named views.");
+        }
     }
 
     private static class SimpleProtoSndQueue<T> implements ProtoSndQueue<T> {
@@ -1334,6 +1356,21 @@ public class Http3CodecTest {
 
         public T poll() {
             return list.isEmpty() ? null : list.remove(0);
+        }
+
+        @Override
+        public ProtoSndQueueView<T> newSub(String key) {
+            throw new UnsupportedOperationException("test send queue does not support named views.");
+        }
+
+        @Override
+        public List<String> subKeys() {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public boolean hasSub(String key) {
+            return false;
         }
     }
 }
