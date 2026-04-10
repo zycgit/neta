@@ -16,6 +16,8 @@
 package net.hasor.neta.codec.net.ntp;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
 
 /**
  * Composite NTP codec that combines {@link NTPDecoder} and {@link NTPEncoder}

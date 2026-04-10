@@ -18,9 +18,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
-import net.hasor.neta.channel.virtual.VrtChannel;
-import net.hasor.neta.channel.virtual.VrtSoConfig;
-import net.hasor.neta.channel.virtual.VrtSocketAddress;
+import net.hasor.neta.channel.transport.virtual.VrtChannel;
+import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
+import net.hasor.neta.channel.transport.virtual.VrtSocketAddress;
 import org.junit.Test;
 
 /**

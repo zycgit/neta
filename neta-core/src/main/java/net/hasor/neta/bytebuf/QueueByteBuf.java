@@ -18,7 +18,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import net.hasor.neta.channel.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
 
 /**
  * A read-only {@link ByteBuf} view over a {@link ProtoRcvQueue ProtoRcvQueue&lt;ByteBuf&gt;},

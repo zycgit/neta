@@ -19,7 +19,7 @@ package net.hasor.neta.channel;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
  */
-final class SoEventObject implements SoEvent {
+public final class SoEventObject implements SoEvent {
     private final Class<?>     eventType;
     private final Object       data;
     private final SoChannel<?> source;

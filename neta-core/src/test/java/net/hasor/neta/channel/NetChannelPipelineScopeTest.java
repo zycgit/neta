@@ -19,10 +19,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import net.hasor.cobble.concurrent.future.Future;
-import net.hasor.neta.channel.virtual.VrtChannel;
-import net.hasor.neta.channel.virtual.VrtSoConfig;
-import net.hasor.neta.channel.virtual.VrtSocketAddress;
-import net.hasor.neta.channel.virtual.VrtTransfer;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
+import net.hasor.neta.channel.transport.virtual.VrtChannel;
+import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
+import net.hasor.neta.channel.transport.virtual.VrtSocketAddress;
+import net.hasor.neta.channel.transport.virtual.VrtTransfer;
 import org.junit.Test;
 
 public class NetChannelPipelineScopeTest extends AbstractStackTest {

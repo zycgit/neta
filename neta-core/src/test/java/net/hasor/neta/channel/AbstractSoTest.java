@@ -27,9 +27,11 @@ import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.function.Callable;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
-import net.hasor.neta.channel.quic.QuicSoConfig;
-import net.hasor.neta.channel.tcp.TcpSoConfig;
-import net.hasor.neta.channel.udp.UdpSoConfig;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
+import net.hasor.neta.channel.transport.quic.QuicSoConfig;
+import net.hasor.neta.channel.transport.tcp.TcpSoConfig;
+import net.hasor.neta.channel.transport.udp.UdpSoConfig;
 
 /**
  * @author 赵永春 (zyc@hasor.net)

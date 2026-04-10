@@ -24,10 +24,14 @@ import java.util.concurrent.atomic.AtomicReference;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.channel.virtual.VrtChannel;
-import net.hasor.neta.channel.virtual.VrtListen;
-import net.hasor.neta.channel.virtual.VrtSoConfig;
-import net.hasor.neta.channel.virtual.VrtSocketAddress;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
+import net.hasor.neta.channel.routing.ProtoRoutingDataSelector;
+import net.hasor.neta.channel.ProtoRoutingDuplexer;
+import net.hasor.neta.channel.transport.virtual.VrtChannel;
+import net.hasor.neta.channel.transport.virtual.VrtListen;
+import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
+import net.hasor.neta.channel.transport.virtual.VrtSocketAddress;
 import org.junit.Test;
 
 /**

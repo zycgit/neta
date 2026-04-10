@@ -23,8 +23,8 @@ import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.NetConfig;
 import net.hasor.neta.channel.SoConfig;
-import net.hasor.neta.channel.tcp.TcpSoConfig;
-import net.hasor.neta.channel.udp.UdpSoConfig;
+import net.hasor.neta.channel.transport.tcp.TcpSoConfig;
+import net.hasor.neta.channel.transport.udp.UdpSoConfig;
 
 /**
  * @author 赵永春 (zyc@hasor.net)

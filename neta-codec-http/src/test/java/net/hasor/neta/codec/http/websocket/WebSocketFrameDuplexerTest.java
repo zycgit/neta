@@ -17,7 +17,7 @@ package net.hasor.neta.codec.http.websocket;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import net.hasor.neta.channel.virtual.VrtSoConfig;
+import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.codec.http.HttpByteBuf;
 import net.hasor.neta.codec.http.HttpObject;
 import org.junit.Test;

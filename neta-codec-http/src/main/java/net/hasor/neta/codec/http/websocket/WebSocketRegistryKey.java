@@ -26,9 +26,9 @@ import java.util.Objects;
  */
 public final class WebSocketRegistryKey {
     private static final WebSocketRegistryKey CONNECTION_SCOPE = new WebSocketRegistryKey(null);
-    private final        Integer              streamId;
+    private final        Long                 streamId;
 
-    private WebSocketRegistryKey(Integer streamId) {
+    private WebSocketRegistryKey(Long streamId) {
         this.streamId = streamId;
     }
 
@@ -43,7 +43,7 @@ public final class WebSocketRegistryKey {
      * Return a stream-scope endpoint key.
      * @param streamId positive stream identifier
      */
-    public static WebSocketRegistryKey streamScope(int streamId) {
+    public static WebSocketRegistryKey streamScope(long streamId) {
         if (streamId <= 0) {
             throw new IllegalArgumentException("streamId must be greater than 0.");
         }
@@ -60,7 +60,7 @@ public final class WebSocketRegistryKey {
     /**
      * Return the stream identifier when this key represents a stream-scope endpoint.
      */
-    public Integer streamId() {
+    public Long streamId() {
         return this.streamId;
     }
 

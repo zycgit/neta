@@ -16,7 +16,7 @@
 package net.hasor.neta.bytebuf;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import net.hasor.neta.channel.ProtoQueue;
+import net.hasor.neta.channel.data.ProtoQueue;
 import org.junit.Test;
 
 /**

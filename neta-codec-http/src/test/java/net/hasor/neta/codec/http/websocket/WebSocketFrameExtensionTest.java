@@ -26,7 +26,7 @@ import com.jcraft.jzlib.GZIPException;
 import com.jcraft.jzlib.JZlib;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.NetManager;
-import net.hasor.neta.channel.virtual.VrtSoConfig;
+import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.websocket.extensions.DeflateFrameSupport;
 import net.hasor.neta.codec.http.websocket.extensions.PerMessageDeflateSupport;

@@ -15,6 +15,8 @@
  */
 package net.hasor.neta.codec.http.websocket;
 import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.codec.http.HttpObject;
 
 /**

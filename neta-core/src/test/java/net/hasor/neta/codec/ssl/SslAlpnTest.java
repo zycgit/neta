@@ -18,10 +18,10 @@ import java.util.ArrayDeque;
 import java.util.Queue;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.neta.channel.PlayLoad;
-import net.hasor.neta.channel.virtual.VrtChannel;
-import net.hasor.neta.channel.virtual.VrtListen;
-import net.hasor.neta.channel.virtual.VrtSoConfig;
-import net.hasor.neta.channel.virtual.VrtSocketAddress;
+import net.hasor.neta.channel.transport.virtual.VrtChannel;
+import net.hasor.neta.channel.transport.virtual.VrtListen;
+import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
+import net.hasor.neta.channel.transport.virtual.VrtSocketAddress;
 import org.junit.Test;
 
 /**

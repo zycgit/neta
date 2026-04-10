@@ -15,6 +15,8 @@
  */
 package net.hasor.neta.codec.http.websocket;
 import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
 
 /**
  * Duplex wrapper that exposes the websocket message layer after the handshake.

@@ -17,7 +17,11 @@ package net.hasor.neta.codec.string;
 import java.nio.charset.Charset;
 import java.util.Objects;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.channel.ProtoDuplexer;
+import net.hasor.neta.channel.ProtoStatus;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
 
 /**
  * Duplex codec that combines {@link StringDecoder} and {@link StringEncoder}.

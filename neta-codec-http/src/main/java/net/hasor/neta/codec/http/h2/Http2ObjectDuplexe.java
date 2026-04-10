@@ -15,6 +15,9 @@
  */
 package net.hasor.neta.codec.http.h2;
 import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
+import net.hasor.neta.channel.routing.ProtoRoutingControl;
 import net.hasor.neta.codec.http.HttpObject;
 import net.hasor.neta.codec.http.HttpProtocolStateException;
 

@@ -204,7 +204,7 @@ public class DefaultHttpResponse extends AbstractHttpObject<HttpResponse> implem
 
     @Override
     public String toString() {
-        return getClass().getSimpleName() + "(version: " + protocolVersionText() + ", status: " + statusText() + ' ' + reasonText() + ')';
+        return getClass().getSimpleName() + "(streamId=" + this.streamId() + ", version: " + protocolVersionText() + ", status: " + statusText() + ' ' + reasonText() + ')';
     }
 
     /**

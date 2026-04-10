@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.channel;
 import java.io.IOException;
+import net.hasor.neta.channel.transport.quic.QuicException;
 
 /**
  * Root checked exception for all I/O failures in the Neta channel layer.
@@ -52,7 +53,7 @@ import java.io.IOException;
  * @see SoBindException
  * @see SoCloseException
  * @see SoConnectException
- * @see net.hasor.neta.channel.quic.QuicException
+ * @see QuicException
  * @see SoRcvException
  * @see SoSndException
  * @see SoTimeoutException

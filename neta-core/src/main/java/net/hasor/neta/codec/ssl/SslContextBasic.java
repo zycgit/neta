@@ -22,7 +22,12 @@ import javax.net.ssl.*;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.channel.ProtoStatus;
+import net.hasor.neta.channel.SoChannel;
+import net.hasor.neta.channel.SoContext;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
 
 /**
  * Base implementation shared by concrete TLS context variants.

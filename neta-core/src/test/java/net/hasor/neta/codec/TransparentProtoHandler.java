@@ -14,7 +14,11 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec;
-import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.channel.ProtoHandler;
+import net.hasor.neta.channel.ProtoStatus;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
 
 /**
  * Transparent conveyor belt.

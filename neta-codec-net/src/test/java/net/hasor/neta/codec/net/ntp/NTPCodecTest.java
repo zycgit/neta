@@ -6,10 +6,10 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.SubscribeMode;
-import net.hasor.neta.channel.virtual.VrtChannel;
-import net.hasor.neta.channel.virtual.VrtSoConfig;
-import net.hasor.neta.channel.virtual.VrtSocketAddress;
-import net.hasor.neta.channel.virtual.VrtTransfer;
+import net.hasor.neta.channel.transport.virtual.VrtChannel;
+import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
+import net.hasor.neta.channel.transport.virtual.VrtSocketAddress;
+import net.hasor.neta.channel.transport.virtual.VrtTransfer;
 import org.junit.Test;
 
 public class NTPCodecTest {

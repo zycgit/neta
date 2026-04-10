@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.channel.udp.UdpSoConfig;
+import net.hasor.neta.channel.transport.udp.UdpSoConfig;
 import net.hasor.neta.codec.http.*;
 import org.junit.After;
 import org.junit.Before;

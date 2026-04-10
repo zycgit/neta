@@ -19,7 +19,7 @@ import java.util.Arrays;
 import java.util.List;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.SoRcvException;
-import net.hasor.neta.channel.virtual.VrtSoConfig;
+import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.codec.http.HttpProtocolException;
 import net.hasor.neta.codec.http.HttpProtocolOutOfBoundsException;
 import net.hasor.neta.codec.http.HttpProtocolStateException;

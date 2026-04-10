@@ -16,6 +16,8 @@
 package net.hasor.neta.channel;
 
 import java.util.List;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
 
 public class AbstractStackTest {
     protected static ProtoHandler<Integer, Integer> doExitHandler(String tag, List<String> recordFinish, List<String> recordFailed) {

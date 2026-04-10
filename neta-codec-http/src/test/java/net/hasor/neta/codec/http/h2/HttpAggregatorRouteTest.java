@@ -6,7 +6,10 @@ import java.util.Base64;
 import java.util.List;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.channel.virtual.VrtSoConfig;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
+import net.hasor.neta.channel.routing.ProtoRoutingControl;
+import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.routing.HttpAggregatorRoute;
 import net.hasor.neta.codec.http.routing.HttpRouteKey;
@@ -285,7 +288,7 @@ public class HttpAggregatorRouteTest extends AbstractHttp2Test {
         }
 
         @Override
-        public ProtoStatus onMessage(ProtoContext context, net.hasor.neta.channel.ProtoRcvQueue<HttpObject> src, net.hasor.neta.channel.ProtoSndQueue<Object> dst) throws Throwable {
+        public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<Object> dst) throws Throwable {
             while (src.hasMore()) {
                 HttpObject item = src.takeMessage();
                 if (!(item instanceof net.hasor.neta.codec.http.FullHttpRequest)) {

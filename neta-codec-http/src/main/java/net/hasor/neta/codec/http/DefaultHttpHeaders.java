@@ -209,4 +209,9 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
 
         return null;
     }
+
+    @Override
+    public String toString() {
+        return getClass().getSimpleName() + "(streamId=" + this.streamId() + ", headers=" + this.entries.size() + ')';
+    }
 }

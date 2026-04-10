@@ -18,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.routing.ProtoPartitionControl;
 import net.hasor.neta.codec.http.*;
 import static org.junit.Assert.*;
 

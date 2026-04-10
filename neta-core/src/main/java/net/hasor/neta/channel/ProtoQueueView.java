@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.channel;
 import java.util.List;
+import net.hasor.neta.channel.data.*;
 
 class ProtoQueueView implements ProtoRcvQueue<Object>, ProtoSndQueue<Object> {
     private final ProtoQueue<Object> queue;
@@ -29,7 +30,7 @@ class ProtoQueueView implements ProtoRcvQueue<Object>, ProtoSndQueue<Object> {
     }
 
     public void clearAndClose() {
-        this.queue.clearAndClose();
+        this.queue.clearAndRelease();
     }
 
     @Override

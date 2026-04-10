@@ -24,7 +24,11 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.bytebuf.ByteBufUtils;
-import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.NetChannel;
+import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.channel.SoContextService;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
 
 /**
  * Per-channel TLS state machine built on top of {@link SslEngineWrap}.

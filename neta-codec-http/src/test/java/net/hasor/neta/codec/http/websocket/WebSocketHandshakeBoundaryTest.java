@@ -20,7 +20,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 import java.util.List;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.virtual.VrtSoConfig;
+import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.codec.http.*;
 import org.junit.Test;
 import static org.junit.Assert.*;

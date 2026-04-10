@@ -20,6 +20,8 @@ import javax.net.ssl.SSLHandshakeException;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
 
 /**
  * TLS record-layer duplexer for byte-oriented Neta pipelines.

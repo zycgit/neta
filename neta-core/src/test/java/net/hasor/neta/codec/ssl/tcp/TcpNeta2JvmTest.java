@@ -29,7 +29,7 @@ import net.hasor.cobble.function.Callable;
 import net.hasor.neta.channel.NetChannel;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.ProtoInitializer;
-import net.hasor.neta.channel.tcp.TcpSoConfig;
+import net.hasor.neta.channel.transport.tcp.TcpSoConfig;
 import net.hasor.neta.codec.ssl.AbstractSslTest;
 import net.hasor.neta.codec.ssl.SoSslUtils;
 import net.hasor.neta.codec.ssl.SslConfig;

@@ -30,7 +30,9 @@ import net.hasor.cobble.ref.Tuple;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.channel.virtual.*;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
+import net.hasor.neta.channel.transport.virtual.*;
 import net.hasor.neta.codec.http.websocket.WebSocketFrame;
 
 public class AbstractHttpTest {

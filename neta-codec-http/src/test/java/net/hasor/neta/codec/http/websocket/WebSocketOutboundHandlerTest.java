@@ -16,7 +16,9 @@
 package net.hasor.neta.codec.http.websocket;
 import java.util.List;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.channel.virtual.VrtTransfer;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
+import net.hasor.neta.channel.transport.virtual.VrtTransfer;
 import net.hasor.neta.codec.http.HttpObject;
 import org.junit.Test;
 import static org.junit.Assert.*;

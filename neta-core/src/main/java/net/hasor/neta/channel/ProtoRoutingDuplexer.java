@@ -16,6 +16,10 @@
 package net.hasor.neta.channel;
 import java.util.*;
 import net.hasor.cobble.logging.Logger;
+import net.hasor.neta.channel.data.ProtoQueue;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
+import net.hasor.neta.channel.routing.*;
 
 /**
  * Routing duplexer.

@@ -19,7 +19,7 @@ import java.util.Arrays;
 import java.util.List;
 import net.hasor.neta.channel.ProtoExceptionHolder;
 import net.hasor.neta.channel.ProtoStatus;
-import net.hasor.neta.channel.virtual.VrtSoConfig;
+import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.codec.http.*;
 import org.junit.Test;
 import static org.junit.Assert.*;

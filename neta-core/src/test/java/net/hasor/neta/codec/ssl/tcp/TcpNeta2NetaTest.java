@@ -23,7 +23,7 @@ import net.hasor.neta.channel.NetChannel;
 import net.hasor.neta.channel.NetListen;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.ProtoInitializer;
-import net.hasor.neta.channel.tcp.TcpSoConfig;
+import net.hasor.neta.channel.transport.tcp.TcpSoConfig;
 import net.hasor.neta.codec.MyRcvToListProtoHandler;
 import net.hasor.neta.codec.ssl.*;
 import org.junit.Test;

@@ -14,7 +14,12 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h2;
-import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.channel.SoEvent;
+import net.hasor.neta.channel.routing.PartitionDataKind;
+import net.hasor.neta.channel.routing.PartitionKey;
+import net.hasor.neta.channel.routing.ProtoPartitionControl;
+import net.hasor.neta.channel.routing.ProtoPartitionPolicy;
 
 /**
  * HTTP/2 partition policy that prevents connection-level control events from leaking into

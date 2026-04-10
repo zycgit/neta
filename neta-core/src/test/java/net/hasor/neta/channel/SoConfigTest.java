@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import net.hasor.neta.channel.tcp.TcpSoConfig;
-import net.hasor.neta.channel.udp.UdpSoConfig;
+import net.hasor.neta.channel.transport.tcp.TcpSoConfig;
+import net.hasor.neta.channel.transport.udp.UdpSoConfig;
 import org.junit.Test;
 
 /**

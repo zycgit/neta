@@ -20,8 +20,8 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoHandler;
 import net.hasor.neta.channel.SoEvent;
-import net.hasor.neta.channel.virtual.VrtSoConfig;
-import net.hasor.neta.channel.virtual.VrtTransfer;
+import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
+import net.hasor.neta.channel.transport.virtual.VrtTransfer;
 import net.hasor.neta.codec.http.HttpEvent;
 import net.hasor.neta.codec.http.HttpObject;
 import org.junit.Test;
@@ -298,7 +298,7 @@ public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
             completeHandshake(pipe);
 
             ByteBuf localPayload = ByteBuf.wrap(new byte[] { (byte) ((WebSocketCode.NORMAL_CLOSURE >> 8) & 0xFF), (byte) (WebSocketCode.NORMAL_CLOSURE & 0xFF) });
-            pipe.server().sendData(InternalWebSocketMessage.of(event.streamId(), WebSocketOpcode.CLOSE, localPayload)).get();
+            pipe.server().sendData(InternalWebSocketMessage.of(0, WebSocketOpcode.CLOSE, localPayload)).get();
             assertTrue(waitUntil(() -> !pipe.clientInbound().isEmpty(), 1000L));
 
             List<HttpObject> firstOutbound = drainQueue(pipe.clientInbound());

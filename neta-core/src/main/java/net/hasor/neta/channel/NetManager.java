@@ -25,11 +25,11 @@ import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
-import net.hasor.neta.channel.quic.QuicProvider;
-import net.hasor.neta.channel.sctp.SctpProvider;
-import net.hasor.neta.channel.tcp.TcpProvider;
-import net.hasor.neta.channel.udp.UdpProvider;
-import net.hasor.neta.channel.virtual.VrtProvider;
+import net.hasor.neta.channel.transport.quic.QuicProvider;
+import net.hasor.neta.channel.transport.sctp.SctpProvider;
+import net.hasor.neta.channel.transport.tcp.TcpProvider;
+import net.hasor.neta.channel.transport.udp.UdpProvider;
+import net.hasor.neta.channel.transport.virtual.VrtProvider;
 
 /**
  * Entry point to the Neta AIO networking layer.

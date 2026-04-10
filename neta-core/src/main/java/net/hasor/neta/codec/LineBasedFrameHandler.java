@@ -16,7 +16,11 @@
 package net.hasor.neta.codec;
 import java.util.List;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.channel.ProtoHandler;
+import net.hasor.neta.channel.ProtoStatus;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
 
 /**
  * Splits queued {@link ByteBuf} data into frames terminated by {@code '\n'} or {@code "\r\n"}.

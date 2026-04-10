@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h2;
+import net.hasor.neta.channel.ProtoRoutingDuplexer;
+import net.hasor.neta.channel.routing.ProtoRoutingDataSelector;
 
 /**
  * Protocol context interface for an HTTP/2 connection.
@@ -32,8 +34,8 @@ package net.hasor.neta.codec.http.h2;
  * directly from the current context.
  * </p>
  * <p>
- * In a {@link net.hasor.neta.channel.ProtoRoutingDataSelector} used by
- * {@link net.hasor.neta.channel.ProtoRoutingDuplexer}, a typical access pattern looks like this:
+ * In a {@link ProtoRoutingDataSelector} used by
+ * {@link ProtoRoutingDuplexer}, a typical access pattern looks like this:
  * <pre>{@code
  * (context, rcvUp, sndDown) -> {
  *     Http2Context h2 = context.rootContext(Http2Context.class);

@@ -19,6 +19,7 @@ import java.util.List;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.channel.data.ProtoQueue;
 
 /**
  * Root object of the bidirectional handler chain.
@@ -216,8 +217,8 @@ class ProtoStackChain {
                 current.afterClose();
                 current = current.next;
             }
-            this.tailRcvDown.clearAndClose();
-            this.headSndDown.clearAndClose();
+            this.tailRcvDown.clearAndRelease();
+            this.headSndDown.clearAndRelease();
             this.tailRcvDownWritable = null;
             this.headSndDownWritable = null;
             if (!this.branchMode) {

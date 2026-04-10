@@ -16,9 +16,9 @@
 package net.hasor.neta.channel;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
-import net.hasor.neta.channel.virtual.VrtChannel;
-import net.hasor.neta.channel.virtual.VrtSoConfig;
-import net.hasor.neta.channel.virtual.VrtSocketAddress;
+import net.hasor.neta.channel.transport.virtual.VrtChannel;
+import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
+import net.hasor.neta.channel.transport.virtual.VrtSocketAddress;
 import net.hasor.neta.codec.TransparentProtoHandler;
 import org.junit.Test;
 

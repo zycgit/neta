@@ -19,7 +19,7 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import net.hasor.cobble.SystemUtils;
 import net.hasor.cobble.logging.Logger;
-import net.hasor.neta.channel.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
 
 /**
  * Central registry for the {@link ByteBufAllocator}s pre-wired in Neta and
@@ -206,7 +206,7 @@ public class ByteBufUtils {
 
     /**
      * Create a read-only {@link ByteBuf} that presents all queued {@link ByteBuf}
-     * messages in the given {@link net.hasor.neta.channel.ProtoRcvQueue ProtoRcvQueue}
+     * messages in the given {@link net.hasor.neta.channel.data.ProtoRcvQueue ProtoRcvQueue}
      * as a single contiguous readable buffer.
      * <p>
      * The returned buffer is a zero-copy composite view over the queue's messages.

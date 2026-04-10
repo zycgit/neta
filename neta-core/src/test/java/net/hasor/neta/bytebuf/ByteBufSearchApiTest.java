@@ -15,7 +15,7 @@
  */
 package net.hasor.neta.bytebuf;
 import java.nio.charset.StandardCharsets;
-import net.hasor.neta.channel.ProtoQueue;
+import net.hasor.neta.channel.data.ProtoQueue;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;

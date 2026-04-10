@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit;
 import net.hasor.neta.channel.NetChannel;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.ProtoInitializer;
-import net.hasor.neta.channel.udp.UdpSoConfig;
+import net.hasor.neta.channel.transport.udp.UdpSoConfig;
 import org.junit.Test;
 
 public class NTPRealServerTest {

@@ -17,9 +17,9 @@ package net.hasor.neta.channel;
 import java.util.ArrayList;
 import java.util.List;
 import net.hasor.cobble.StringUtils;
-import net.hasor.neta.channel.virtual.VrtChannel;
-import net.hasor.neta.channel.virtual.VrtSoConfig;
-import net.hasor.neta.channel.virtual.VrtSocketAddress;
+import net.hasor.neta.channel.transport.virtual.VrtChannel;
+import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
+import net.hasor.neta.channel.transport.virtual.VrtSocketAddress;
 import org.junit.Test;
 
 /**

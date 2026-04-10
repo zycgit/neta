@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
+
 /**
  * Internal wrapper that combines one decoder and one encoder into a single duplexer.
  * <p>When the upper-level API declares a protocol step as an encoder/decoder pair, this wrapper

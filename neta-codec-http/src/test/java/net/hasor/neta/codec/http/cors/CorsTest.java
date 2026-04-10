@@ -19,7 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.ProtoQueue;
+import net.hasor.neta.channel.data.ProtoQueue;
 import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.codec.http.*;
 import org.junit.Test;

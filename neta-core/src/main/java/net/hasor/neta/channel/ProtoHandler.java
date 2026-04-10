@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
+
 /**
  * Unidirectional handler interface, typically used as a decoder or encoder.
  * <p>A unidirectional handler consumes messages from the receive queue and emits zero or more

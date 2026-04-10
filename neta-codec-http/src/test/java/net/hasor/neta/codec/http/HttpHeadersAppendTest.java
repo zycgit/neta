@@ -17,7 +17,7 @@ package net.hasor.neta.codec.http;
 import java.util.List;
 import java.util.Set;
 import net.hasor.neta.channel.NetManager;
-import net.hasor.neta.channel.virtual.VrtSoConfig;
+import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;

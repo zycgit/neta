@@ -16,6 +16,8 @@
 package net.hasor.neta.channel;
 import java.util.Objects;
 import net.hasor.cobble.logging.Logger;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
 
 /**
  * Single node in the doubly linked handler chain of {@link ProtoStackChain}.
