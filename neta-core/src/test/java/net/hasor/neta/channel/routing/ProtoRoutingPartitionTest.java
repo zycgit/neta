@@ -382,7 +382,7 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
 
         duplexer.onInit("partition", 2, 2, context);
 
-        ProtoStatus status = duplexer.onMessage(context, false, new ProtoQueue<PartitionMessage>(1), new ProtoQueue<PartitionMessage>(1), sndUp, sndDown);
+        ProtoStatus status = duplexer.onMessage(context, false, new ProtoQueue<>(1), new ProtoQueue<>(1), sndUp, sndDown);
         Assert.assertEquals(ProtoStatus.Next, status);
         Assert.assertEquals(1, sndDown.queueSize());
         Assert.assertEquals("A", sndDown.peekMessage().body());

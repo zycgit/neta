@@ -16,7 +16,12 @@
 package net.hasor.neta.channel;
 import java.util.*;
 import net.hasor.cobble.logging.Logger;
-import net.hasor.neta.channel.ProtoPartitionPolicy.ReceivePolicy;
+import net.hasor.neta.channel.data.ProtoQueue;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoRcvQueueView;
+import net.hasor.neta.channel.data.ProtoSndQueue;
+import net.hasor.neta.channel.routing.*;
+import net.hasor.neta.channel.routing.ProtoPartitionPolicy.ReceivePolicy;
 
 /**
  * Partition duplexer that splits one connection's message stream into multiple partition sub-pipelines by partition key.
@@ -37,7 +42,8 @@ import net.hasor.neta.channel.ProtoPartitionPolicy.ReceivePolicy;
  * @version : 2026-03-29
  */
 public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OUT, OUT> {
-    private static final Logger                            logger = Logger.getLogger(ProtoPartitionDuplexer.class);
+    private static final Logger                            logger          = Logger.getLogger(ProtoPartitionDuplexer.class);
+    private static final String                            STAGE_QUEUE_KEY = ProtoPartitionDuplexer.class.getName();
     private final        ProtoPartitionSelector            selector;
     private final        Map<PartitionKey, PartitionState> partitions;
     private final        ProtoPartitionControl             partitionControl;
@@ -53,13 +59,12 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
     private              String                            parentPrevStackName;
     private              String                            parentNextStackName;
     private              boolean                           creationLock;
-    private final        ArrayList<IN>                     receiveBuffer;
 
     public ProtoPartitionDuplexer(ProtoPartitionSelector selector) {
+        String ownerSuffix = Integer.toHexString(System.identityHashCode(this));
         this.selector = Objects.requireNonNull(selector, "selector is null.");
         this.partitions = new LinkedHashMap<>();
-        this.receiveBuffer = new ArrayList<>();
-        this.recoveryOwnerId = "partition@" + Integer.toHexString(System.identityHashCode(this));
+        this.recoveryOwnerId = "partition@" + ownerSuffix;
         this.partitionPolicy = (a, b, c, d, e) -> ReceivePolicy.Accept;
         this.partitionControl = new ProtoPartitionControl() {
             @Override
@@ -199,10 +204,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
             ProtoRcvQueue<OUT> sndUp, ProtoSndQueue<OUT> sndDown) throws Throwable {
 
         if (!isRcv) {
-            int sendCount = Math.min(sndUp.queueSize(), sndDown.slotSize());
-            if (sendCount > 0) {
-                sndDown.offerMessage(sndUp.takeMessage(sendCount));
-            }
+            this.processSendMessages(context, sndUp, sndDown);
             this.commitRequestedClosures();
             return ProtoStatus.Next;
         }
@@ -257,12 +259,12 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
                 continue;
             }
 
-            int batchCount = this.collectBatchMessages(context, rcvUp, rcvDown.slotSize(), routeKey);
-            if (batchCount <= 0) {
+            ProtoRcvQueueView<IN> stagedMessages = this.collectBatchMessages(context, rcvUp, rcvDown.slotSize(), routeKey);
+            if (stagedMessages == null) {
                 continue;
             }
 
-            state.process(this.receiveBuffer);
+            state.process(stagedMessages);
             if (!state.flushTo(rcvDown)) {
                 this.pendingPartitionKey = routeKey;
                 this.pendingPartition = true;
@@ -273,6 +275,42 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
 
         this.commitRequestedClosures();
         return ProtoStatus.Next;
+    }
+
+    private void processSendMessages(ProtoContext context, ProtoRcvQueue<OUT> sndUp, ProtoSndQueue<OUT> sndDown) throws Throwable {
+        if (!sndUp.hasMore() || sndDown.slotSize() <= 0) {
+            return;
+        }
+
+        while (sndUp.hasMore() && sndDown.slotSize() > 0) {
+            ProtoRcvQueueView<OUT> stagedMessages = this.collectLeadingMessages(sndUp, Math.min(sndUp.queueSize(), Math.max(1, sndDown.slotSize())), STAGE_QUEUE_KEY);
+            if (stagedMessages == null) {
+                return;
+            }
+
+            if (!sndDown.offerMessage(stagedMessages.takeMessage(-1))) {
+                throw new IllegalStateException("ProtoPartitionDuplexer failed to pass through send messages.");
+            }
+        }
+    }
+
+    private <M> ProtoRcvQueueView<M> collectLeadingMessages(ProtoRcvQueue<M> sourceQueue, int batchLimit, String stagingKey) {
+        if (batchLimit <= 0) {
+            return null;
+        }
+
+        int acceptedCount = 0;
+        while (acceptedCount < batchLimit && sourceQueue.hasMore()) {
+            M item = sourceQueue.peekMessage();
+            if (item == null) {
+                sourceQueue.skipMessage(1);
+                continue;
+            }
+
+            sourceQueue.drainToQueue(stagingKey);
+            acceptedCount++;
+        }
+        return acceptedCount <= 0 ? null : sourceQueue.queueView(stagingKey);
     }
 
     @Override
@@ -335,12 +373,12 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
             return this.passThroughMessages(context, rcvUp, rcvDown, defaultKey);
         }
 
-        int batchCount = this.collectBatchMessages(context, rcvUp, rcvDown.slotSize(), defaultKey);
-        if (batchCount <= 0) {
+        ProtoRcvQueueView<IN> stagedMessages = this.collectBatchMessages(context, rcvUp, rcvDown.slotSize(), defaultKey);
+        if (stagedMessages == null) {
             return true;
         }
 
-        state.process(this.receiveBuffer);
+        state.process(stagedMessages);
         if (!state.flushTo(rcvDown)) {
             this.pendingPartition = true;
             this.pendingPartitionKey = defaultKey;
@@ -355,31 +393,13 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
     }
 
     private boolean passThroughMessages(ProtoContext context, ProtoRcvQueue<IN> rcvUp, ProtoSndQueue<IN> rcvDown, PartitionKey expectedKey) {
-        this.receiveBuffer.clear();
-
         int batchLimit = Math.min(rcvUp.queueSize(), Math.max(1, rcvDown.slotSize()));
-        int acceptedCount = 0;
-        while (acceptedCount < batchLimit && rcvUp.hasMore()) {
-            IN item = rcvUp.peekMessage();
-            if (item == null) {
-                rcvUp.skipMessage(1);
-                continue;
-            }
-
-            PartitionKey itemKey = this.selector.route(context, PartitionDataKind.Message, item);
-            if (!Objects.equals(expectedKey, itemKey)) {
-                break;
-            }
-
-            this.receiveBuffer.add(rcvUp.takeMessage());
-            acceptedCount++;
-        }
-
-        if (acceptedCount <= 0) {
+        ProtoRcvQueueView<IN> stagedMessages = this.collectMatchedMessages(context, rcvUp, batchLimit, expectedKey, STAGE_QUEUE_KEY);
+        if (stagedMessages == null) {
             return true;
         }
 
-        if (!rcvDown.offerMessage(this.receiveBuffer)) {
+        if (!rcvDown.offerMessage(stagedMessages.takeMessage(-1))) {
             throw new IllegalStateException("ProtoPartitionDuplexer failed to pass through unmatched messages.");
         }
 
@@ -387,17 +407,17 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
     }
 
     private void dropUnmatchedMessages(ProtoContext context, ProtoRcvQueue<IN> rcvUp, PartitionKey key) throws Throwable {
-        int batchCount = this.collectDroppedMessages(context, rcvUp, key);
-        if (batchCount <= 0) {
+        ProtoRcvQueueView<IN> stagedMessages = this.collectDroppedMessages(context, rcvUp, key);
+        if (stagedMessages == null) {
             return;
         }
 
-        PartitionUnmatchedEvent unmatchedEvent = new PartitionUnmatchedEvent(key, this.receiveBuffer);
+        List<IN> unmatchedMessages = stagedMessages.takeMessage(-1);
+        PartitionUnmatchedEvent unmatchedEvent = new PartitionUnmatchedEvent(key, unmatchedMessages);
         try {
             context.fireEvent(PartitionUnmatchedEvent.class, unmatchedEvent);
         } finally {
             unmatchedEvent.release();
-            this.receiveBuffer.clear();
         }
     }
 
@@ -454,51 +474,40 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
         return state;
     }
 
-    private int collectBatchMessages(ProtoContext context, ProtoRcvQueue<IN> rcvUp, int downstreamSlotSize, PartitionKey key) {
-        this.receiveBuffer.clear();
-
+    private ProtoRcvQueueView<IN> collectBatchMessages(ProtoContext context, ProtoRcvQueue<IN> rcvUp, int downstreamSlotSize, PartitionKey key) {
         int batchLimit = this.partitionRcvSize <= 0 ? 1 : Math.min(rcvUp.queueSize(), this.partitionRcvSize);
         batchLimit = Math.min(batchLimit, Math.max(1, downstreamSlotSize));
-        int acceptedCount = 0;
-        while (acceptedCount < batchLimit && rcvUp.hasMore()) {
-            IN item = rcvUp.peekMessage();
-            if (item == null) {
-                rcvUp.skipMessage(1);
-                continue;
-            }
-
-            PartitionKey itemKey = this.selector.route(context, PartitionDataKind.Message, item);
-            if (!Objects.equals(key, itemKey)) {
-                break;
-            }
-
-            this.receiveBuffer.add(rcvUp.takeMessage());
-            acceptedCount++;
-        }
-        return acceptedCount;
+        return this.collectMatchedMessages(context, rcvUp, batchLimit, key, STAGE_QUEUE_KEY);
     }
 
-    private int collectDroppedMessages(ProtoContext context, ProtoRcvQueue<IN> rcvUp, PartitionKey key) {
-        this.receiveBuffer.clear();
-
+    private ProtoRcvQueueView<IN> collectDroppedMessages(ProtoContext context, ProtoRcvQueue<IN> rcvUp, PartitionKey key) {
         int batchLimit = this.partitionRcvSize <= 0 ? 1 : Math.min(rcvUp.queueSize(), this.partitionRcvSize);
+        return this.collectMatchedMessages(context, rcvUp, batchLimit, key, STAGE_QUEUE_KEY);
+    }
+
+    private <M> ProtoRcvQueueView<M> collectMatchedMessages(ProtoContext context, ProtoRcvQueue<M> sourceQueue, int batchLimit, PartitionKey expectedKey, String stagingKey) {
+        if (batchLimit <= 0) {
+            return null;
+        }
+
         int acceptedCount = 0;
-        while (acceptedCount < batchLimit && rcvUp.hasMore()) {
-            IN item = rcvUp.peekMessage();
+        while (acceptedCount < batchLimit && sourceQueue.hasMore()) {
+            M item = sourceQueue.peekMessage();
             if (item == null) {
-                rcvUp.skipMessage(1);
+                sourceQueue.skipMessage(1);
                 continue;
             }
 
             PartitionKey itemKey = this.selector.route(context, PartitionDataKind.Message, item);
-            if (!Objects.equals(key, itemKey)) {
+            if (!Objects.equals(expectedKey, itemKey)) {
                 break;
             }
 
-            this.receiveBuffer.add(rcvUp.takeMessage());
+            sourceQueue.drainToQueue(stagingKey);
             acceptedCount++;
         }
-        return acceptedCount;
+
+        return acceptedCount <= 0 ? null : sourceQueue.queueView(stagingKey);
     }
 
     private boolean isDefaultPartitionKey(PartitionKey key) {
@@ -601,12 +610,17 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
             this.chainRoot = chainRoot;
         }
 
-        private ProtoStatus process(List<?> messages) throws Throwable {
-            if (messages == null || messages.isEmpty()) {
+        private ProtoStatus process(ProtoRcvQueueView<?> messages) throws Throwable {
+            if (messages == null || !messages.hasMore()) {
                 return ProtoStatus.Next;
             }
 
-            ChainResult cr = this.chainRoot.onRcv(this.context, null, messages.toArray(), null);
+            List<?> batchMessages = messages.takeMessage(-1);
+            if (batchMessages.isEmpty()) {
+                return ProtoStatus.Next;
+            }
+
+            ChainResult cr = this.chainRoot.onRcv(this.context, null, batchMessages.toArray(), null);
             if (cr.error != null) {
                 throw cr.error;
             } else {

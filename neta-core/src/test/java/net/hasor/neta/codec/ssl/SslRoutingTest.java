@@ -27,7 +27,6 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.channel.routing.ProtoRoutingDataSelector;
-import net.hasor.neta.channel.ProtoRoutingDuplexer;
 import net.hasor.neta.channel.transport.virtual.VrtChannel;
 import net.hasor.neta.channel.transport.virtual.VrtListen;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
