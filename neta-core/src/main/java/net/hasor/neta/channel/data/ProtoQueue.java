@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.channel.data;
 import java.util.*;
+import java.util.function.Predicate;
 import net.hasor.neta.channel.ProtoFullException;
 import net.hasor.neta.channel.SoUtils;
 
@@ -77,6 +78,10 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
 
         @Override
         public void drainToQueue(String key, int cnt) {
+        }
+
+        @Override
+        public void drainToQueue(String key, int cnt, Predicate predicate) {
         }
 
         @Override
@@ -314,6 +319,37 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     }
 
     @Override
+    public void drainToQueue(String key, int cnt, Predicate<T> predicate) {
+        if (cnt == 0 || this.linkedList.isEmpty()) {
+            return;
+        }
+
+        String fixedKey = this.requireKey(key);
+        Predicate<T> fixedPredicate = predicate != null ? predicate : item -> true;
+        int remaining = cnt < 0 ? Integer.MAX_VALUE : cnt;
+        List<T> moved = new ArrayList<>();
+
+        Iterator<T> iterator = this.linkedList.iterator();
+        while (iterator.hasNext() && remaining > 0) {
+            T item = iterator.next();
+            if (!fixedPredicate.test(item)) {
+                continue;
+            }
+
+            moved.add(item);
+            iterator.remove();
+            remaining--;
+        }
+
+        if (moved.isEmpty()) {
+            return;
+        }
+
+        ProtoQueueSndSubQueue<T> queueView = this.ensureSubQueue(fixedKey);
+        queueView.linkedList.addAll(moved);
+    }
+
+    @Override
     public List<String> queueNames() {
         return new ArrayList<String>(this.subQueueMap.keySet());
     }
@@ -343,8 +379,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
         return created;
     }
 
-    @Override
-    public ProtoSndQueueView<T> newSub(String key) {
+    public ProtoSndQueueView<T> subQueue(String key) {
         String fixedKey = this.requireKey(key);
         ProtoQueueSndSubQueue<T> subQueue = this.subQueueMap.get(fixedKey);
         if (subQueue != null) {
@@ -369,19 +404,6 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
             total += subQueue.localSize();
         }
         return total;
-    }
-
-    int mainSize() {
-        return this.linkedList.size();
-    }
-
-    List<T> mainPeek(int cnt) {
-        if (cnt < 0) {
-            cnt = this.linkedList.size();
-        }
-
-        int fixCnt = Math.min(cnt, this.linkedList.size());
-        return new ArrayList<T>(this.linkedList.subList(0, fixCnt));
     }
 
     List<T> mainTake(int cnt) {
@@ -434,7 +456,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
         return key;
     }
 
-    ProtoQueueSndSubQueue<T> subQueue(String key) {
+    ProtoQueueSndSubQueue<T> attachedSubQueue(String key) {
         return this.subQueueMap.get(this.requireKey(key));
     }
 
@@ -715,7 +737,7 @@ class ProtoQueueLazySndSubQueue<T> implements ProtoSndQueueView<T> {
     }
 
     private ProtoQueueSndSubQueue<T> attached() {
-        return this.owner.subQueue(this.key);
+        return this.owner.attachedSubQueue(this.key);
     }
 
     private ProtoQueueSndSubQueue<T> ensureAttached() {

@@ -17,6 +17,7 @@ package net.hasor.neta.channel.data;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Predicate;
 import net.hasor.cobble.function.Release;
 import net.hasor.neta.bytebuf.ReferenceHolder;
 import org.junit.Test;
@@ -279,6 +280,56 @@ public class ProtoQueueExTest {
     }
 
     @Test
+    public void drainToQueue_withPredicate_movesOnlyMatchedItems() {
+        ProtoQueue<Integer> q = new ProtoQueue<>(10);
+        q.offerMessage(1);
+        q.offerMessage(2);
+        q.offerMessage(3);
+        q.offerMessage(4);
+
+        q.drainToQueue("rcv-P", value -> value % 2 == 0);
+
+        assert q.hasQueue("rcv-P");
+        assert q.takeMessage(-1).equals(Arrays.asList(1, 3));
+
+        ProtoRcvQueueView<Integer> view = q.queueView("rcv-P");
+        assert view.takeMessage(-1).equals(Arrays.asList(2, 4));
+        assert !q.hasQueue("rcv-P");
+    }
+
+    @Test
+    public void drainToQueue_withPredicateAndLimit_preservesMainOrder() {
+        ProtoQueue<Integer> q = new ProtoQueue<>(10);
+        q.offerMessage(1);
+        q.offerMessage(2);
+        q.offerMessage(4);
+        q.offerMessage(6);
+        q.offerMessage(3);
+
+        q.drainToQueue("rcv-L", 2, value -> value % 2 == 0);
+
+        assert q.takeMessage(-1).equals(Arrays.asList(1, 6, 3));
+
+        ProtoRcvQueueView<Integer> view = q.queueView("rcv-L");
+        assert view.takeMessage(-1).equals(Arrays.asList(2, 4));
+        assert !q.hasQueue("rcv-L");
+    }
+
+    @Test
+    public void drainToQueue_withNullPredicate_matchesAll() {
+        ProtoQueue<Integer> q = new ProtoQueue<>(10);
+        q.offerMessage(7);
+        q.offerMessage(8);
+
+        q.drainToQueue("rcv-N", -1, (Predicate<Integer>) null);
+
+        assert q.queueSize() == 0;
+        ProtoRcvQueueView<Integer> view = q.queueView("rcv-N");
+        assert view.takeMessage(-1).equals(Arrays.asList(7, 8));
+        assert !q.hasQueue("rcv-N");
+    }
+
+    @Test
     public void emptyReceiveView_isRemovedAfterReplay() {
         ProtoQueue<Integer> q = new ProtoQueue<>(10);
         q.offerMessage(10);
@@ -297,7 +348,7 @@ public class ProtoQueueExTest {
     @Test
     public void emptySendView_isRemovedAfterPush() {
         ProtoQueue<Integer> q = new ProtoQueue<>(10);
-        ProtoSndQueueView<Integer> sub = q.newSub("snd-A");
+        ProtoSndQueueView<Integer> sub = q.subQueue("snd-A");
 
         assert !q.hasSub("snd-A");
         assert sub.offerMessage(7);
@@ -313,9 +364,9 @@ public class ProtoQueueExTest {
     }
 
     @Test
-    public void newSub_isLazyUntilFirstAcceptedMessage() {
+    public void subQueue_isLazyUntilFirstAcceptedMessage() {
         ProtoQueue<Integer> q = new ProtoQueue<>(10);
-        ProtoSndQueueView<Integer> sub = q.newSub("snd-B");
+        ProtoSndQueueView<Integer> sub = q.subQueue("snd-B");
 
         assert !q.hasSub("snd-B");
         assert sub.slotSize() == 10;
@@ -331,7 +382,7 @@ public class ProtoQueueExTest {
     @Test
     public void lazySendViewCanRecreateSubQueueAfterAutoClose() {
         ProtoQueue<Integer> q = new ProtoQueue<>(10);
-        ProtoSndQueueView<Integer> sub = q.newSub("snd-C");
+        ProtoSndQueueView<Integer> sub = q.subQueue("snd-C");
 
         assert sub.offerMessage(9);
         sub.discard();
@@ -340,7 +391,7 @@ public class ProtoQueueExTest {
         assert sub.offerMessage(10);
         assert q.hasSub("snd-C");
 
-        ProtoSndQueueView<Integer> recreated = q.newSub("snd-C");
+        ProtoSndQueueView<Integer> recreated = q.subQueue("snd-C");
         assert recreated != sub;
         assert recreated.offerMessage(11);
         assert q.hasSub("snd-C");

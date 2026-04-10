@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.channel.data;
 import java.util.List;
+import java.util.function.Predicate;
 
 /**
  * Main receive-side queue interface.
@@ -49,12 +50,33 @@ public interface ProtoRcvQueue<T> extends ProtoRcvData<T> {
     }
 
     /**
+     * Transfers all data items matching the predicate from the current main queue into the named receive view.
+     * <p>Items that do not match remain in the main queue and keep their relative order.</p>
+     * <p>A {@code null} predicate means all items are considered matched.</p>
+     * @param key target receive view name
+     * @param predicate selector used to decide which items move into the view
+     */
+    default void drainToQueue(String key, Predicate<T> predicate) {
+        this.drainToQueue(key, -1, predicate);
+    }
+
+    /**
      * Transfers up to {@code cnt} data items from the current main queue into the receive view identified by the specified key.
      * <p>After the transfer, the data is no longer kept in the main queue, but it still remains within the ownership scope of the same receive-container system.</p>
      * @param key target receive view name
      * @param cnt maximum number of items to transfer; whether values less than 0 are supported is implementation-specific
      */
     void drainToQueue(String key, int cnt);
+
+    /**
+     * Transfers up to {@code cnt} data items matching the predicate from the current main queue into the named receive view.
+     * <p>Only items accepted by the predicate are moved. Items not accepted remain in the main queue and keep their relative order.</p>
+     * <p>A {@code null} predicate means all items are considered matched.</p>
+     * @param key target receive view name
+     * @param cnt maximum number of matched items to transfer; values less than 0 mean transferring all matched items
+     * @param predicate selector used to decide which items move into the view
+     */
+    void drainToQueue(String key, int cnt, Predicate<T> predicate);
 
     /**
      * Returns the names of all receive views that currently exist under this main queue.

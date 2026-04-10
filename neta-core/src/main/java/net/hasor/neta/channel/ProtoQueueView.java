@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.channel;
 import java.util.List;
+import java.util.function.Predicate;
 import net.hasor.neta.channel.data.*;
 
 class ProtoQueueView implements ProtoRcvQueue<Object>, ProtoSndQueue<Object> {
@@ -89,6 +90,11 @@ class ProtoQueueView implements ProtoRcvQueue<Object>, ProtoSndQueue<Object> {
     }
 
     @Override
+    public void drainToQueue(String key, int cnt, Predicate<Object> predicate) {
+        this.queue.drainToQueue(key, cnt, predicate);
+    }
+
+    @Override
     public List<String> queueNames() {
         return this.queue.queueNames();
     }
@@ -104,8 +110,8 @@ class ProtoQueueView implements ProtoRcvQueue<Object>, ProtoSndQueue<Object> {
     }
 
     @Override
-    public ProtoSndQueueView<Object> newSub(String key) {
-        return this.queue.newSub(key);
+    public ProtoSndQueueView<Object> subQueue(String key) {
+        return this.queue.subQueue(key);
     }
 
     @Override

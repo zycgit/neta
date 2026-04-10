@@ -45,7 +45,7 @@ public interface ProtoSndQueue<T> extends ProtoSndData<T> {
      * @param key send view name
      * @return the corresponding send view
      */
-    ProtoSndQueueView<T> newSub(String key);
+    ProtoSndQueueView<T> subQueue(String key);
 
     /**
      * Returns the names of all send views that currently exist under this main send queue.
@@ -59,4 +59,25 @@ public interface ProtoSndQueue<T> extends ProtoSndData<T> {
      * @return {@code true} if the view exists
      */
     boolean hasSub(String key);
+
+    /**
+     * Discards all data in the current send view and removes the view from its owning main send queue.
+     * <p>Once the data in the view is discarded, the corresponding shared capacity is released as well.</p>
+     */
+    default void discard(String key) {
+        if (this.hasSub(key)) {
+            this.subQueue(key).discard();
+        }
+    }
+
+    /**
+     * Pushes all data in the current send view back into the owning main send queue.
+     * <p>After the push, the current view should no longer continue to hold that data.</p>
+     * <p>This operation only changes where the data is located. It does not change how that data consumes shared capacity.</p>
+     */
+    default void push(String key) {
+        if (this.hasSub(key)) {
+            this.subQueue(key).push();
+        }
+    }
 }
