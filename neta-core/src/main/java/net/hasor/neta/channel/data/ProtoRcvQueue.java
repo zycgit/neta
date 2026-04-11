@@ -41,13 +41,12 @@ public interface ProtoRcvQueue<T> extends ProtoRcvData<T> {
     int getCapacity();
 
     /**
-     * Transfers one data item from the main queue into the receive view identified by the specified key.
-     * <p>This is the single-item convenience form of {@link #drainToQueue(String, int)}.</p>
+     * Transfers up to {@code cnt} data items from the current main queue into the receive view identified by the specified key.
+     * <p>After the transfer, the data is no longer kept in the main queue, but it still remains within the ownership scope of the same receive-container system.</p>
      * @param key target receive view name
+     * @param cnt maximum number of items to transfer; whether values less than 0 are supported is implementation-specific
      */
-    default void drainToQueue(String key) {
-        this.drainToQueue(key, 1);
-    }
+    void drainToQueue(String key, int cnt);
 
     /**
      * Transfers all data items matching the predicate from the current main queue into the named receive view.
@@ -59,14 +58,6 @@ public interface ProtoRcvQueue<T> extends ProtoRcvData<T> {
     default void drainToQueue(String key, Predicate<T> predicate) {
         this.drainToQueue(key, -1, predicate);
     }
-
-    /**
-     * Transfers up to {@code cnt} data items from the current main queue into the receive view identified by the specified key.
-     * <p>After the transfer, the data is no longer kept in the main queue, but it still remains within the ownership scope of the same receive-container system.</p>
-     * @param key target receive view name
-     * @param cnt maximum number of items to transfer; whether values less than 0 are supported is implementation-specific
-     */
-    void drainToQueue(String key, int cnt);
 
     /**
      * Transfers up to {@code cnt} data items matching the predicate from the current main queue into the named receive view.
@@ -90,6 +81,12 @@ public interface ProtoRcvQueue<T> extends ProtoRcvData<T> {
      * @return {@code true} if the view exists
      */
     boolean hasQueue(String key);
+
+    /**
+     * Discards all data in the current view and removes the view from its owning main queue.
+     * <p>Once the data in the view is discarded, the corresponding shared capacity is released as well.</p>
+     */
+    void discard(String key);
 
     /**
      * Returns the receive view with the specified name.

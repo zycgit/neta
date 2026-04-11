@@ -105,6 +105,11 @@ class ProtoQueueView implements ProtoRcvQueue<Object>, ProtoSndQueue<Object> {
     }
 
     @Override
+    public void discard(String key) {
+        this.queue.discard(key);
+    }
+
+    @Override
     public ProtoRcvQueueView<Object> queueView(String key) {
         return this.queue.queueView(key);
     }

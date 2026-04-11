@@ -307,7 +307,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
                 continue;
             }
 
-            sourceQueue.drainToQueue(stagingKey);
+            sourceQueue.drainToQueue(stagingKey, 1);
             acceptedCount++;
         }
         return acceptedCount <= 0 ? null : sourceQueue.queueView(stagingKey);
@@ -503,7 +503,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
                 break;
             }
 
-            sourceQueue.drainToQueue(stagingKey);
+            sourceQueue.drainToQueue(stagingKey, 1);
             acceptedCount++;
         }
 

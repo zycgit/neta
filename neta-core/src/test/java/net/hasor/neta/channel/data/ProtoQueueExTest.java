@@ -321,7 +321,7 @@ public class ProtoQueueExTest {
         q.offerMessage(7);
         q.offerMessage(8);
 
-        q.drainToQueue("rcv-N", -1, (Predicate<Integer>) null);
+        q.drainToQueue("rcv-N", -1, null);
 
         assert q.queueSize() == 0;
         ProtoRcvQueueView<Integer> view = q.queueView("rcv-N");

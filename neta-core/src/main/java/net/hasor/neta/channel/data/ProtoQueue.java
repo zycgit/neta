@@ -95,6 +95,10 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
         }
 
         @Override
+        public void discard(String key) {
+        }
+
+        @Override
         public ProtoRcvQueueView queueView(String key) {
             throw new UnsupportedOperationException("empty receive queue does not support queue views.");
         }
@@ -357,6 +361,18 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     @Override
     public boolean hasQueue(String key) {
         return key != null && this.subQueueMap.containsKey(key);
+    }
+
+    @Override
+    public void discard(String key) {
+        if (key == null || key.trim().isEmpty()) {
+            return;
+        }
+
+        ProtoQueueSndSubQueue<T> subQueue = this.subQueueMap.get(key);
+        if (subQueue != null) {
+            subQueue.discard();
+        }
     }
 
     @Override
