@@ -14,28 +14,26 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
+import java.util.List;
+import java.util.concurrent.Future;
 import net.hasor.cobble.StringUtils;
-import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
 
 /**
- * Aggregates request-related {@link HttpObject} streams into a {@link FullHttpRequest}.
+ * Aggregates an ordered HTTP request object sequence into a {@link FullHttpRequest}.
  * <p>
- * This handler consumes segmented request objects such as {@link HttpRequest},
- * {@link HttpHeaders}, and {@link HttpContent}, and emits a fully aggregated request object.
+ * The first staged object is the request line, the last staged object is the terminal {@link LastHttpContent}, and all
+ * staged objects in between are appended in-order to the aggregated request.
  * <p>
- * Use it after {@link HttpRequestDecoder} or {@link HttpServerDuplexe} when downstream business
- * logic only wants complete requests instead of processing the request line, header block, and
- * message body in pieces.
- * If both request aggregation and response aggregation are needed in the same duplex node, use
- * {@link HttpServerDuplexeAggregator} instead.
+ * Request aggregation also owns the HTTP/1.1 expectation handling and the automatic 413 or 417 responses that may be
+ * emitted during request validation.
  * @author 赵永春 (zyc@hasor.net)
- * @version : 2026-03-13
+ * @version : 2026-04-11
  */
 public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
-    private static final Logger logger = Logger.getLogger(HttpRequestAggregator.class);
-
     /**
      * Creates a request aggregator with the default maximum content length.
      */
@@ -45,14 +43,14 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
 
     /**
      * Creates a request aggregator with an explicit maximum content length.
-     * @param maxContentLength the maximum content length
+     * @param maxContentLength maximum accepted aggregated payload length
      */
     public HttpRequestAggregator(int maxContentLength) {
         super(maxContentLength);
     }
 
     /**
-     * Returns whether the current object is a request start message.
+     * Request aggregation always starts from the request line object.
      */
     @Override
     protected boolean isStartMessage(HttpObject msg) {
@@ -60,74 +58,168 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
     }
 
     /**
-     * Casts the start message to a request object.
+     * Builds a full request directly on top of {@link DefaultFullHttpRequest} by appending the staged parts in order.
      */
     @Override
-    protected HttpRequest castStartMessage(HttpObject msg) {
-        return (HttpRequest) msg;
-    }
-
-    /**
-     * Builds the aggregated full request.
-     */
-    @Override
-    protected HttpObject buildAggregatedMessage(HttpRequest message, ByteBuf aggregated, DefaultHttpHeaders headers) {
-        DefaultFullHttpRequest fullReq = new DefaultFullHttpRequest(message.protocolVersion(), message.method(), message.uri(), aggregated, headers);
-        fullReq.streamId(message.streamId());
-        if (message.isBad()) {
-            fullReq.markBad(message.badReason());
+    protected void emitAggregated(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<HttpObject> dst) {
+        List<HttpObject> parts = this.takeStagedParts(src);
+        if (parts == null || parts.isEmpty()) {
+            this.resetAggregation(src);
+            return;
         }
-        return fullReq;
+
+        HttpRequest request = (HttpRequest) parts.get(0);
+        DefaultFullHttpRequest fullReq = new DefaultFullHttpRequest(request.protocolVersion(), request.method(), request.uri(), ByteBuf.EMPTY);
+        boolean handled = false;
+        boolean success = false;
+        try {
+            int contentLength = 0;
+            for (int index = 0; index < parts.size(); index++) {
+                HttpObject part = parts.get(index);
+                if (part instanceof HttpHeaders) {
+                    fullReq.appendHeaders((HttpHeaders) part);
+                    if (part instanceof LastHttpHeaders && !this.isHeadersClosedHandled()) {
+                        long declaredLength = fullReq.getLong(HttpHeaderNames.CONTENT_LENGTH, -1);
+                        this.onHeadersClosed(context, request, fullReq, declaredLength);
+                        if (fullReq.isBad() || this.isDiscardMode()) {
+                            handled = true;
+                            return;
+                        }
+                    }
+                }
+                if (part instanceof HttpContent) {
+                    ByteBuf content = ((HttpContent) part).content();
+                    int readable = content == null ? 0 : content.readableBytes();
+                    int newLength = contentLength + readable;
+                    if (newLength > this.maxContentLength()) {
+                        if (this.onContentTooLarge(context, request, fullReq, newLength) && this.isDiscardMode()) {
+                            handled = true;
+                            return;
+                        }
+                        throw new HttpContentTooLargeException("content length exceeds maximum: " + newLength + " > " + this.maxContentLength(), this.maxContentLength(), newLength);
+                    }
+                    contentLength = newLength;
+                    if (content != null && readable > 0) {
+                        fullReq.appendContent((HttpContent) part);
+                    }
+                }
+            }
+
+            this.completeFullRequest(request, fullReq, contentLength);
+            dst.offerMessage(fullReq);
+            this.logAggregatedRequest(context, request, contentLength);
+            success = true;
+        } finally {
+            this.releaseAggregatedRequest(parts, fullReq, success);
+            this.finishAggregation(src, success, handled);
+        }
+    }
+
+    @Override
+    protected void onHeadersStaged(ProtoContext context, ProtoRcvQueue<HttpObject> src) {
+        List<HttpObject> parts = this.peekStagedParts(src);
+        if (parts == null || parts.isEmpty()) {
+            return;
+        }
+
+        HttpRequest request = (HttpRequest) parts.get(0);
+        DefaultHttpHeaders headers = new DefaultLastHttpHeaders();
+        for (HttpObject part : parts) {
+            if (part instanceof HttpHeaders) {
+                headers.appendHeaders((HttpHeaders) part);
+            }
+        }
+
+        long declaredLength = headers.getLong(HttpHeaderNames.CONTENT_LENGTH, -1);
+        this.onHeadersClosed(context, request, headers, declaredLength);
     }
 
     /**
-     * Logs completion of request aggregation.
+     * Finalizes the aggregated request headers and propagates request-line metadata.
      */
-    @Override
-    protected void logAggregated(ProtoContext context, HttpRequest message, int contentLength) {
+    private void completeFullRequest(HttpRequest request, DefaultFullHttpRequest fullReq, int contentLength) {
+        fullReq.setHeader(HttpHeaderNames.CONTENT_LENGTH, String.valueOf(contentLength));
+        fullReq.removeHeader(HttpHeaderNames.TRANSFER_ENCODING);
+        fullReq.streamId(request.streamId());
+        if (request.isBad()) {
+            fullReq.markBad(request.badReason());
+        }
+    }
+
+    /**
+     * Writes the aggregation summary log line when HTTP logging is enabled.
+     */
+    private void logAggregatedRequest(ProtoContext context, HttpRequest request, int contentLength) {
         if (context.getConfig().isPrintLog()) {
             long channelID = context.getChannel().getChannelId();
-            logger.info(this.logPrefix() + " channel=" + channelID + " " + message.method() + " " + message.uri() + " streamId=" + message.streamId() + " contentLength=" + contentLength);
+            logger.info(this.logPrefix() + " channel=" + channelID + " " + request.method() + " " + request.uri() + " streamId=" + request.streamId() + " contentLength=" + contentLength);
         }
     }
 
     /**
-     * Returns the log prefix.
+     * Releases the staged request parts and, on failure, also releases the not-yet-emitted full request.
      */
+    private void releaseAggregatedRequest(List<HttpObject> parts, DefaultFullHttpRequest fullReq, boolean success) {
+        if (!success) {
+            fullReq.release();
+        }
+        for (HttpObject part : parts) {
+            if (part != null) {
+                part.release();
+            }
+        }
+    }
+
+    /**
+     * Performs queue cleanup and state transition for the current aggregation result.
+     */
+    private void finishAggregation(ProtoRcvQueue<HttpObject> src, boolean success, boolean handled) {
+        if (success) {
+            this.resetAggregation(src);
+        } else if (handled && this.isDiscardMode()) {
+            this.clearAggregationQueue(src);
+        } else if (handled) {
+            this.resetAggregation(src);
+        } else {
+            this.clearAggregationQueue(src);
+        }
+    }
+
     @Override
     protected String logPrefix() {
         return "[HTTP-REQ-AGG]";
     }
 
-    @Override
     /**
-     * Validates content length after the header section closes and handles Expect semantics.
-     */ protected void onHeadersClosed(ProtoContext context, HttpRequest message, long contentLength) {
+     * Validates the completed request head and applies expectation handling.
+     */
+    @Override
+    protected void onHeadersClosed(ProtoContext context, HttpRequest message, HttpHeaders headers, long contentLength) {
         if (contentLength > this.maxContentLength()) {
-            this.sendAutoResponse(context, message, HttpStatus.REQUEST_ENTITY_TOO_LARGE);
+            this.sendAutoResponse(context, message, HttpStatus.REQUEST_ENTITY_TOO_LARGE, headers);
             this.enterDiscardMode();
             return;
         }
-        if (this.handleExpectation(context, message, contentLength)) {
-        }
+        this.handleExpectation(context, message, headers, contentLength);
     }
 
-    @Override
     /**
-     * Sends an automatic response and enters discard mode when aggregated content exceeds the limit.
-     */ protected boolean onContentTooLarge(ProtoContext context, HttpRequest message, int newLength) {
-        this.sendAutoResponse(context, message, HttpStatus.REQUEST_ENTITY_TOO_LARGE);
+     * Sends a 413 response and switches to discard mode once the request body grows beyond the configured limit.
+     */
+    @Override
+    protected boolean onContentTooLarge(ProtoContext context, HttpRequest message, HttpHeaders headers, int newLength) {
+        this.sendAutoResponse(context, message, HttpStatus.REQUEST_ENTITY_TOO_LARGE, headers);
         this.enterDiscardMode();
         return true;
     }
 
-    @Override
     /**
-     * Handles protocol exceptions during request aggregation and auto-replies with an error when needed.
-     */ protected boolean handleProtocolError(ProtoContext context, HttpProtocolException e, boolean fromPipelineError) {
-        HttpRequest request = this.currentMessage();
+     * Converts request-side protocol failures into HTTP auto-responses when enough request context is available.
+     */
+    @Override
+    protected boolean handleProtocolError(ProtoContext context, HttpProtocolException e, boolean fromPipelineError, HttpRequest request, HttpHeaders headers) {
         if (request != null) {
-            this.sendAutoResponse(context, request, e.status());
+            this.sendAutoResponse(context, request, e.status(), headers);
             this.enterDiscardMode();
             return true;
         }
@@ -144,8 +236,10 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
         return false;
     }
 
-    private boolean handleExpectation(ProtoContext context, HttpRequest request, long contentLength) {
-        DefaultHttpHeaders headers = this.currentHeaders();
+    /**
+     * Processes the {@code Expect} header after the request head has been fully assembled.
+     */
+    private boolean handleExpectation(ProtoContext context, HttpRequest request, HttpHeaders headers, long contentLength) {
         String expect = headers != null ? headers.getString(HttpHeaderNames.EXPECT) : null;
         if (expect == null) {
             return false;
@@ -156,7 +250,7 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
             return false;
         }
         if (!StringUtils.equalsIgnoreCase(expectValue, HttpHeaderValues.CONTINUE)) {
-            this.sendAutoResponse(context, request, HttpStatus.EXPECTATION_FAILED);
+            this.sendAutoResponse(context, request, HttpStatus.EXPECTATION_FAILED, headers);
             this.enterDiscardMode();
             return true;
         }
@@ -167,12 +261,18 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
         return false;
     }
 
-    private void sendAutoResponse(ProtoContext context, HttpRequest request, HttpStatus status) {
-        this.sendAutoResponse(context, request.protocolVersion(), request.streamId(), status, this.isKeepAlive(request));
+    /**
+     * Sends an automatic response that reuses the current request version and keep-alive policy.
+     */
+    private void sendAutoResponse(ProtoContext context, HttpRequest request, HttpStatus status, HttpHeaders headers) {
+        this.sendAutoResponse(context, request.protocolVersion(), request.streamId(), status, this.isKeepAlive(request, headers));
     }
 
+    /**
+     * Sends an automatically generated HTTP response and waits for the send future to complete.
+     */
     private void sendAutoResponse(ProtoContext context, HttpVersion protocolVersion, long streamId, HttpStatus status, boolean keepAlive) {
-        DefaultFullHttpResponse response = new DefaultFullHttpResponse(protocolVersion, status);
+        DefaultFullHttpResponse response = new DefaultFullHttpResponse(protocolVersion, status, ByteBuf.wrap(new byte[0]));
         response.streamId(streamId);
         response.setHeader(HttpHeaderNames.CONTENT_LENGTH, HttpHeaderValues.ZERO);
 
@@ -180,15 +280,24 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
             response.setHeader(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
         }
 
-        context.sendData(response);
+        Future<?> sendFuture = context.sendData(response);
+        try {
+            if (sendFuture != null) {
+                sendFuture.get();
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("failed to send auto response", e);
+        }
         if (context.getConfig().isPrintLog()) {
             long channelID = context.getChannel().getChannelId();
             logger.info(this.logPrefix() + " channel=" + channelID + " auto-response status=" + status.code() + " keepAlive=" + keepAlive + " streamId=" + streamId);
         }
     }
 
-    private boolean isKeepAlive(HttpRequest request) {
-        DefaultHttpHeaders headers = this.currentHeaders();
+    /**
+     * Resolves the effective keep-alive policy from the request version and the current connection header.
+     */
+    private boolean isKeepAlive(HttpRequest request, HttpHeaders headers) {
         String connection = headers != null ? headers.getString(HttpHeaderNames.CONNECTION) : null;
         if (connection != null) {
             if (StringUtils.containsIgnoreCase(connection, HttpHeaderValues.CLOSE)) {

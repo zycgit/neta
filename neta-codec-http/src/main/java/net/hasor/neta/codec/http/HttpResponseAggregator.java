@@ -14,27 +14,24 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
-import net.hasor.cobble.logging.Logger;
+import java.util.List;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
 
 /**
- * Aggregates response-related {@link HttpObject} streams into a {@link FullHttpResponse}.
+ * Aggregates an ordered HTTP response object sequence into a {@link FullHttpResponse}.
  * <p>
- * This handler consumes segmented response objects such as {@link HttpResponse},
- * {@link HttpHeaders}, and {@link HttpContent}, and emits a fully aggregated response object.
+ * The first staged object is the response line, the last staged object is the terminal {@link LastHttpContent}, and
+ * all staged objects in between are appended in-order to the aggregated response.
  * <p>
- * Use it after {@link HttpResponseDecoder} or {@link HttpClientDuplexe} when downstream business
- * logic only wants complete responses instead of processing the status line, header block, and
- * message body in pieces.
- * If both response aggregation and request aggregation are needed in the same duplex node, use
- * {@link HttpClientDuplexeAggregator} instead.
+ * Unlike request aggregation, the response path does not synthesize protocol auto-responses. It only assembles the
+ * full response, enforces the configured size limit, and leaves protocol failures to the common pipeline flow.
  * @author 赵永春 (zyc@hasor.net)
- * @version : 2026-03-13
+ * @version : 2026-04-11
  */
 public class HttpResponseAggregator extends AbstractHttpAggregator<HttpResponse> {
-    private static final Logger logger = Logger.getLogger(HttpResponseAggregator.class);
-
     /**
      * Creates a response aggregator with the default maximum content length.
      */
@@ -44,16 +41,14 @@ public class HttpResponseAggregator extends AbstractHttpAggregator<HttpResponse>
 
     /**
      * Creates a response aggregator with an explicit maximum content length.
-     * @param maxContentLength the maximum content length
+     * @param maxContentLength maximum accepted aggregated payload length
      */
     public HttpResponseAggregator(int maxContentLength) {
         super(maxContentLength);
     }
 
     /**
-     * Returns whether the current object is a response start message.
-     * @param msg the object to test
-     * @return true if this is a response start message
+     * Response aggregation always starts from the response line object.
      */
     @Override
     protected boolean isStartMessage(HttpObject msg) {
@@ -61,46 +56,116 @@ public class HttpResponseAggregator extends AbstractHttpAggregator<HttpResponse>
     }
 
     /**
-     * Casts the start message to a response object.
-     * @param msg the start message
-     * @return the response object
+     * Builds a full response directly on top of {@link DefaultFullHttpResponse} by appending the staged parts in order.
      */
     @Override
-    protected HttpResponse castStartMessage(HttpObject msg) {
-        return (HttpResponse) msg;
-    }
+    protected void emitAggregated(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<HttpObject> dst) {
+        List<HttpObject> parts = this.takeStagedParts(src);
+        if (parts == null || parts.isEmpty()) {
+            this.resetAggregation(src);
+            return;
+        }
 
-    /**
-     * Builds the aggregated full response.
-     * @param message the start response object
-     * @param aggregated the aggregated content buffer
-     * @param headers the aggregated header collection
-     * @return the full response object
-     */
-    @Override
-    protected HttpObject buildAggregatedMessage(HttpResponse message, ByteBuf aggregated, DefaultHttpHeaders headers) {
-        DefaultFullHttpResponse fullResp = new DefaultFullHttpResponse(message.protocolVersion(), message.status(), aggregated, headers);
-        fullResp.streamId(message.streamId());
-        return fullResp;
-    }
+        HttpResponse response = (HttpResponse) parts.get(0);
+        DefaultFullHttpResponse fullResp = new DefaultFullHttpResponse(response.protocolVersion(), response.status(), ByteBuf.EMPTY);
+        boolean handled = false;
+        boolean success = false;
+        try {
+            int contentLength = 0;
+            for (int index = 0; index < parts.size(); index++) {
+                HttpObject part = parts.get(index);
+                if (part instanceof HttpHeaders) {
+                    fullResp.appendHeaders((HttpHeaders) part);
+                    if (part instanceof LastHttpHeaders && !this.isHeadersClosedHandled()) {
+                        long declaredLength = fullResp.getLong(HttpHeaderNames.CONTENT_LENGTH, -1);
+                        this.onHeadersClosed(context, response, fullResp, declaredLength);
+                        if (fullResp.isBad() || this.isDiscardMode()) {
+                            handled = true;
+                            return;
+                        }
+                    }
+                }
+                if (part instanceof HttpContent) {
+                    ByteBuf content = ((HttpContent) part).content();
+                    int readable = content == null ? 0 : content.readableBytes();
+                    int newLength = contentLength + readable;
+                    if (newLength > this.maxContentLength()) {
+                        if (this.onContentTooLarge(context, response, fullResp, newLength) && this.isDiscardMode()) {
+                            handled = true;
+                            return;
+                        }
+                        throw new HttpContentTooLargeException("content length exceeds maximum: " + newLength + " > " + this.maxContentLength(), this.maxContentLength(), newLength);
+                    }
+                    contentLength = newLength;
+                    if (content != null && readable > 0) {
+                        fullResp.appendContent((HttpContent) part);
+                    }
+                }
+            }
 
-    /**
-     * Logs completion of response aggregation.
-     * @param context the protocol context
-     * @param message the start response object
-     * @param contentLength the aggregated content length
-     */
-    @Override
-    protected void logAggregated(ProtoContext context, HttpResponse message, int contentLength) {
-        if (context.getConfig().isPrintLog()) {
-            long channelID = context.getChannel().getChannelId();
-            logger.info(this.logPrefix() + " channel=" + channelID + " response status=" + message.status().code() + " streamId=" + message.streamId() + " contentLength=" + contentLength);
+            this.completeFullResponse(response, fullResp, contentLength);
+            dst.offerMessage(fullResp);
+            this.logAggregatedResponse(context, response, contentLength);
+            success = true;
+        } finally {
+            this.releaseAggregatedResponse(parts, fullResp, success);
+            this.finishAggregation(src, success, handled);
         }
     }
 
     /**
-     * Returns the log prefix.
-     * @return the log prefix
+     * Finalizes the aggregated response headers and propagates response-line metadata.
+     */
+    private void completeFullResponse(HttpResponse response, DefaultFullHttpResponse fullResp, int contentLength) {
+        fullResp.setHeader(HttpHeaderNames.CONTENT_LENGTH, String.valueOf(contentLength));
+        fullResp.removeHeader(HttpHeaderNames.TRANSFER_ENCODING);
+        fullResp.streamId(response.streamId());
+        if (response.isBad()) {
+            fullResp.markBad(response.badReason());
+        }
+    }
+
+    /**
+     * Writes the aggregation summary log line when HTTP logging is enabled.
+     */
+    private void logAggregatedResponse(ProtoContext context, HttpResponse response, int contentLength) {
+        if (context.getConfig().isPrintLog()) {
+            long channelID = context.getChannel().getChannelId();
+            logger.info(this.logPrefix() + " channel=" + channelID + " response status=" + response.status().code() + " streamId=" + response.streamId() + " contentLength=" + contentLength);
+        }
+    }
+
+    /**
+     * Releases the staged response parts and, on failure, also releases the not-yet-emitted full response.
+     */
+    private void releaseAggregatedResponse(List<HttpObject> parts, DefaultFullHttpResponse fullResp, boolean success) {
+        if (!success) {
+            fullResp.release();
+        }
+        for (HttpObject part : parts) {
+            if (part != null) {
+                part.release();
+            }
+        }
+    }
+
+    /**
+     * Performs queue cleanup and state transition for the current aggregation result.
+     */
+    private void finishAggregation(ProtoRcvQueue<HttpObject> src, boolean success, boolean handled) {
+        if (success) {
+            this.resetAggregation(src);
+        } else if (handled && this.isDiscardMode()) {
+            this.clearAggregationQueue(src);
+        } else if (handled) {
+            this.resetAggregation(src);
+        } else {
+            this.resetAggregation(src);
+        }
+    }
+
+    /**
+     * Returns the log prefix used by response aggregation.
      */
     @Override
     protected String logPrefix() {

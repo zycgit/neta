@@ -279,15 +279,15 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
     private HttpContext.DecodePhase nextState(HttpContext.RequestDecodeState reqCtx) {
         switch (reqCtx.decoderPhase) {
             case READ_INITIAL:
-                return reqCtx.currentMessage != null ?     //
+                return reqCtx.currentMessage != null ?       //
                         HttpContext.DecodePhase.READ_HEADER ://
                         HttpContext.DecodePhase.READ_INITIAL;
             case READ_HEADER:
                 if (reqCtx.currentHeaders == null) {
                     return HttpContext.DecodePhase.READ_HEADER;
                 }
-                return (reqCtx.currentHeaders instanceof LastHttpHeaders) ?//
-                        HttpContext.DecodePhase.DONE_HEADER :           //
+                return (reqCtx.currentHeaders instanceof LastHttpHeaders) ? //
+                        HttpContext.DecodePhase.DONE_HEADER :               //
                         HttpContext.DecodePhase.READ_HEADER;
             case DONE_HEADER:
                 if (reqCtx.chunked) {
@@ -300,19 +300,19 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                 reqCtx.emitEmptyEndContent = true;
                 return HttpContext.DecodePhase.READ_END;
             case READ_FIXED_LENGTH_CONTENT:
-                return reqCtx.bytesRead < reqCtx.contentLength ?         //
-                        HttpContext.DecodePhase.READ_FIXED_LENGTH_CONTENT ://
+                return reqCtx.bytesRead < reqCtx.contentLength ?            //
+                        HttpContext.DecodePhase.READ_FIXED_LENGTH_CONTENT : //
                         endState(reqCtx, false);
             case READ_CHUNK_SIZE:
                 if (!reqCtx.chunkSizeReady) {
                     return HttpContext.DecodePhase.READ_CHUNK_SIZE;
                 }
                 reqCtx.chunkSizeReady = false;
-                return reqCtx.currentChunkSize == 0 ?              //
+                return reqCtx.currentChunkSize == 0 ?                //
                         HttpContext.DecodePhase.READ_HEADER_TRAILER ://
                         HttpContext.DecodePhase.READ_CHUNKED_CONTENT;
             case READ_CHUNKED_CONTENT:
-                return reqCtx.bytesRead < reqCtx.currentChunkSize ? //
+                return reqCtx.bytesRead < reqCtx.currentChunkSize ?   //
                         HttpContext.DecodePhase.READ_CHUNKED_CONTENT ://
                         HttpContext.DecodePhase.READ_CHUNK_DELIMITER;
             case READ_CHUNK_DELIMITER:
