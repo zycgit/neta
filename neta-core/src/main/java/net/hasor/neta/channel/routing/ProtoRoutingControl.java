@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.routing;
-
 import net.hasor.neta.channel.ProtoStatus;
 
 /**
@@ -44,10 +43,12 @@ public interface ProtoRoutingControl {
      * returns:</p>
      * <ul>
      *   <li>returning {@link ProtoStatus#Next} keeps running the current branch until the round ends, then applies the pending switch;</li>
-     *   <li>returning {@link ProtoStatus#Stop} ends the current branch immediately and allows the routing owner to switch the selected route in the same outer round; later router entries then run on the new branch;</li>
+     *   <li>returning {@link ProtoStatus#Stop} ends the current branch immediately and allows the routing owner to switch the selected route in the same outer round;</li>
      *   <li>returning {@link ProtoStatus#Abort} suppresses route switching for the current round; the pending switch is retried on the next routing entry.</li>
      * </ul>
      * <p>The actual cut-over still waits for pending output and recovery state of the old branch to clear.</p>
+     * <p>When the switch is applied during an RCV round, the routing owner immediately runs the
+     * target branch once with empty receive input in the same outer routing invocation.</p>
      * @param target target branch name
      */
     void switchRoute(String target);
@@ -58,10 +59,29 @@ public interface ProtoRoutingControl {
      * It is then exposed through {@link #hasSeed()}, {@link #peekSeed()}, and {@link #takeSeed()} on
      * the same control handle while the target branch is current.</p>
      * <p>At most one route seed may be pending or visible at a time for the current routing owner.</p>
+     * <p>When the switch is applied during an RCV round, the target branch immediately receives one
+     * empty-input round in the same outer routing invocation so the seed can be consumed right away.</p>
      * @param target target branch name
      * @param seed one-shot handoff object for the target branch
      */
     void switchRoute(String target, Object seed);
+
+    /**
+     * Request a switch whose cut-over becomes visible on the next routing entry.
+     * <p>Unlike {@link #switchRoute(String)}, this method does not activate the target branch inside
+     * the current outer routing invocation. The target branch becomes current only when the next
+     * network event or data round enters the routing duplexer.</p>
+     * @param target target branch name
+     */
+    void switchRouteNextTick(String target);
+
+    /**
+     * Request a next-tick switch and deliver a one-shot seed object to the target branch.
+     * <p>The seed becomes visible only after the next routing entry applies the pending switch.</p>
+     * @param target target branch name
+     * @param seed one-shot handoff object for the target branch
+     */
+    void switchRouteNextTick(String target, Object seed);
 
     /** Return whether the current selected branch has a pending one-shot seed object to consume. */
     boolean hasSeed();

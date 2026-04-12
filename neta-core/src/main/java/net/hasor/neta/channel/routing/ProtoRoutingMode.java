@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.routing;
-
 import net.hasor.neta.channel.ProtoRoutingDuplexer;
 
 /**
@@ -25,7 +24,7 @@ import net.hasor.neta.channel.ProtoRoutingDuplexer;
  * @version : 2026-03-08
  */
 public enum ProtoRoutingMode {
-    /** Cache the first successfully selected branch and keep reusing it until explicitly switched through {@link ProtoRoutingControl#switchRoute(String)}. */
+    /** Cache the first successfully selected branch and keep reusing it until explicitly switched through {@link ProtoRoutingControl#switchRoute(String)} or {@link ProtoRoutingControl#switchRouteNextTick(String)}. */
     STATIC,
     /** Re-run the data selector whenever a new inbound message arrives. */
     REALTIME

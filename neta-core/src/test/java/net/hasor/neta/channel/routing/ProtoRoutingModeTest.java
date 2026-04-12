@@ -255,7 +255,7 @@ public class ProtoRoutingModeTest {
         Assert.assertEquals("alpha-switch", stepLog.get(0));
         Assert.assertEquals("alpha-tail", stepLog.get(1));
         Assert.assertEquals(1, RecordHandler.activeCount("beta"));
-        Assert.assertEquals(1, RecordHandler.messageCount("beta"));
+        Assert.assertEquals(2, RecordHandler.messageCount("beta"));
     }
 
     @Test
@@ -278,12 +278,12 @@ public class ProtoRoutingModeTest {
         Assert.assertEquals(1, stepLog.size());
         Assert.assertEquals("alpha-switch", stepLog.get(0));
         Assert.assertEquals(1, RecordHandler.activeCount("beta"));
-        Assert.assertEquals(0, RecordHandler.messageCount("beta"));
+        Assert.assertEquals(1, RecordHandler.messageCount("beta"));
 
         channel.receiveData(20);
         Assert.assertEquals(1, received.size());
         Assert.assertEquals(20, received.get(0));
-        Assert.assertEquals(1, RecordHandler.messageCount("beta"));
+        Assert.assertEquals(2, RecordHandler.messageCount("beta"));
     }
 
     @Test
@@ -313,17 +313,46 @@ public class ProtoRoutingModeTest {
         Assert.assertEquals(2, received.size());
         Assert.assertEquals(20, received.get(1));
         Assert.assertEquals(1, RecordHandler.activeCount("beta"));
-        Assert.assertEquals(1, RecordHandler.messageCount("beta"));
+        Assert.assertEquals(2, RecordHandler.messageCount("beta"));
     }
 
     @Test
-    public void switchRouteWithSeed_shouldExposeOneShotSeedToTargetBranch() throws Throwable {
+    public void switchRouteWithSeed_shouldExposeOneShotSeedInSameRouterEntry() throws Throwable {
         List<String> stepLog = new ArrayList<>();
         List<Object> received = new ArrayList<>();
 
         ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class).nextRouteAsStatic("router", (ProtoRoutingDataSelector<Integer, Integer>) (ctx, rcvUp, rcvDown) -> rcvUp.queueSize() == 0 ? null : "alpha", r -> {
             ProtoRoutingControl routingControl = r.control();
             r.branch("alpha", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("alpha", new SeedSwitchHandler(routingControl, "beta", stepLog)));
+            r.branch("beta", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("beta", new SeedAwareHandler(routingControl, stepLog)));
+        }).build();
+
+        VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
+        channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> received.add(data.getData()));
+
+        channel.receiveData(10);
+        Assert.assertTrue(received.isEmpty());
+        Assert.assertEquals(3, stepLog.size());
+        Assert.assertEquals("alpha-switch", stepLog.get(0));
+        Assert.assertEquals("beta-hasSeed=true", stepLog.get(1));
+        Assert.assertEquals("beta-seed=1010", stepLog.get(2));
+
+        channel.receiveData(20);
+        Assert.assertEquals(1, received.size());
+        Assert.assertEquals(20, received.get(0));
+        Assert.assertEquals(5, stepLog.size());
+        Assert.assertEquals("beta-hasSeed=false", stepLog.get(3));
+        Assert.assertEquals("beta-seed=null", stepLog.get(4));
+    }
+
+    @Test
+    public void switchRouteNextTickWithSeed_shouldExposeSeedOnNextRouterEntry() throws Throwable {
+        List<String> stepLog = new ArrayList<>();
+        List<Object> received = new ArrayList<>();
+
+        ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class).nextRouteAsStatic("router", (ProtoRoutingDataSelector<Integer, Integer>) (ctx, rcvUp, rcvDown) -> rcvUp.queueSize() == 0 ? null : "alpha", r -> {
+            ProtoRoutingControl routingControl = r.control();
+            r.branch("alpha", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("alpha", new SeedSwitchHandler(routingControl, "beta", true, stepLog)));
             r.branch("beta", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("beta", new SeedAwareHandler(routingControl, stepLog)));
         }).build();
 
@@ -351,8 +380,8 @@ public class ProtoRoutingModeTest {
 
         ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class).nextRouteAsStatic("router", (ProtoRoutingDataSelector<Integer, Integer>) (ctx, rcvUp, rcvDown) -> rcvUp.queueSize() == 0 ? null : "alpha", r -> {
             ProtoRoutingControl routingControl = r.control();
-            r.branch("alpha", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("alpha", new ByteBufSeedSwitchHandler(routingControl, "beta", seedA, false, stepLog)));
-            r.branch("beta", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("beta", new ByteBufSeedSwitchHandler(routingControl, "gamma", seedB, true, stepLog)));
+            r.branch("alpha", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("alpha", new ByteBufSeedSwitchHandler(routingControl, "beta", seedA, false, true, stepLog)));
+            r.branch("beta", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("beta", new ByteBufSeedSwitchHandler(routingControl, "gamma", seedB, true, true, stepLog)));
             r.branch("gamma", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("gamma", new ByteBufSeedObserveHandler(routingControl, stepLog)));
         }).build();
 
@@ -383,7 +412,7 @@ public class ProtoRoutingModeTest {
 
         ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class).nextRouteAsStatic("router", (ProtoRoutingDataSelector<Integer, Integer>) (ctx, rcvUp, rcvDown) -> rcvUp.queueSize() == 0 ? null : "alpha", r -> {
             ProtoRoutingControl routingControl = r.control();
-            r.branch("alpha", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("alpha", new ByteBufSeedSwitchHandler(routingControl, "beta", seed, false, stepLog)));
+            r.branch("alpha", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("alpha", new ByteBufSeedSwitchHandler(routingControl, "beta", seed, false, true, stepLog)));
             r.branch("beta", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("beta", new SeedRemoveHandler(routingControl, stepLog)));
         }).build();
 
@@ -475,7 +504,9 @@ public class ProtoRoutingModeTest {
         @Override
         public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Integer> src, ProtoSndQueue<Integer> dst) {
             Integer value = src.takeMessage();
-            dst.offerMessage(value);
+            if (value != null) {
+                dst.offerMessage(value);
+            }
             if (value != null && value == this.triggerValue) {
                 Assert.assertNotNull(this.routingControl);
                 this.routingControl.switchRoute(this.targetRoute);
@@ -617,11 +648,17 @@ public class ProtoRoutingModeTest {
     private static class SeedSwitchHandler implements ProtoHandler<Integer, Integer> {
         private final ProtoRoutingControl routingControl;
         private final String              targetRoute;
+        private final boolean             nextTick;
         private final List<String>        stepLog;
 
         private SeedSwitchHandler(ProtoRoutingControl routingControl, String targetRoute, List<String> stepLog) {
+            this(routingControl, targetRoute, false, stepLog);
+        }
+
+        private SeedSwitchHandler(ProtoRoutingControl routingControl, String targetRoute, boolean nextTick, List<String> stepLog) {
             this.routingControl = routingControl;
             this.targetRoute = targetRoute;
+            this.nextTick = nextTick;
             this.stepLog = stepLog;
         }
 
@@ -630,7 +667,11 @@ public class ProtoRoutingModeTest {
             Integer value = src.takeMessage();
             if (value != null) {
                 this.stepLog.add("alpha-switch");
-                this.routingControl.switchRoute(this.targetRoute, value + 1000);
+                if (this.nextTick) {
+                    this.routingControl.switchRouteNextTick(this.targetRoute, value + 1000);
+                } else {
+                    this.routingControl.switchRoute(this.targetRoute, value + 1000);
+                }
                 return ProtoStatus.Stop;
             }
             return ProtoStatus.Next;
@@ -663,13 +704,15 @@ public class ProtoRoutingModeTest {
         private final String              targetRoute;
         private final ByteBuf             seed;
         private final boolean             observeBeforeOverride;
+        private final boolean             nextTick;
         private final List<String>        stepLog;
 
-        private ByteBufSeedSwitchHandler(ProtoRoutingControl routingControl, String targetRoute, ByteBuf seed, boolean observeBeforeOverride, List<String> stepLog) {
+        private ByteBufSeedSwitchHandler(ProtoRoutingControl routingControl, String targetRoute, ByteBuf seed, boolean observeBeforeOverride, boolean nextTick, List<String> stepLog) {
             this.routingControl = routingControl;
             this.targetRoute = targetRoute;
             this.seed = seed;
             this.observeBeforeOverride = observeBeforeOverride;
+            this.nextTick = nextTick;
             this.stepLog = stepLog;
         }
 
@@ -680,7 +723,11 @@ public class ProtoRoutingModeTest {
                 if (this.observeBeforeOverride) {
                     this.stepLog.add("beta-override-old=" + this.routingControl.hasSeed());
                 }
-                this.routingControl.switchRoute(this.targetRoute, this.seed);
+                if (this.nextTick) {
+                    this.routingControl.switchRouteNextTick(this.targetRoute, this.seed);
+                } else {
+                    this.routingControl.switchRoute(this.targetRoute, this.seed);
+                }
                 return ProtoStatus.Stop;
             }
             return ProtoStatus.Next;

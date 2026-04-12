@@ -61,7 +61,11 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
     private              String                            selectedRoute;
     private              String                            pendingRoute;
     private              Object                            pendingRouteSeed;
+    private              boolean                           pendingRouteImmediate;
+    private              long                              pendingRouteApplyEntry;
     private              Object                            deliveredSeed;
+    private              long                              routingEntrySeq;
+    private              long                              currentRoutingEntry;
 
     /** Create a static data-routing duplexer. */
     public ProtoRoutingDuplexer(ProtoRoutingDataSelector<IN, OUT> routing) {
@@ -139,21 +143,48 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
             public void switchRoute(String target, Object seed) {
                 schedulePendingUpgrade(target, seed);
             }
+
+            @Override
+            public void switchRouteNextTick(String target) {
+                schedulePendingUpgradeNextTick(target);
+            }
+
+            @Override
+            public void switchRouteNextTick(String target, Object seed) {
+                schedulePendingUpgradeNextTick(target, seed);
+            }
         };
     }
 
     /** Record a pending branch-switch request to be executed later. */
     private void schedulePendingUpgrade(String newBranchName) {
-        this.schedulePendingUpgrade(newBranchName, null);
+        this.schedulePendingUpgrade(newBranchName, null, true, false);
     }
 
     /** Record a pending branch-switch request with a one-shot seed object. */
     private void schedulePendingUpgrade(String newBranchName, Object seed) {
+        this.schedulePendingUpgrade(newBranchName, seed, true, false);
+    }
+
+    /** Record a pending branch-switch request that becomes visible on the next routing entry. */
+    private void schedulePendingUpgradeNextTick(String newBranchName) {
+        this.schedulePendingUpgrade(newBranchName, null, false, true);
+    }
+
+    /** Record a pending branch-switch request with a seed that becomes visible on the next routing entry. */
+    private void schedulePendingUpgradeNextTick(String newBranchName, Object seed) {
+        this.schedulePendingUpgrade(newBranchName, seed, false, true);
+    }
+
+    /** Record a pending branch-switch request with an optional one-shot seed. */
+    private void schedulePendingUpgrade(String newBranchName, Object seed, boolean immediate, boolean nextTick) {
         if (!this.branches.containsKey(newBranchName)) {
             throw new IllegalArgumentException("Unknown branch '" + newBranchName + "' for upgrade, available: " + this.branches.keySet());
         }
 
         this.pendingRoute = newBranchName;
+        this.pendingRouteImmediate = immediate;
+        this.pendingRouteApplyEntry = this.currentRoutingEntry + (nextTick ? 1 : 0);
 
         if (seed != null) {
             this.pendingRouteSeed = this.releaseSeed(this.pendingRouteSeed);
@@ -241,6 +272,7 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
      */
     @Override
     public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) throws Throwable {
+        this.beginRoutingEntry();
         this.checkAndExecutePendingUpgrade(context);
 
         if (this.selectedRoute == null && this.routing4Event != null) {
@@ -274,9 +306,17 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
      */
     @Override
     public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<IN> rcvUp, ProtoSndQueue<Object> rcvDown, ProtoRcvQueue<Object> sndUp, ProtoSndQueue<OUT> sndDown) throws Throwable {
-        this.checkAndExecutePendingUpgrade(context);
+        this.beginRoutingEntry();
+        RouteUpgradeAction appliedAction = this.checkAndExecutePendingUpgrade(context);
 
         if (isRcv) {
+            if (appliedAction.immediate()) {
+                ProtoStatus immediateStatus = this.runImmediateRcvRound(rcvDown, sndDown);
+                if (immediateStatus == ProtoStatus.Abort) {
+                    return ProtoStatus.Abort;
+                }
+            }
+
             ProtoStatus recoveryStatus = this.tryRecoverRcvBranch((ProtoContextService) context, rcvUp, rcvDown, sndDown);
             if (recoveryStatus != null) {
                 return recoveryStatus;
@@ -316,7 +356,13 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
             // Route is now known. Fire branch onActive
             this.activateBranchLifecycle(context, this.selectedRoute, null, false);
             if (!this.flushBranchOutputs(branch, rcvDown, sndDown)) {
-                this.checkAndExecutePendingUpgrade(context);
+                RouteUpgradeAction delayedAction = this.checkAndExecutePendingUpgrade(context);
+                if (delayedAction.immediate()) {
+                    ProtoStatus immediateStatus = this.runImmediateRcvRound(rcvDown, sndDown);
+                    if (immediateStatus == ProtoStatus.Abort) {
+                        return ProtoStatus.Abort;
+                    }
+                }
                 return ProtoStatus.Next;
             }
 
@@ -324,7 +370,11 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
             List<IN> data = rcvUp.takeMessage(rcvUp.queueSize());
             ProtoStatus status = this.doRcvRoute(branch, data, rcvDown, sndDown);
             if (status != ProtoStatus.Abort) {
-                this.checkAndExecutePendingUpgrade(context);
+                RouteUpgradeAction delayedAction = this.checkAndExecutePendingUpgrade(context);
+                if (delayedAction.immediate()) {
+                    ProtoStatus immediateStatus = this.runImmediateRcvRound(rcvDown, sndDown);
+                    status = this.mergeImmediateStatus(status, immediateStatus);
+                }
             }
             return status;
         } else {
@@ -394,6 +444,40 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
             throw cr.error;
         }
         return cr.status;
+    }
+
+    private ProtoStatus runImmediateRcvRound(ProtoSndQueue<Object> rcvDown, ProtoSndQueue<OUT> sndDown) throws Throwable {
+        if (this.selectedRoute == null) {
+            return ProtoStatus.Next;
+        }
+
+        BranchEntry branch = this.branches.get(this.selectedRoute);
+        if (branch == null) {
+            return ProtoStatus.Next;
+        }
+
+        if (!this.flushBranchOutputs(branch, rcvDown, sndDown)) {
+            return ProtoStatus.Next;
+        }
+
+        ChainResult cr = branch.chainRoot.onRcv(branch.branchCtx, null, null, null);
+        branch.addPendingSnd(cr.data);
+        this.flushBranchOutputs(branch, rcvDown, sndDown);
+
+        if (cr.error != null) {
+            throw cr.error;
+        }
+        return cr.status;
+    }
+
+    private ProtoStatus mergeImmediateStatus(ProtoStatus currentStatus, ProtoStatus immediateStatus) {
+        if (immediateStatus == ProtoStatus.Abort || currentStatus == ProtoStatus.Abort) {
+            return ProtoStatus.Abort;
+        }
+        if (immediateStatus == ProtoStatus.Stop) {
+            return ProtoStatus.Stop;
+        }
+        return currentStatus;
     }
 
     /**
@@ -592,6 +676,10 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
         return context.activeRecovery(isRcv, this.recoveryOwnerId);
     }
 
+    private void beginRoutingEntry() {
+        this.currentRoutingEntry = ++this.routingEntrySeq;
+    }
+
     private void activateBranchLifecycle(ProtoContext context, String routeName, String fromRoute, boolean fireRouteChangedEvent) {
         if (context.getConfig().isPrintLog()) {
             logger.info("[ROUTE] channel=" + context.getChannel().getChannelId() + " selected='" + routeName + "'");
@@ -622,12 +710,15 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
     }
 
     /** Check for and execute any branch switch registered for the current round. */
-    private void checkAndExecutePendingUpgrade(ProtoContext context) {
+    private RouteUpgradeAction checkAndExecutePendingUpgrade(ProtoContext context) {
         if (this.pendingRoute == null) {
-            return;
+            return RouteUpgradeAction.NONE;
+        }
+        if (this.currentRoutingEntry < this.pendingRouteApplyEntry) {
+            return RouteUpgradeAction.NONE;
         }
         if (this.shouldDelayPendingUpgrade(context)) {
-            return;
+            return RouteUpgradeAction.NONE;
         }
 
         String newRoute = this.pendingRoute;
@@ -635,13 +726,16 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
         String oldRoute = this.selectedRoute;
         Object nextSeed = this.pendingRouteSeed;
         this.pendingRouteSeed = null;
+        boolean immediate = this.pendingRouteImmediate;
+        this.pendingRouteImmediate = false;
+        this.pendingRouteApplyEntry = 0;
 
         if (Objects.equals(oldRoute, newRoute)) {
             if (nextSeed != null) {
                 this.releaseSeed(this.deliveredSeed);
                 this.deliveredSeed = nextSeed;
             }
-            return;
+            return RouteUpgradeAction.noneFor(newRoute);
         }
 
         if (context.getConfig().isPrintLog()) {
@@ -653,6 +747,7 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
         this.selectedRoute = newRoute;
         this.deliveredSeed = nextSeed;
         this.activateBranchLifecycle(context, newRoute, oldRoute, true);
+        return new RouteUpgradeAction(newRoute, immediate);
     }
 
     /** Return the child context associated with the specified branch. */
@@ -683,6 +778,25 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
 
         private boolean hasPendingOutput() {
             return !this.pendingSnd.isEmpty() || this.chainRoot.getTailRcvDown().queueSize() > 0;
+        }
+    }
+
+    private static final class RouteUpgradeAction {
+        private static final RouteUpgradeAction NONE = new RouteUpgradeAction(null, false);
+        private final String  routeName;
+        private final boolean immediate;
+
+        private RouteUpgradeAction(String routeName, boolean immediate) {
+            this.routeName = routeName;
+            this.immediate = immediate;
+        }
+
+        private static RouteUpgradeAction noneFor(String routeName) {
+            return new RouteUpgradeAction(routeName, false);
+        }
+
+        private boolean immediate() {
+            return this.immediate && this.routeName != null;
         }
     }
 }
