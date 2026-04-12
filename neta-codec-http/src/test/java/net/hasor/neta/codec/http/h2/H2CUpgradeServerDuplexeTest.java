@@ -23,23 +23,28 @@ public class H2CUpgradeServerDuplexeTest extends AbstractHttp2Test {
         autoCloseNeta(neta -> {
             // server
             VirtualPipe serverPipe = openVirtualPipe(neta, (ProtoInitializer) ctx -> {
-                ProtoHelper.standard().nextRouteAsStatic("protocol-detect", new HttpAggregatorRoute(), routing -> {
-                    ProtoRoutingControl routingControl = routing.control();
-                    routing.branch(HttpRouteKey.BRANCH_H1, branch -> {
-                        branch.nextDuplex("http-codec", new HttpServerDuplexe()).nextDecoder("http-aggregator", new HttpRequestAggregator(MAX_CONTENT_LENGTH)).nextDecoder("http-handler", new InlineDispatchHandler("h1"));
-                    }).branch(HttpRouteKey.BRANCH_H2, branch -> {
-                        branch.nextDuplex("h2-frame", new Http2FrameDuplexe(true)).nextDuplex("h2-message", new Http2ObjectDuplexe(true, routingControl)).nextPartition("h2-stream", new Http2ObjectPartitionSelector(), partition -> {
-                            Http2ObjectPartitionPolicy policy = new Http2ObjectPartitionPolicy();
-                            partition.policy(policy).byDefault(partitionCtx -> {
-                                partitionCtx.addLast("h2-control-lifecycle", new Http2ObjectStreamManager(partition.control(), policy));
-                            }).byInitializer(partitionCtx -> {
-                                partitionCtx.addLast("h2-aggregator", new HttpServerDuplexeAggregator(MAX_CONTENT_LENGTH));
-                                partitionCtx.addLastDecoder("h2-handler", new InlineDispatchHandler("h2"));
-                            });
-                        });
-                    }).branch(HttpRouteKey.BRANCH_H2C, branch -> {
-                        branch.nextDuplex("http-codec", new HttpServerDuplexe()).nextDuplex("h2c-upgrade", new H2CUpgradeServerDuplexe(routingControl)).nextDecoder("h2c-handler", new InlineDispatchHandler("h2c"));
-                    });
+                ProtoHelper.standard().nextRouteAsStatic("protocol-detect", new HttpAggregatorRoute(), r -> {
+                    ProtoRoutingControl routingControl = r.control();
+                    r.branch(HttpRouteKey.BRANCH_H1, b -> b//
+                                    .nextDuplex("http-codec", new HttpServerDuplexe())//
+                                    .nextDecoder("http-aggregator", new HttpRequestAggregator(MAX_CONTENT_LENGTH))//
+                                    .nextDecoder("http-handler", new InlineDispatchHandler("h1")))//
+                            .branch(HttpRouteKey.BRANCH_H2, b -> b//
+                                    .nextDuplex("h2-frame", new Http2FrameDuplexe(true))//
+                                    .nextDuplex("h2-message", new Http2ObjectDuplexe(true, routingControl))//
+                                    .nextPartition("h2-stream", new Http2ObjectPartitionSelector(), p -> {
+                                        Http2ObjectPartitionPolicy policy = new Http2ObjectPartitionPolicy();
+                                        p.policy(policy).byDefault(partitionCtx -> {
+                                            partitionCtx.addLast("h2-control-lifecycle", new Http2ObjectStreamManager(p.control(), policy));
+                                        }).byInitializer(partitionCtx -> {
+                                            partitionCtx.addLast("h2-aggregator", new HttpServerDuplexeAggregator(MAX_CONTENT_LENGTH));
+                                            partitionCtx.addLastDecoder("h2-handler", new InlineDispatchHandler("h2"));
+                                        });
+                                    }))//
+                            .branch(HttpRouteKey.BRANCH_H2C, b -> b//
+                                    .nextDuplex("http-codec", new HttpServerDuplexe())//
+                                    .nextDuplex("h2c-upgrade", new H2CUpgradeServerDuplexe(routingControl))//
+                                    .nextDecoder("h2c-handler", new InlineDispatchHandler("h2c")));
                 }).config(ctx);
             }, VrtSoConfig.asServer());
 
@@ -74,7 +79,11 @@ public class H2CUpgradeServerDuplexeTest extends AbstractHttp2Test {
 
             List<HttpObject> handshakeObjects = receiveAndIntBound(clientDecoder, ByteBuf.wrap(handshakeBytes));
             try {
-                assertTrue(handshakeObjects.isEmpty());
+                assertEquals(1, handshakeObjects.size());
+                FullHttpResponse upgradedResponse = (FullHttpResponse) handshakeObjects.get(0);
+                assertEquals(1, upgradedResponse.streamId());
+                assertEquals(HttpStatus.OK, upgradedResponse.status());
+                assertEquals("h2:/upgrade", utf8(upgradedResponse.content()));
             } finally {
                 free(handshakeObjects);
             }
@@ -84,7 +93,7 @@ public class H2CUpgradeServerDuplexeTest extends AbstractHttp2Test {
                 ctx.addLast("h2-frame", new Http2FrameDuplexe(false));
             }, VrtSoConfig.asClient());
             List<Http2Frame> serverPreface = receiveAndIntBound(frameDecoder, ByteBuf.wrap(handshakeBytes));
-            assertEquals(1, serverPreface.size());
+            assertTrue(serverPreface.size() >= 1);
             assertEquals(Http2FrameType.SETTINGS, serverPreface.get(0).type());
             assertEquals(0, serverPreface.get(0).streamId());
 
@@ -96,13 +105,9 @@ public class H2CUpgradeServerDuplexeTest extends AbstractHttp2Test {
 
             List<HttpObject> decoded = receiveAndIntBound(clientDecoder, ByteBuf.wrap(drainRawBytes(serverPipe.channelOutbound())));
             drainQueue(clientDecoder.channelOutbound());
-            assertEquals(1, decoded.size());
+            assertTrue(decoded.isEmpty());
 
             try {
-                FullHttpResponse upgradedResponse = (FullHttpResponse) decoded.get(0);
-                assertEquals(1, upgradedResponse.streamId());
-                assertEquals(HttpStatus.OK, upgradedResponse.status());
-                assertEquals("h2:/upgrade", utf8(upgradedResponse.content()));
             } finally {
                 free(decoded);
             }
@@ -157,7 +162,10 @@ public class H2CUpgradeServerDuplexeTest extends AbstractHttp2Test {
 
             List<HttpObject> handshakeObjects = receiveAndIntBound(clientDecoder, ByteBuf.wrap(Arrays.copyOfRange(firstOutbound, headerEnd, firstOutbound.length)));
             try {
-                assertTrue(handshakeObjects.isEmpty());
+                assertEquals(1, handshakeObjects.size());
+                FullHttpResponse upgradedResponse = (FullHttpResponse) handshakeObjects.get(0);
+                assertEquals(1, upgradedResponse.streamId());
+                assertEquals("h2:/upgrade", utf8(upgradedResponse.content()));
             } finally {
                 free(handshakeObjects);
             }
@@ -169,7 +177,7 @@ public class H2CUpgradeServerDuplexeTest extends AbstractHttp2Test {
 
             List<FullHttpResponse> responses = new ArrayList<FullHttpResponse>();
             long deadline = System.currentTimeMillis() + 1500L;
-            while (System.currentTimeMillis() < deadline && responses.size() < 2) {
+            while (System.currentTimeMillis() < deadline && responses.size() < 1) {
                 if (!transport.clientInbound().isEmpty()) {
                     List<HttpObject> decoded = receiveAndIntBound(clientDecoder, ByteBuf.wrap(drainRawBytes(transport.clientInbound())));
                     for (HttpObject item : decoded) {
@@ -187,12 +195,10 @@ public class H2CUpgradeServerDuplexeTest extends AbstractHttp2Test {
             assertTrue(transport.serverInboundErrors().isEmpty());
             assertTrue(transport.clientOutboundErrors().isEmpty());
             assertTrue(transport.serverOutboundErrors().isEmpty());
-            assertEquals(2, responses.size());
+            assertEquals(1, responses.size());
             try {
-                assertEquals(1, responses.get(0).streamId());
-                assertEquals("h2:/upgrade", utf8(responses.get(0).content()));
-                assertEquals(3, responses.get(1).streamId());
-                assertEquals("h2:/after", utf8(responses.get(1).content()));
+                assertEquals(3, responses.get(0).streamId());
+                assertEquals("h2:/after", utf8(responses.get(0).content()));
             } finally {
                 free(responses);
             }

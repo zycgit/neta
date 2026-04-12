@@ -200,7 +200,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
 
         long errorCode = resolveErrorCode(protocolError.errorCode(), Http2ErrorCode.INTERNAL_ERROR);
         Http2Frame frame = goAwayFrame(lastAcceptedStreamId, errorCode, debugData);
-        context.sendData(frame);
+        context.sendEncoded(frame);
         this.fireEvent(context, Http2GoawayEvent.class, new Http2GoawayEvent(0, lastAcceptedStreamId, errorCode, debugData).remote(false));
 
         eh.clear();
@@ -260,8 +260,8 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
                 dst.offerMessage(httpContent);
             }
             if (dataLength > 0) {
-                state.offerWindowUpdate(buildWindowUpdateFrame(0, dataLength));
-                state.offerWindowUpdate(buildWindowUpdateFrame(streamId, dataLength));
+                state.offerWindowUpdate(0, dataLength);
+                state.offerWindowUpdate(streamId, dataLength);
             }
         }
 
@@ -310,7 +310,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
         }
 
         if (state.serverInitialWindowSize() > 65535) {
-            state.offerWindowUpdate(buildWindowUpdateFrame(streamId, state.serverInitialWindowSize() - 65535));
+            state.offerWindowUpdate(streamId, state.serverInitialWindowSize() - 65535);
         }
 
         if (Http2Flags.endHeaders(flags)) {
@@ -633,35 +633,25 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
 
     private void emitInitialHeaders(ProtoContext context, Http2DecoderContent state, ProtoSndQueue<HttpObject> dst, long streamId, HttpHeaders headers, boolean endStream) {
         LastHttpHeaders regularHeaders = new DefaultLastHttpHeaders();
-        String status = headers.getString(HttpHeaderNames.PSEUDO_STATUS);
+        HttpObject startLine = state.newStartLine(streamId, headers);
         state.setLastEmittedStreamId(streamId);
         if (endStream) {
             state.offerResponseStreamId(streamId);
         }
 
-        if (status != null) {
-            HttpResponse response = new DefaultHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.valueOf(Integer.parseInt(status)));
-            copyRegularHeaders(headers, regularHeaders);
+        copyRegularHeaders(headers, regularHeaders);
+        regularHeaders.streamId(streamId);
 
-            response.streamId(streamId);
-            regularHeaders.streamId(streamId);
-
+        if (startLine instanceof HttpResponse) {
+            HttpResponse response = (HttpResponse) startLine;
             context.context(HttpVersion.class, response.protocolVersion());
             context.context(HttpScope.class, HttpScope.STREAM);
             dst.offerMessage(response);
             dst.offerMessage(regularHeaders);
         } else {
-            String method = headers.getString(HttpHeaderNames.PSEUDO_METHOD);
-            String path = headers.getString(HttpHeaderNames.PSEUDO_PATH);
+            HttpRequest request = (HttpRequest) startLine;
             String authority = headers.getString(HttpHeaderNames.PSEUDO_AUTHORITY);
             String scheme = headers.getString(HttpHeaderNames.PSEUDO_SCHEME);
-            if (StringUtils.isBlank(method) || StringUtils.isBlank(path)) {
-                String msg = "HTTP/2: missing required pseudo-header " + HttpHeaderNames.PSEUDO_METHOD + " or " + HttpHeaderNames.PSEUDO_PATH;
-                throw new HttpBadRequestException(msg);
-            }
-
-            HttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.valueOf(method), path);
-            copyRegularHeaders(headers, regularHeaders);
 
             if (StringUtils.isNotBlank(authority) && StringUtils.isBlank(regularHeaders.getString(HttpHeaderNames.HOST))) {
                 regularHeaders.addHeader(HttpHeaderNames.HOST, authority);
@@ -669,9 +659,6 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
             if (StringUtils.isNotBlank(scheme)) {
                 regularHeaders.addHeader(HttpHeaderNames.X_FORWARDED_PROTO, scheme);
             }
-
-            request.streamId(streamId);
-            regularHeaders.streamId(streamId);
 
             context.context(HttpVersion.class, request.protocolVersion());
             context.context(HttpScope.class, HttpScope.STREAM);
@@ -754,7 +741,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
 
         long errorCode = resolveErrorCode(protocolError.errorCode(), Http2ErrorCode.INTERNAL_ERROR);
         Http2Frame frame = resetStreamFrame(streamId, errorCode);
-        context.sendData(frame);
+        context.sendEncoded(frame);
         this.fireEvent(context, Http2ResetEvent.class, new Http2ResetEvent(streamId, errorCode).remote(false));
     }
 
@@ -767,15 +754,6 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
         lastContent.streamId(streamId);
         lastContent.markBad("HTTP/2 stream reset: " + Http2ErrorCode.name(errorCode));
         return lastContent;
-    }
-
-    private static Http2Frame buildWindowUpdateFrame(long streamId, int increment) {
-        byte[] payload = new byte[4];
-        payload[0] = (byte) ((increment >> 24) & 0x7F);
-        payload[1] = (byte) ((increment >> 16) & 0xFF);
-        payload[2] = (byte) ((increment >> 8) & 0xFF);
-        payload[3] = (byte) (increment & 0xFF);
-        return Http2Frame.windowUpdate(streamId, payload);
     }
 
     private static Http2Frame resetStreamFrame(long streamId, long errorCode) {

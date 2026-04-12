@@ -15,14 +15,13 @@
  */
 package net.hasor.neta.codec.http.h2;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.codec.http.*;
 
 /**
@@ -195,9 +194,8 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
     }
 
     private boolean flushPendingControlFrames(ProtoContext context, ProtoSndQueue<Http2Frame> dst) {
-        Http2EncoderContent encoderState = context.context(Http2EncoderContent.class);
         Http2DecoderContent decoderState = context.context(Http2DecoderContent.class);
-        if (decoderState == null && (encoderState == null || !encoderState.hasPendingOutboundFrames())) {
+        if (decoderState == null) {
             return false;
         }
 
@@ -214,23 +212,13 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
                 hasAny = true;
             }
 
-            Http2Frame windowUpdate;
+            Http2DecoderContent.PendingWindowUpdate windowUpdate;
             while ((windowUpdate = decoderState.pollPendingWindowUpdate()) != null) {
-                int increment = parseWindowUpdateIncrement(windowUpdate.payload(), windowUpdate.payloadOffset());
-                Http2Frame frame = buildWindowUpdateFrame(windowUpdate.streamId(), increment);
+                Http2Frame frame = buildWindowUpdateFrame(windowUpdate.streamId(), windowUpdate.increment());
                 dst.offerMessage(frame);
                 hasAny = true;
             }
         }
-
-        if (encoderState != null) {
-            Http2Frame pendingFrame;
-            while ((pendingFrame = encoderState.pollPendingOutboundFrame()) != null) {
-                dst.offerMessage(pendingFrame);
-                hasAny = true;
-            }
-        }
-
         return hasAny;
     }
 
@@ -289,16 +277,14 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
             request.streamId(state.allocateNextStreamId());
         }
 
-        state.pendingRequest(request);
-        state.pendingResponse(null);
+        state.pendingStartLine(request);
         state.trailingHeadersSent(false);
     }
 
     private void bindResponse(Http2EncoderContent state, ProtoContext context, HttpResponse response) {
         long streamId = this.resolveResponseStreamId(state, context, response);
         response.streamId(streamId);
-        state.pendingResponse(response);
-        state.pendingRequest(null);
+        state.pendingStartLine(response);
         state.trailingHeadersSent(false);
     }
 
@@ -306,10 +292,11 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
         long streamId = this.resolveResponseStreamId(state, context, response);
         ByteBuf body = response.content();
         boolean hasBody = body != null && body.readableBytes() > 0;
-        this.encodeHeaders(state, this.buildResponseHeaders(response, response), streamId, !hasBody, dst);
+        boolean webSocketUpgrade = isWebSocketUpgradeHandshake(response);
+        this.encodeHeaders(state, this.buildResponseHeaders(response, response), streamId, !hasBody && !webSocketUpgrade, dst);
         if (hasBody) {
             this.encodeData(context, streamId, body, true, dst);
-        } else {
+        } else if (!webSocketUpgrade) {
             this.recordOutboundHalfClosed(context, streamId);
         }
         state.clearPendingStartLine();
@@ -321,10 +308,11 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
         request.streamId(streamId);
         ByteBuf body = request.content();
         boolean hasBody = body != null && body.readableBytes() > 0;
-        this.encodeHeaders(state, this.buildRequestHeaders(request, request), streamId, !hasBody, dst);
+        boolean webSocketUpgrade = isWebSocketUpgradeHandshake(request);
+        this.encodeHeaders(state, this.buildRequestHeaders(request, request), streamId, !hasBody && !webSocketUpgrade, dst);
         if (hasBody) {
             this.encodeData(context, streamId, body, true, dst);
-        } else {
+        } else if (!webSocketUpgrade) {
             this.recordOutboundHalfClosed(context, streamId);
         }
         state.clearPendingStartLine();
@@ -332,17 +320,9 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
     }
 
     private void encodeHeaderBlock(Http2EncoderContent state, ProtoContext context, HttpHeaders headers, ProtoSndQueue<Http2Frame> dst) {
-        if (state.pendingRequest() != null) {
+        if (state.pendingStartLine() != null) {
             long streamId = this.resolveActiveStreamId(state, headers);
-            this.encodeHeaders(state, this.buildRequestHeaders(state.pendingRequest(), headers), streamId, false, dst);
-            state.clearPendingStartLine();
-            return;
-        }
-
-        if (state.pendingResponse() != null) {
-            long streamId = this.resolveActiveStreamId(state, headers);
-            this.encodeHeaders(state, this.buildResponseHeaders(state.pendingResponse(), headers), streamId, false, dst);
-            state.clearPendingStartLine();
+            this.encodePendingStartLine(state, headers, streamId, false, dst);
             return;
         }
 
@@ -382,12 +362,18 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
         long streamId = this.ensureHeaderBlock(state, context, lastContent, dst);
         ByteBuf body = lastContent.content();
         int bodyLen = body != null ? body.readableBytes() : 0;
+        boolean pendingUpgradeStream = state.consumePendingUpgradeStream(streamId);
         if (state.trailingHeadersSent()) {
             if (bodyLen > 0) {
                 throw new HttpProtocolStreamException(streamId, Http2ErrorCode.PROTOCOL_ERROR, "HTTP/2: trailing headers must be followed by an empty LastHttpContent");
             }
             state.trailingHeadersSent(false);
             state.clearPendingStartLine();
+            return;
+        }
+        if (pendingUpgradeStream && bodyLen == 0) {
+            state.clearPendingStartLine();
+            state.trailingHeadersSent(false);
             return;
         }
         this.encodeData(context, streamId, body != null ? body : context.byteBufAllocator().buffer(0), true, dst);
@@ -402,14 +388,26 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
 
     private long ensureHeaderBlock(Http2EncoderContent state, ProtoContext context, HttpObject content, ProtoSndQueue<Http2Frame> dst) {
         long streamId = this.resolveActiveStreamId(state, content);
-        if (state.pendingRequest() != null) {
-            this.encodeHeaders(state, this.buildRequestHeaders(state.pendingRequest(), null), streamId, false, dst);
-            state.clearPendingStartLine();
-        } else if (state.pendingResponse() != null) {
-            this.encodeHeaders(state, this.buildResponseHeaders(state.pendingResponse(), null), streamId, false, dst);
-            state.clearPendingStartLine();
+        if (state.pendingStartLine() != null) {
+            this.encodePendingStartLine(state, null, streamId, false, dst);
         }
         return streamId;
+    }
+
+    private void encodePendingStartLine(Http2EncoderContent state, HttpHeaders regularHeaders, long streamId, boolean endStream, ProtoSndQueue<Http2Frame> dst) {
+        HttpObject pendingStartLine = state.pendingStartLine();
+        if (pendingStartLine == null) {
+            String msg = "HTTP/2: missing request/response start-line before header block";
+            throw new HttpProtocolConnectionException(Http2ErrorCode.PROTOCOL_ERROR, msg);
+        }
+
+        if (isWebSocketUpgradeHandshake(regularHeaders)) {
+            state.markPendingUpgradeStream(streamId);
+        }
+
+        HttpHeaders headers = state.pendingStartLineIsRequest() ? this.buildRequestHeaders(state.pendingRequest(), regularHeaders) : this.buildResponseHeaders(state.pendingResponse(), regularHeaders);
+        this.encodeHeaders(state, headers, streamId, endStream, dst);
+        state.clearPendingStartLine();
     }
 
     private long resolveResponseStreamId(Http2EncoderContent state, ProtoContext context, HttpObject responseObject) {
@@ -464,7 +462,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
     private HttpHeaders buildResponseHeaders(HttpResponse response, HttpHeaders regularHeaders) {
         HttpHeaders target = new DefaultHttpHeaders();
         target.addHeader(HttpHeaderNames.PSEUDO_STATUS, String.valueOf(response.status().code()));
-        this.copyRegularHeaders(regularHeaders, target);
+        this.copyRegularHeaders(regularHeaders, target, shouldPreserveWebSocketUpgradeHeaders(regularHeaders));
         return target;
     }
 
@@ -477,29 +475,30 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
             target.addHeader(HttpHeaderNames.PSEUDO_AUTHORITY, host);
         }
         target.addHeader(HttpHeaderNames.PSEUDO_SCHEME, this.scheme.name());
-        this.copyRegularHeaders(regularHeaders, target);
+        this.copyRegularHeaders(regularHeaders, target, shouldPreserveWebSocketUpgradeHeaders(regularHeaders));
         return target;
     }
 
     private HttpHeaders buildTrailerHeaders(HttpHeaders regularHeaders) {
         HttpHeaders target = new DefaultHttpHeaders();
-        this.copyRegularHeaders(regularHeaders, target);
+        this.copyRegularHeaders(regularHeaders, target, false);
         return target;
     }
 
-    private void copyRegularHeaders(HttpHeaders source, HttpHeaders target) {
+    private void copyRegularHeaders(HttpHeaders source, HttpHeaders target, boolean preserveWebSocketUpgradeHeaders) {
         if (source == null || source.headerSize() == 0) {
             return;
         }
 
         for (String headerName : source.headerNames()) {
             String name = headerName.toLowerCase();
+            boolean preserveHeader = preserveWebSocketUpgradeHeaders && (StringUtils.equals(HttpHeaderNames.CONNECTION, name) || StringUtils.equals(HttpHeaderNames.UPGRADE, name));
             if (StringUtils.startsWith(name, ":") ||                        //
-                    StringUtils.equals(HttpHeaderNames.CONNECTION, name) ||       //
+                    (!preserveHeader && StringUtils.equals(HttpHeaderNames.CONNECTION, name)) ||       //
                     StringUtils.equals(HttpHeaderNames.TRANSFER_ENCODING, name) ||//
                     StringUtils.equals(HttpHeaderNames.KEEP_ALIVE, name) ||       //
                     StringUtils.equals(HttpHeaderNames.PROXY_CONNECTION, name) || //
-                    StringUtils.equals(HttpHeaderNames.UPGRADE, name) ||          //
+                    (!preserveHeader && StringUtils.equals(HttpHeaderNames.UPGRADE, name)) ||          //
                     StringUtils.equals(HttpHeaderNames.HOST, name)) {
                 continue;
             }
@@ -507,6 +506,19 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
                 target.addHeader(name, value);
             }
         }
+    }
+
+    private boolean shouldPreserveWebSocketUpgradeHeaders(HttpHeaders headers) {
+        if (headers == null) {
+            return false;
+        }
+        String upgrade = headers.getString(HttpHeaderNames.UPGRADE);
+        String connection = headers.getString(HttpHeaderNames.CONNECTION);
+        return StringUtils.equalsIgnoreCase(HttpHeaderValues.WEBSOCKET, upgrade) && StringUtils.containsIgnoreCase(connection, HttpHeaderValues.UPGRADE);
+    }
+
+    private boolean isWebSocketUpgradeHandshake(HttpHeaders headers) {
+        return shouldPreserveWebSocketUpgradeHeaders(headers);
     }
 
     private void encodeHeaders(Http2EncoderContent state, HttpHeaders headers, long streamId, boolean endStream, ProtoSndQueue<Http2Frame> dst) {
@@ -566,7 +578,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
             byte[] opaqueData = new byte[8];
             event.getData().getBytes(0, opaqueData, 0, opaqueData.length);
             Http2Frame frame = pingFrame(false, opaqueData);
-            this.queueControlFrame(context, frame);
+            this.sendEncodedFrame(context, frame);
         } finally {
             event.release();
         }
@@ -574,7 +586,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
 
     private void sendGoaway(ProtoContext context, Http2GoawayEvent event) {
         Http2Frame frame = goawayFrame(event.lastAcceptedId(), event.errorCode(), event.debugData());
-        this.queueControlFrame(context, frame);
+        this.sendEncodedFrame(context, frame);
         this.fireEventRcv(context, Http2GoawayEvent.class, event);
     }
 
@@ -586,13 +598,13 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
 
         long code = normalizeResetErrorCode(resetEvent.errorCode());
         Http2Frame frame = resetStreamFrame(streamId, code);
-        this.queueControlFrame(context, frame);
+        this.sendEncodedFrame(context, frame);
         this.fireEventRcv(context, Http2ResetEvent.class, resetEvent);
     }
 
     private void sendPriority(ProtoContext context, Http2PriorityEvent event) {
         Http2Frame frame = priorityFrame(event.streamId(), event.streamDependency(), event.weight(), event.exclusive());
-        this.queueControlFrame(context, frame);
+        this.sendEncodedFrame(context, frame);
     }
 
     private void sendPushPromise(ProtoContext context, Http2PushPromiseEvent event) {
@@ -603,32 +615,48 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
 
         int maxFrameSize = this.resolvePeerMaxFrameSize(context);
         List<Http2Frame> frames = pushPromiseFrames(event.streamId(), event.promisedStreamId(), event.headers(), (int) this.localSettings.headerTableSize(), maxFrameSize);
-        this.queueControlFrames(context, frames);
+        this.sendEncodedFrames(context, frames);
     }
 
-    private void queueControlFrame(ProtoContext context, Http2Frame frame) {
-        Http2EncoderContent state = this.encoderState(context);
-        state.queueOutboundFrame(frame);
-        this.triggerPendingControlWrite(context);
+    private void sendEncodedFrame(ProtoContext context, Http2Frame frame) {
+        if (frame != null) {
+            context.sendEncoded(this.prepareImmediateControlFrames(context, new Http2Frame[] { frame }));
+        }
     }
 
-    private void queueControlFrames(ProtoContext context, List<Http2Frame> frames) {
-        Http2EncoderContent state = this.encoderState(context);
-        state.queueOutboundFrames(frames);
-        this.triggerPendingControlWrite(context);
+    private void sendEncodedFrames(ProtoContext context, List<Http2Frame> frames) {
+        if (frames == null || frames.isEmpty()) {
+            return;
+        }
+        context.sendEncoded(this.prepareImmediateControlFrames(context, frames.toArray(new Http2Frame[0])));
     }
 
-    private Http2EncoderContent encoderState(ProtoContext context) {
+    private Object[] prepareImmediateControlFrames(ProtoContext context, Http2Frame[] frames) {
         Http2EncoderContent state = context.context(Http2EncoderContent.class);
         if (state == null) {
             state = new Http2EncoderContent(this.serverMode, this.localSettings);
             context.context(Http2EncoderContent.class, state);
         }
-        return state;
-    }
 
-    private void triggerPendingControlWrite(ProtoContext context) {
-        context.flush();
+        if (state.isPrefaceSent()) {
+            return frames;
+        }
+
+        state.markPrefaceSent();
+        List<Object> immediateFrames = new ArrayList<>();
+        if (this.serverMode) {
+            int initialWindowSize = this.localSettings.initialWindowSize();
+            immediateFrames.add(serverSettingsFrame(this.localSettings));
+            if (initialWindowSize > 65535) {
+                immediateFrames.add(buildWindowUpdateFrame(0, initialWindowSize - 65535));
+            }
+        } else {
+            immediateFrames.add(new Http2Frame(Http2FrameType.PREFACE, 0, 0, CLIENT_PREFACE));
+            immediateFrames.add(settingsFrame(false, toSettingsMap(this.localSettings)));
+        }
+
+        Collections.addAll(immediateFrames, frames);
+        return immediateFrames.toArray(new Object[0]);
     }
 
     private int resolvePeerMaxFrameSize(ProtoContext context) {
@@ -652,7 +680,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
 
         long errorCode = resolveErrorCode(protocolError.errorCode(), Http2ErrorCode.INTERNAL_ERROR);
         Http2Frame frame = resetStreamFrame(streamId, errorCode);
-        this.queueControlFrame(context, frame);
+        this.sendEncodedFrame(context, frame);
 
         Http2ResetEvent event = new Http2ResetEvent(streamId, errorCode).remote(false);
         this.fireEvent(context, Http2ResetEvent.class, event);
@@ -664,7 +692,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
         byte[] debugData = buildDebugData(protocolError);
         long errorCode = resolveErrorCode(protocolError.errorCode(), Http2ErrorCode.INTERNAL_ERROR);
         Http2Frame frame = goawayFrame(lastAcceptedStreamId, errorCode, debugData);
-        this.queueControlFrame(context, frame);
+        this.sendEncodedFrame(context, frame);
 
         Http2GoawayEvent event = new Http2GoawayEvent(0, lastAcceptedStreamId, errorCode, debugData).remote(false);
         this.fireEvent(context, Http2GoawayEvent.class, event);

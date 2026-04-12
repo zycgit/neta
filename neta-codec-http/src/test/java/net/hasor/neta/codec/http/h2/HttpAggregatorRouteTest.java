@@ -222,7 +222,10 @@ public class HttpAggregatorRouteTest extends AbstractHttp2Test {
 
             List<HttpObject> handshakeObjects = receiveAndIntBound(clientH2, ByteBuf.wrap(Arrays.copyOfRange(firstOutbound, headerEnd, firstOutbound.length)));
             try {
-                assertTrue(handshakeObjects.isEmpty());
+                assertEquals(1, handshakeObjects.size());
+                FullHttpResponse upgradedResponse = (FullHttpResponse) handshakeObjects.get(0);
+                assertEquals(1, upgradedResponse.streamId());
+                assertEquals("h2:/upgrade", utf8(upgradedResponse.content()));
             } finally {
                 free(handshakeObjects);
             }
@@ -241,7 +244,7 @@ public class HttpAggregatorRouteTest extends AbstractHttp2Test {
 
             List<FullHttpResponse> responses = new ArrayList<FullHttpResponse>();
             long deadline = System.currentTimeMillis() + 1500L;
-            while (System.currentTimeMillis() < deadline && responses.size() < 2) {
+            while (System.currentTimeMillis() < deadline && responses.size() < 1) {
                 if (!transport.clientInbound().isEmpty()) {
                     List<ByteBuf> rawBatch = new ArrayList<ByteBuf>();
                     for (Object item : drainQueue(transport.clientInbound())) {
@@ -264,12 +267,10 @@ public class HttpAggregatorRouteTest extends AbstractHttp2Test {
             assertTrue(transport.clientOutboundErrors().isEmpty());
             assertTrue(transport.serverInboundErrors().isEmpty());
             assertTrue(transport.serverOutboundErrors().isEmpty());
-            assertEquals(2, responses.size());
+            assertEquals(1, responses.size());
             try {
-                assertEquals(1, responses.get(0).streamId());
-                assertEquals("h2:/upgrade", utf8(responses.get(0).content()));
-                assertEquals(3, responses.get(1).streamId());
-                assertEquals("h2:/after", utf8(responses.get(1).content()));
+                assertEquals(3, responses.get(0).streamId());
+                assertEquals("h2:/after", utf8(responses.get(0).content()));
             } finally {
                 free(responses);
             }

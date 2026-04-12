@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h2;
-import java.util.LinkedList;
-import java.util.Queue;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import net.hasor.neta.codec.http.HttpObject;
 import net.hasor.neta.codec.http.HttpRequest;
 import net.hasor.neta.codec.http.HttpResponse;
 
@@ -35,15 +36,14 @@ import net.hasor.neta.codec.http.HttpResponse;
  * @version : 2026-02-28
  */
 class Http2EncoderContent {
-    private final HpackEncoder      hpackEncoder;
-    private final Http2Settings     localSettings;
-    private final AtomicInteger     nextStreamId;
-    private final Queue<Http2Frame> pendingOutboundFrames;
-    private       boolean           prefaceSent;
-    private       long              currentStreamId = 0;
-    private       HttpRequest       pendingRequest;
-    private       HttpResponse      pendingResponse;
-    private       boolean           trailingHeadersSent;
+    private final HpackEncoder  hpackEncoder;
+    private final Http2Settings localSettings;
+    private final AtomicInteger nextStreamId;
+    private final Set<Long>     pendingUpgradeStreams;
+    private       boolean       prefaceSent;
+    private       long          currentStreamId = 0;
+    private       HttpObject    pendingStartLine;
+    private       boolean       trailingHeadersSent;
 
     /**
      * Creates the encoder-side connection state container.
@@ -54,7 +54,7 @@ class Http2EncoderContent {
         this.localSettings = localSettings != null ? new Http2Settings(localSettings) : new Http2Settings();
         this.hpackEncoder = new HpackEncoder((int) this.localSettings.headerTableSize());
         this.nextStreamId = new AtomicInteger(serverMode ? 2 : 1);
-        this.pendingOutboundFrames = new LinkedList<>();
+        this.pendingUpgradeStreams = new HashSet<>();
         this.prefaceSent = false;
     }
 
@@ -93,37 +93,41 @@ class Http2EncoderContent {
     /**
      * Returns the currently buffered request start-line object that has not yet entered header encoding.
      */
+    public HttpObject pendingStartLine() {
+        return this.pendingStartLine;
+    }
+
+    /**
+     * Stores the request/response start-line object that is about to be encoded.
+     */
+    public void pendingStartLine(HttpObject pendingStartLine) {
+        if (pendingStartLine != null && !(pendingStartLine instanceof HttpRequest) && !(pendingStartLine instanceof HttpResponse)) {
+            throw new IllegalArgumentException("pendingStartLine must be HttpRequest or HttpResponse");
+        }
+        this.pendingStartLine = pendingStartLine;
+    }
+
+    public boolean pendingStartLineIsRequest() {
+        return this.pendingStartLine instanceof HttpRequest;
+    }
+
+    public boolean pendingStartLineIsResponse() {
+        return this.pendingStartLine instanceof HttpResponse;
+    }
+
     public HttpRequest pendingRequest() {
-        return this.pendingRequest;
+        return this.pendingStartLineIsRequest() ? (HttpRequest) this.pendingStartLine : null;
     }
 
-    /**
-     * Stores the request start-line object that is about to be encoded.
-     */
-    public void pendingRequest(HttpRequest pendingRequest) {
-        this.pendingRequest = pendingRequest;
-    }
-
-    /**
-     * Returns the currently buffered response start-line object that has not yet entered header encoding.
-     */
     public HttpResponse pendingResponse() {
-        return this.pendingResponse;
-    }
-
-    /**
-     * Stores the response start-line object that is about to be encoded.
-     */
-    public void pendingResponse(HttpResponse pendingResponse) {
-        this.pendingResponse = pendingResponse;
+        return this.pendingStartLineIsResponse() ? (HttpResponse) this.pendingStartLine : null;
     }
 
     /**
      * Clears the currently buffered request/response start-line binding.
      */
     public void clearPendingStartLine() {
-        this.pendingRequest = null;
-        this.pendingResponse = null;
+        this.pendingStartLine = null;
     }
 
     /**
@@ -150,39 +154,14 @@ class Http2EncoderContent {
         return id;
     }
 
-    /**
-     * Adds a frame to the outbound staging queue.
-     */
-    public void queueOutboundFrame(Http2Frame frame) {
-        if (frame != null) {
-            this.pendingOutboundFrames.offer(frame);
+    public void markPendingUpgradeStream(long streamId) {
+        if (streamId > 0) {
+            this.pendingUpgradeStreams.add(streamId);
         }
     }
 
-    /**
-     * Appends a batch of frames to the outbound staging queue.
-     */
-    public void queueOutboundFrames(Iterable<Http2Frame> frames) {
-        if (frames == null) {
-            return;
-        }
-        for (Http2Frame frame : frames) {
-            this.queueOutboundFrame(frame);
-        }
-    }
-
-    /**
-     * Polls one pending outbound frame, or {@code null} if the queue is empty.
-     */
-    public Http2Frame pollPendingOutboundFrame() {
-        return this.pendingOutboundFrames.poll();
-    }
-
-    /**
-     * Returns {@code true} when the outbound staging queue still contains frames to send.
-     */
-    public boolean hasPendingOutboundFrames() {
-        return !this.pendingOutboundFrames.isEmpty();
+    public boolean consumePendingUpgradeStream(long streamId) {
+        return streamId > 0 && this.pendingUpgradeStreams.remove(streamId);
     }
 
     // ─── HPACK header encoding ────────────────────────────────────────────────

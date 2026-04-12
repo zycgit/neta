@@ -21,8 +21,11 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.bytebuf.CompositeByteBuf;
-import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.channel.ProtoDuplexer;
+import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoRcvQueueView;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.channel.routing.ProtoRoutingControl;
 import net.hasor.neta.codec.http.*;
@@ -34,9 +37,11 @@ import net.hasor.neta.codec.http.routing.HttpRouteKey;
  * This handler is designed to sit on the h2c branch after the regular HTTP/1.1 request codec. It
  * is responsible only for the upgrade transaction itself: buffering staged {@link HttpObject}
  * request parts, deciding whether the current request is a valid {@code Upgrade: h2c} exchange,
- * sending the raw HTTP/1.1 {@code 101 Switching Protocols} response together with the server-side
- * HTTP/2 SETTINGS preface, promoting stream 1 into a one-shot route seed for the {@code h2} branch,
- * and letting all later traffic continue through the regular {@code h2} route.
+ * sending the raw HTTP/1.1 {@code 101 Switching Protocols} response, preparing stream 1 as a
+ * one-shot route seed for the {@code h2} branch, and then handing control over to the regular
+ * HTTP/2 pipeline. When this bridge calls the default-immediate {@link ProtoRoutingControl#switchRoute(String, Object)},
+ * the {@code h2} branch runs one empty-input receive round right away so it can emit the server
+ * SETTINGS preface and consume the promoted stream-1 request in the same outer routing invocation.
  * The route seed is used only for the already-consumed upgrade request. Once this handler accepts
  * the HTTP/1.1 upgrade request, it explicitly hands it off as a synthetic stream-1 request. The
  * client HTTP/2 connection preface, client SETTINGS, and SETTINGS ACK sent afterwards flow to the
@@ -50,16 +55,17 @@ import net.hasor.neta.codec.http.routing.HttpRouteKey;
  *     |---------------------->| buffer staged request parts      |
  *     |                       | validate Upgrade + Settings      |
  *     |                       | if not upgrade: passthrough      |
- *     |                       |--------------------------------->| normal h1-style handling on h2c branch tail
- *     |                       |
+ *     |<----------------------| continue on current h2c branch tail
+ *     |                       |                                  |
  *     |                       | if valid upgrade request         |
  *     |                       | send "101 Switching Protocols"   |
- *     |<----------------------| send server SETTINGS preface     |
  *     |                       | convert consumed upgrade request |
  *     |                       | to synthetic stream-1 seed       |
- *     |                       | switchRoute(BRANCH_H2, seed)     |
- *     |                       |--------------------------------->| Http2ObjectDuplexe emits seed first
+ *     |                       | switchRoute(BRANCH_H2, seed) ---->| apply route cut-over
+ *     |                       |                                  | emit server SETTINGS preface
+ *     |                       |                                  | Http2ObjectDuplexe consumes seed immediately
  *     |                       |                                  | stream 1 enters normal h2 pipeline
+ *     |<---------------------------------------------------------| upgraded response on stream 1
  *     | client preface        |                                  |
  *     | + client SETTINGS     |                                  |
  *     |---------------------->| routed as normal h2 traffic      |
@@ -71,16 +77,11 @@ import net.hasor.neta.codec.http.routing.HttpRouteKey;
  * @version : 2026-04-07
  */
 public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> {
-    private static final Logger                   logger               = Logger.getLogger(H2CUpgradeServerDuplexe.class);
-    private final        ProtoRoutingControl      control;
-    private final        Http2Settings            http2Settings;
-    private final        Http2ObjectEncoder       h2ObjectEncoder;
-    private final        Http2FrameEncoder        h2FrameEncoder;
-    private final        ScratchQueue<Http2Frame> frameScratch;
-    private final        ScratchQueue<ByteBuf>    byteScratch;
-    private final        List<HttpObject>         bufferedRequestParts = new ArrayList<>();
-    private final        List<HttpObject>         pendingOutbound      = new ArrayList<>();
-    private              boolean                  upgraded;
+    private static final Logger              logger              = Logger.getLogger(H2CUpgradeServerDuplexe.class);
+    private static final String              UPGRADE_REQUEST_KEY = H2CUpgradeServerDuplexe.class.getName() + ".upgradeRequest";
+    private final        ProtoRoutingControl control;
+    private final        Http2Settings       http2Settings;
+    private              boolean             upgraded;
 
     /**
      * Creates an h2c upgrade bridge with the given routing controller.
@@ -92,10 +93,6 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
     private H2CUpgradeServerDuplexe(ProtoRoutingControl control, Http2Settings http2Settings) {
         this.control = Objects.requireNonNull(control, "control is null");
         this.http2Settings = http2Settings != null ? new Http2Settings(http2Settings) : Http2Settings.defaultLocalSettings(true);
-        this.h2ObjectEncoder = new Http2ObjectEncoder(true, this.http2Settings);
-        this.h2FrameEncoder = new Http2FrameEncoder();
-        this.frameScratch = new ScratchQueue<>();
-        this.byteScratch = new ScratchQueue<>();
     }
 
     @Override
@@ -125,15 +122,6 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
         if (context.context(Http2Context.class) == null) {
             context.context(Http2Context.class, h2Context);
         }
-
-        this.h2ObjectEncoder.onInit(name + "-h2-object-enc", sndSize, context);
-        this.h2FrameEncoder.onInit(name + "-h2-frame-enc", sndSize, context);
-    }
-
-    @Override
-    public void onActive(ProtoContext context) throws Throwable {
-        this.h2ObjectEncoder.onActive(context);
-        this.h2FrameEncoder.onActive(context);
     }
 
     @Override
@@ -141,65 +129,26 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
             ProtoRcvQueue<HttpObject> rcvUp, ProtoSndQueue<HttpObject> rcvDown,//
             ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<HttpObject> sndDown) throws Throwable {
         if (isRcv) {
-            return this.handleUpgradeRequest(context, rcvUp, rcvDown, sndDown);
+            return this.handleUpgradeRequest(context, rcvUp, rcvDown);
         } else {
-            if (!this.flushPendingOutbound(sndDown)) {
+            if (this.upgraded) {
+                if (sndUp != null && sndUp.hasMore()) {
+                    throw new HttpProtocolStateException("HTTP/2: h2c upgrade branch should switch to the h2 route before receiving post-upgrade outbound payload");
+                }
                 return ProtoStatus.Next;
             }
 
-            if (!this.upgraded) {
-                return this.forwardSendPassthrough(sndUp, sndDown);
-            }
-
-            ProtoStatus status = this.encodePendingFrames(context, sndUp);
-            if (status != ProtoStatus.Next) {
-                return status;
-            }
-            this.flushPendingOutbound(sndDown);
-            return ProtoStatus.Next;
+            return this.forwardSendPassthrough(sndUp, sndDown);
         }
-    }
-
-    @Override
-    public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) throws Throwable {
-        boolean testEvent = event.getEventType() == Http2PingEvent.class ||     //
-                /*        */event.getEventType() == Http2GoawayEvent.class ||   //
-                /*        */event.getEventType() == Http2ResetEvent.class ||    //
-                /*        */event.getEventType() == Http2PriorityEvent.class || //
-                /*        */event.getEventType() == Http2PushPromiseEvent.class;
-        if (this.upgraded && testEvent) {
-            return this.h2ObjectEncoder.onEvent(context, event);
-        } else {
-            return true;
-        }
-    }
-
-    @Override
-    public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
-        if (!this.upgraded) {
-            return ProtoStatus.Next;
-        }
-
-        if (isRcv) {
-            return ProtoStatus.Next;
-        }
-
-        return this.h2ObjectEncoder.onError(context, e, eh);
-    }
-
-    @Override
-    public void onClose(ProtoContext context) {
-        this.resetRequestState(true);
-        this.releasePendingOutbound();
-        this.frameScratch.clear();
-        this.byteScratch.clear();
-        this.h2ObjectEncoder.onClose(context);
-        this.h2FrameEncoder.onClose(context);
     }
 
     //
 
-    private ProtoStatus handleUpgradeRequest(ProtoContext context, ProtoRcvQueue<HttpObject> rcvUp, ProtoSndQueue<HttpObject> rcvDown, ProtoSndQueue<HttpObject> sndDown) throws Throwable {
+    private ProtoStatus handleUpgradeRequest(ProtoContext context, ProtoRcvQueue<HttpObject> rcvUp, ProtoSndQueue<HttpObject> rcvDown) throws Throwable {
+        if (this.tryFinalizeBufferedRequest(context, rcvUp, rcvDown)) {
+            return ProtoStatus.Next;
+        }
+
         while (rcvUp.hasMore()) {
             HttpObject message = rcvUp.peekMessage();
             if (message == null) {
@@ -211,59 +160,64 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
                 throw new HttpProtocolStateException("HTTP/2: h2c upgrade branch should switch to the h2 route before receiving post-upgrade inbound payload");
             }
 
-            if (this.bufferedRequestParts.isEmpty() && !(message instanceof HttpRequest)) {
+            ProtoRcvQueueView<HttpObject> requestView = this.bufferedRequestView(rcvUp);
+            boolean bufferingRequest = requestView != null && requestView.hasMore();
+            if (!bufferingRequest && !(message instanceof HttpRequest)) {
                 if (!this.forwardSingle(rcvUp, rcvDown)) {
                     return ProtoStatus.Next;
                 }
                 continue;
             }
 
-            message = rcvUp.takeMessage();
-            this.bufferedRequestParts.add(message);
-
-            boolean requestComplete = isRequestComplete(message);
-            boolean upgradeRequest = (requestComplete || isHeaderSectionClosed(message)) && isValidUpgradeRequest(this.bufferedRequestParts);
-
-            if (!isHeaderSectionClosed(message)) {
-                if (requestComplete) {
-                    if (upgradeRequest) {
-                        FullHttpRequest request = this.buildFullHttpRequest(context.byteBufAllocator());
-                        this.performUpgrade(context, request, sndDown);
-                        this.resetRequestState(true);
-                    } else {
-                        if (!this.flushBufferedRequest(rcvDown)) {
-                            return ProtoStatus.Next;
-                        }
-                        this.resetRequestState(false);
-                    }
+            rcvUp.drainToQueue(UPGRADE_REQUEST_KEY, 1);
+            if (isRequestComplete(message) && this.tryFinalizeBufferedRequest(context, rcvUp, rcvDown)) {
+                if (this.upgraded) {
+                    return ProtoStatus.Next;
                 }
+            } else if (!isRequestComplete(message)) {
                 continue;
             }
-
-            if (!requestComplete) {
-                if (!upgradeRequest) {
-                    if (!this.flushBufferedRequest(rcvDown)) {
-                        return ProtoStatus.Next;
-                    }
-                    this.resetRequestState(false);
-                }
-                continue;
-            }
-
-            if (upgradeRequest) {
-                FullHttpRequest request = this.buildFullHttpRequest(context.byteBufAllocator());
-                this.performUpgrade(context, request, sndDown);
-                this.resetRequestState(true);
-                return ProtoStatus.Next;
-            }
-
-            if (!this.flushBufferedRequest(rcvDown)) {
-                return ProtoStatus.Next;
-            }
-            this.resetRequestState(false);
         }
 
         return ProtoStatus.Next;
+    }
+
+    private boolean tryFinalizeBufferedRequest(ProtoContext context, ProtoRcvQueue<HttpObject> rcvUp, ProtoSndQueue<HttpObject> rcvDown) throws Throwable {
+        ProtoRcvQueueView<HttpObject> requestView = this.bufferedRequestView(rcvUp);
+        if (requestView == null || !requestView.hasMore()) {
+            return false;
+        }
+
+        List<HttpObject> requestParts = requestView.peekMessage(-1);
+        if (requestParts.isEmpty()) {
+            requestView.discard();
+            return false;
+        }
+
+        HttpObject lastPart = requestParts.get(requestParts.size() - 1);
+        if (!isRequestComplete(lastPart)) {
+            return false;
+        }
+
+        if (isValidUpgradeRequest(requestParts)) {
+            FullHttpRequest request = this.buildFullHttpRequest(requestParts, context.byteBufAllocator());
+            try {
+                this.performUpgrade(context, request);
+            } finally {
+                requestView.discard();
+            }
+            return true;
+        }
+
+        if (rcvDown == null || rcvDown.slotSize() < requestView.queueSize()) {
+            return false;
+        }
+
+        List<HttpObject> forwardedRequest = requestView.takeMessage(-1);
+        if (!forwardedRequest.isEmpty() && !rcvDown.offerMessage(forwardedRequest)) {
+            throw new HttpProtocolStateException("HTTP/2: failed to forward buffered h2c request after capacity pre-check");
+        }
+        return true;
     }
 
     private boolean isValidUpgradeRequest(List<HttpObject> requestParts) {
@@ -285,15 +239,22 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
         return containsConnectionToken(c, HttpHeaderValues.UPGRADE) && containsConnectionToken(c, HttpHeaderNames.HTTP2_SETTINGS);
     }
 
-    private FullHttpRequest buildFullHttpRequest(ByteBufAllocator alloc) {
-        HttpRequest requestLine = this.findRequestLine(this.bufferedRequestParts);
+    private ProtoRcvQueueView<HttpObject> bufferedRequestView(ProtoRcvQueue<HttpObject> rcvUp) {
+        if (rcvUp == null || !rcvUp.hasQueue(UPGRADE_REQUEST_KEY)) {
+            return null;
+        }
+        return rcvUp.queueView(UPGRADE_REQUEST_KEY);
+    }
+
+    private FullHttpRequest buildFullHttpRequest(List<HttpObject> requestParts, ByteBufAllocator alloc) {
+        HttpRequest requestLine = this.findRequestLine(requestParts);
         if (requestLine == null) {
             throw new HttpProtocolStateException("HTTP/2: incomplete h2c request state");
         }
 
         DefaultHttpHeaders headers = new DefaultHttpHeaders();
         CompositeByteBuf content = null;
-        for (HttpObject part : this.bufferedRequestParts) {
+        for (HttpObject part : requestParts) {
             if (part instanceof HttpHeaders) {
                 headers.appendHeaders((HttpHeaders) part);
             }
@@ -308,28 +269,33 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
             }
         }
 
-        DefaultFullHttpRequest request = new DefaultFullHttpRequest(requestLine.protocolVersion(), requestLine.method(), requestLine.uri(), content == null ? ByteBuf.EMPTY : content, headers);
+        FullHttpRequest request = new DefaultFullHttpRequest(requestLine.protocolVersion(), requestLine.method(), requestLine.uri(), content == null ? ByteBuf.EMPTY : content, headers);
         request.streamId(requestLine.streamId());
         return request;
     }
 
-    private void performUpgrade(ProtoContext context, FullHttpRequest request, ProtoSndQueue<HttpObject> sndDown) throws Throwable {
+    private void performUpgrade(ProtoContext context, FullHttpRequest request) throws Throwable {
         byte[] settingsPayload = decodeSettingsPayload(request.getString(HttpHeaderNames.HTTP2_SETTINGS));
-        applyRemoteSettings(context, settingsPayload);
+        Http2DecoderContent decoderState = context.context(Http2DecoderContent.class);
+        for (int i = 0; i < settingsPayload.length; i += 6) {
+            int id = ((settingsPayload[i] & 0xFF) << 8) | (settingsPayload[i + 1] & 0xFF);
+            long value = ((settingsPayload[i + 2] & 0xFFL) << 24) | ((settingsPayload[i + 3] & 0xFFL) << 16) | ((settingsPayload[i + 4] & 0xFFL) << 8) | (settingsPayload[i + 5] & 0xFFL);
+            decoderState.applyRemoteSetting(id, value);
+        }
+
+        Http2Stream stream = decoderState.getOrCreateStream(1);
+        stream.state(Http2StreamState.HALF_CLOSED_REMOTE);
+        decoderState.offerResponseStreamId(1);
+
         sendSwitchingProtocols(context);
         context.fireEventSnd(HttpThroughEvent.class, new HttpThroughEvent(true, request.streamId()));
-        sendServerPreface(context);
         this.upgraded = true;
 
         promoteRequestToHttp2(context, request);
-        switchToHttp2Route(request);
+        this.control.switchRoute(HttpRouteKey.BRANCH_H2, request);
         if (context.getConfig().isPrintLog()) {
             logger.info("[H2C-UPGRADE] channel=" + context.getChannel().getChannelId() + " upgraded request to stream=1 uri=" + request.uri());
         }
-    }
-
-    private void switchToHttp2Route(FullHttpRequest request) {
-        this.control.switchRoute(HttpRouteKey.BRANCH_H2, request);
     }
 
     private byte[] decodeSettingsPayload(String encodedSettings) {
@@ -349,47 +315,12 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
         }
     }
 
-    private void applyRemoteSettings(ProtoContext context, byte[] settingsPayload) {
-        Http2DecoderContent decoderState = context.context(Http2DecoderContent.class);
-        for (int i = 0; i < settingsPayload.length; i += 6) {
-            int id = ((settingsPayload[i] & 0xFF) << 8) | (settingsPayload[i + 1] & 0xFF);
-            long value = ((settingsPayload[i + 2] & 0xFFL) << 24) | ((settingsPayload[i + 3] & 0xFFL) << 16) | ((settingsPayload[i + 4] & 0xFFL) << 8) | (settingsPayload[i + 5] & 0xFFL);
-            decoderState.applyRemoteSetting(id, value);
-        }
-
-        Http2Stream stream = decoderState.getOrCreateStream(1);
-        stream.state(Http2StreamState.HALF_CLOSED_REMOTE);
-        decoderState.offerResponseStreamId(1);
-    }
-
     private void sendSwitchingProtocols(ProtoContext context) throws Throwable {
         DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.SWITCHING_PROTOCOLS);
         response.setHeader(HttpHeaderNames.CONNECTION, HttpHeaderValues.UPGRADE);
         response.setHeader(HttpHeaderNames.UPGRADE, HttpHeaderValues.H2C);
         response.setHeader(HttpHeaderNames.CONTENT_LENGTH, HttpHeaderValues.ZERO);
         context.sendData(response).get();
-    }
-
-    private void sendServerPreface(ProtoContext context) throws Throwable {
-        this.frameScratch.clear();
-        this.byteScratch.clear();
-        try {
-            this.h2ObjectEncoder.flushPendingFrames(context, this.frameScratch);
-            if (!this.frameScratch.hasMore()) {
-                return;
-            }
-
-            this.h2FrameEncoder.onMessage(context, this.frameScratch, this.byteScratch);
-            while (this.byteScratch.hasMore()) {
-                ByteBuf payload = this.byteScratch.takeMessage();
-                if (payload != null) {
-                    context.sendData(new DefaultHttpByteBuf(payload)).get();
-                }
-            }
-        } finally {
-            this.frameScratch.clear();
-            this.byteScratch.clear();
-        }
     }
 
     private void promoteRequestToHttp2(ProtoContext context, FullHttpRequest request) {
@@ -407,58 +338,24 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
         decoderState.setLastEmittedStreamId(1);
     }
 
-    private boolean flushBufferedRequest(ProtoSndQueue<HttpObject> rcvDown) {
-        return rcvDown != null && rcvDown.offerMessage(this.bufferedRequestParts);
-    }
-
-    private void resetRequestState(boolean releaseBuffered) {
-        if (releaseBuffered) {
-            for (HttpObject msg : this.bufferedRequestParts) {
-                SoUtils.release(msg);
-            }
-        }
-        this.bufferedRequestParts.clear();
-    }
-
     private ProtoStatus forwardSendPassthrough(ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<HttpObject> sndDown) {
         while (sndUp.hasMore()) {
-            if (!sndDown.hasSlot()) {
+            if (sndDown == null || !sndDown.hasSlot()) {
                 return ProtoStatus.Next;
             }
 
-            HttpObject message = sndUp.takeMessage();
+            HttpObject message = sndUp.peekMessage();
             if (message == null) {
+                sndUp.takeMessage();
                 continue;
             }
 
-            if (!sndDown.offerMessage(Collections.singletonList(message))) {
-                this.pendingOutbound.add(message);
+            if (!sndDown.offerMessage(message)) {
                 return ProtoStatus.Next;
             }
+            sndUp.takeMessage();
         }
         return ProtoStatus.Next;
-    }
-
-    private boolean flushPendingOutbound(ProtoSndQueue<HttpObject> sndDown) {
-        while (!this.pendingOutbound.isEmpty()) {
-            if (sndDown == null || !sndDown.hasSlot()) {
-                return false;
-            }
-
-            HttpObject message = this.pendingOutbound.get(0);
-            if (!sndDown.offerMessage(Collections.singletonList(message))) {
-                return false;
-            }
-            this.pendingOutbound.remove(0);
-        }
-        return true;
-    }
-
-    private void releasePendingOutbound() {
-        for (HttpObject msg : this.pendingOutbound) {
-            SoUtils.release(msg);
-        }
-        this.pendingOutbound.clear();
     }
 
     private boolean forwardSingle(ProtoRcvQueue<HttpObject> src, ProtoSndQueue<HttpObject> dst) {
@@ -470,35 +367,7 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
         return message == null || dst.offerMessage(Collections.singletonList(message));
     }
 
-    private ProtoStatus encodePendingFrames(ProtoContext context, ProtoRcvQueue<HttpObject> sndUp) throws Throwable {
-        this.frameScratch.clear();
-        this.byteScratch.clear();
-        try {
-            this.h2ObjectEncoder.onMessage(context, sndUp, this.frameScratch);
-            if (!this.frameScratch.hasMore()) {
-                return ProtoStatus.Next;
-            }
-
-            this.h2FrameEncoder.onMessage(context, this.frameScratch, this.byteScratch);
-            while (this.byteScratch.hasMore()) {
-                ByteBuf payload = this.byteScratch.takeMessage();
-                if (payload != null) {
-                    this.pendingOutbound.add(new DefaultHttpByteBuf(payload));
-                }
-            }
-
-            return ProtoStatus.Next;
-        } finally {
-            this.frameScratch.clear();
-            this.byteScratch.clear();
-        }
-    }
-
     // Utils
-
-    private static boolean isHeaderSectionClosed(HttpObject msg) {
-        return msg instanceof LastHttpHeaders || (msg instanceof HttpRequest && msg instanceof HttpContent);
-    }
 
     private static boolean isRequestComplete(HttpObject msg) {
         return msg instanceof LastHttpContent || (msg instanceof HttpRequest && msg instanceof HttpContent);
@@ -562,133 +431,4 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
         return target;
     }
 
-    /** Scratch queue used only for the local outbound HTTP/2 encoding step. */
-    private static class ScratchQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
-        @SuppressWarnings("rawtypes")
-        private static final ProtoSndQueue EMPTY_SND = new ProtoSndQueue() {
-            @Override
-            public int getCapacity() {
-                return 0;
-            }
-
-            @Override
-            public int slotSize() {
-                return 0;
-            }
-
-            @Override
-            public boolean offerMessage(Object[] offerList) {
-                return false;
-            }
-
-            @Override
-            public boolean offerMessage(List offerList) {
-                return false;
-            }
-
-            @Override
-            public boolean offerMessage(ProtoRcvQueue offerList) {
-                return false;
-            }
-        };
-
-        private final List<T> list = new ArrayList<>();
-
-        @SuppressWarnings("unchecked")
-        static <T> ProtoSndQueue<T> emptySnd() {
-            return (ProtoSndQueue<T>) EMPTY_SND;
-        }
-
-        @Override
-        public int getCapacity() {
-            return Integer.MAX_VALUE;
-        }
-
-        @Override
-        public int slotSize() {
-            return Integer.MAX_VALUE;
-        }
-
-        @Override
-        public boolean offerMessage(T[] offerList) {
-            if (offerList == null || offerList.length == 0) {
-                return false;
-            }
-            Collections.addAll(this.list, offerList);
-            return true;
-        }
-
-        @Override
-        public boolean offerMessage(List<T> offerList) {
-            if (offerList == null || offerList.isEmpty()) {
-                return false;
-            }
-            this.list.addAll(offerList);
-            return true;
-        }
-
-        @Override
-        public boolean offerMessage(T offerMessage) {
-            this.list.add(offerMessage);
-            return true;
-        }
-
-        @Override
-        public boolean offerMessage(ProtoRcvQueue<T> offerList) {
-            if (offerList == null || !offerList.hasMore()) {
-                return false;
-            }
-            while (offerList.hasMore()) {
-                this.list.add(offerList.takeMessage());
-            }
-            return true;
-        }
-
-        @Override
-        public int queueSize() {
-            return this.list.size();
-        }
-
-        @Override
-        public List<T> takeMessage(int cnt) {
-            if (this.list.isEmpty()) {
-                return Collections.emptyList();
-            }
-            if (cnt < 0) {
-                cnt = this.list.size();
-            }
-            int take = Math.min(cnt, this.list.size());
-            List<T> result = new ArrayList<>(this.list.subList(0, take));
-            this.list.subList(0, take).clear();
-            return result;
-        }
-
-        @Override
-        public List<T> peekMessage(int cnt) {
-            if (this.list.isEmpty()) {
-                return Collections.emptyList();
-            }
-            if (cnt < 0) {
-                cnt = this.list.size();
-            }
-            int take = Math.min(cnt, this.list.size());
-            return new ArrayList<>(this.list.subList(0, take));
-        }
-
-        @Override
-        public void skipMessage(int cnt) {
-            if (cnt < 0) {
-                cnt = this.list.size();
-            }
-            int skip = Math.min(cnt, this.list.size());
-            for (int i = 0; i < skip; i++) {
-                SoUtils.release(this.list.get(i));
-            }
-            this.list.subList(0, skip).clear();
-        }
-
-        void clear() {
-            this.skipMessage(this.list.size());
-        }
-    }
 }

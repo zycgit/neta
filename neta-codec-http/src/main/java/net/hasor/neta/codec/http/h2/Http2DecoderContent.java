@@ -18,7 +18,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
-import net.hasor.neta.codec.http.DefaultHttpHeaders;
+import net.hasor.neta.codec.http.*;
 
 /**
  * Connection-level state container shared by the HTTP/2 message layer.
@@ -35,19 +35,19 @@ import net.hasor.neta.codec.http.DefaultHttpHeaders;
  * @version : 2026-02-28
  */
 class Http2DecoderContent {
-    private final Queue<Long>            responseStreamIdQueue   = new LinkedList<>();
-    private final Queue<byte[]>          pendingPingAcks         = new LinkedList<>();
-    private final Queue<Http2Frame>      pendingWindowUpdates    = new LinkedList<>();
-    private final Map<Long, Http2Stream> streams                 = new HashMap<>();
-    private final HpackDecoder           hpackDecoder;
-    private final Http2Settings          localSettings;
-    private final Http2Settings          remoteSettings          = new Http2Settings();
-    private       boolean                prefaceReceived;
-    private       boolean                pendingSettingsAck;
-    private       long                   openHeaderBlockStreamId = -1;
-    private       int                    openHeaderBlockType     = -1;
-    private       long                   openPromisedStreamId    = -1;
-    private       long                   lastEmittedStreamId     = 0;
+    private final Queue<Long>                responseStreamIdQueue   = new LinkedList<>();
+    private final Queue<byte[]>              pendingPingAcks         = new LinkedList<>();
+    private final Queue<PendingWindowUpdate> pendingWindowUpdates    = new LinkedList<>();
+    private final Map<Long, Http2Stream>     streams                 = new HashMap<>();
+    private final HpackDecoder               hpackDecoder;
+    private final Http2Settings              localSettings;
+    private final Http2Settings              remoteSettings          = new Http2Settings();
+    private       boolean                    prefaceReceived;
+    private       boolean                    pendingSettingsAck;
+    private       long                       openHeaderBlockStreamId = -1;
+    private       int                        openHeaderBlockType     = -1;
+    private       long                       openPromisedStreamId    = -1;
+    private       long                       lastEmittedStreamId     = 0;
 
     /**
      * Creates the decoder-side connection state container.
@@ -114,6 +114,29 @@ class Http2DecoderContent {
     }
 
     /**
+     * Builds a request or response start-line from a decoded HTTP/2 header block.
+     */
+    public HttpObject newStartLine(long streamId, HttpHeaders headers) {
+        String status = headers.getString(HttpHeaderNames.PSEUDO_STATUS);
+        if (status != null) {
+            HttpResponse response = new DefaultHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.valueOf(Integer.parseInt(status)));
+            response.streamId(streamId);
+            return response;
+        }
+
+        String method = headers.getString(HttpHeaderNames.PSEUDO_METHOD);
+        String path = headers.getString(HttpHeaderNames.PSEUDO_PATH);
+        if (method == null || method.trim().isEmpty() || path == null || path.trim().isEmpty()) {
+            String msg = "HTTP/2: missing required pseudo-header " + HttpHeaderNames.PSEUDO_METHOD + " or " + HttpHeaderNames.PSEUDO_PATH;
+            throw new HttpBadRequestException(msg);
+        }
+
+        HttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.valueOf(method), path);
+        request.streamId(streamId);
+        return request;
+    }
+
+    /**
      * Queues a PING ACK payload that should be sent to the remote peer.
      */
     public void offerPingAck(byte[] payload) {
@@ -121,10 +144,12 @@ class Http2DecoderContent {
     }
 
     /**
-     * Queues a WINDOW_UPDATE frame that should be sent to the remote peer.
+     * Queues a WINDOW_UPDATE request that should be sent to the remote peer.
      */
-    public void offerWindowUpdate(Http2Frame frame) {
-        pendingWindowUpdates.offer(frame);
+    public void offerWindowUpdate(long streamId, int increment) {
+        if (increment > 0) {
+            pendingWindowUpdates.offer(new PendingWindowUpdate(streamId, increment));
+        }
     }
 
     /**
@@ -234,9 +259,9 @@ class Http2DecoderContent {
     }
 
     /**
-     * Polls the next pending WINDOW_UPDATE frame, or {@code null} if none exists.
+     * Polls the next pending WINDOW_UPDATE request, or {@code null} if none exists.
      */
-    public Http2Frame pollPendingWindowUpdate() {
+    public PendingWindowUpdate pollPendingWindowUpdate() {
         return this.pendingWindowUpdates.poll();
     }
 
@@ -334,5 +359,23 @@ class Http2DecoderContent {
             return Integer.MAX_VALUE;
         }
         return (int) maxHeaderListSize;
+    }
+
+    static final class PendingWindowUpdate {
+        private final long streamId;
+        private final int  increment;
+
+        PendingWindowUpdate(long streamId, int increment) {
+            this.streamId = streamId;
+            this.increment = increment;
+        }
+
+        long streamId() {
+            return this.streamId;
+        }
+
+        int increment() {
+            return this.increment;
+        }
     }
 }
