@@ -307,10 +307,10 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
     @Override
     public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<IN> rcvUp, ProtoSndQueue<Object> rcvDown, ProtoRcvQueue<Object> sndUp, ProtoSndQueue<OUT> sndDown) throws Throwable {
         this.beginRoutingEntry();
-        RouteUpgradeAction appliedAction = this.checkAndExecutePendingUpgrade(context);
+        boolean immediateUpgradeApplied = this.checkAndExecutePendingUpgrade(context);
 
         if (isRcv) {
-            if (appliedAction.immediate()) {
+            if (immediateUpgradeApplied) {
                 ProtoStatus immediateStatus = this.runImmediateRcvRound(rcvDown, sndDown);
                 if (immediateStatus == ProtoStatus.Abort) {
                     return ProtoStatus.Abort;
@@ -356,8 +356,8 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
             // Route is now known. Fire branch onActive
             this.activateBranchLifecycle(context, this.selectedRoute, null, false);
             if (!this.flushBranchOutputs(branch, rcvDown, sndDown)) {
-                RouteUpgradeAction delayedAction = this.checkAndExecutePendingUpgrade(context);
-                if (delayedAction.immediate()) {
+                boolean delayedImmediateUpgrade = this.checkAndExecutePendingUpgrade(context);
+                if (delayedImmediateUpgrade) {
                     ProtoStatus immediateStatus = this.runImmediateRcvRound(rcvDown, sndDown);
                     if (immediateStatus == ProtoStatus.Abort) {
                         return ProtoStatus.Abort;
@@ -370,8 +370,8 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
             List<IN> data = rcvUp.takeMessage(rcvUp.queueSize());
             ProtoStatus status = this.doRcvRoute(branch, data, rcvDown, sndDown);
             if (status != ProtoStatus.Abort) {
-                RouteUpgradeAction delayedAction = this.checkAndExecutePendingUpgrade(context);
-                if (delayedAction.immediate()) {
+                boolean delayedImmediateUpgrade = this.checkAndExecutePendingUpgrade(context);
+                if (delayedImmediateUpgrade) {
                     ProtoStatus immediateStatus = this.runImmediateRcvRound(rcvDown, sndDown);
                     status = this.mergeImmediateStatus(status, immediateStatus);
                 }
@@ -710,15 +710,15 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
     }
 
     /** Check for and execute any branch switch registered for the current round. */
-    private RouteUpgradeAction checkAndExecutePendingUpgrade(ProtoContext context) {
+    private boolean checkAndExecutePendingUpgrade(ProtoContext context) {
         if (this.pendingRoute == null) {
-            return RouteUpgradeAction.NONE;
+            return false;
         }
         if (this.currentRoutingEntry < this.pendingRouteApplyEntry) {
-            return RouteUpgradeAction.NONE;
+            return false;
         }
         if (this.shouldDelayPendingUpgrade(context)) {
-            return RouteUpgradeAction.NONE;
+            return false;
         }
 
         String newRoute = this.pendingRoute;
@@ -735,7 +735,7 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
                 this.releaseSeed(this.deliveredSeed);
                 this.deliveredSeed = nextSeed;
             }
-            return RouteUpgradeAction.noneFor(newRoute);
+            return false;
         }
 
         if (context.getConfig().isPrintLog()) {
@@ -747,7 +747,7 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
         this.selectedRoute = newRoute;
         this.deliveredSeed = nextSeed;
         this.activateBranchLifecycle(context, newRoute, oldRoute, true);
-        return new RouteUpgradeAction(newRoute, immediate);
+        return immediate;
     }
 
     /** Return the child context associated with the specified branch. */
@@ -781,22 +781,4 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
         }
     }
 
-    private static final class RouteUpgradeAction {
-        private static final RouteUpgradeAction NONE = new RouteUpgradeAction(null, false);
-        private final String  routeName;
-        private final boolean immediate;
-
-        private RouteUpgradeAction(String routeName, boolean immediate) {
-            this.routeName = routeName;
-            this.immediate = immediate;
-        }
-
-        private static RouteUpgradeAction noneFor(String routeName) {
-            return new RouteUpgradeAction(routeName, false);
-        }
-
-        private boolean immediate() {
-            return this.immediate && this.routeName != null;
-        }
-    }
 }

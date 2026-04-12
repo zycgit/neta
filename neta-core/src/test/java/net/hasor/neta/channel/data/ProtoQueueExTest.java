@@ -17,7 +17,6 @@ package net.hasor.neta.channel.data;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.function.Predicate;
 import net.hasor.cobble.function.Release;
 import net.hasor.neta.bytebuf.ReferenceHolder;
 import org.junit.Test;
