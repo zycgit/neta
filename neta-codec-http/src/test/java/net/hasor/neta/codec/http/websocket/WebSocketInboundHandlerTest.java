@@ -24,6 +24,7 @@ import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.channel.transport.virtual.VrtTransfer;
 import net.hasor.neta.codec.http.HttpEvent;
 import net.hasor.neta.codec.http.HttpObject;
+import net.hasor.neta.codec.http.HttpThroughEvent;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -38,7 +39,7 @@ public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
             @Override
             public boolean onEvent(ProtoContext context, SoEvent event) {
                 Object eventData = event.getData();
-                if (eventData instanceof HttpEvent && !(eventData instanceof WebSocketHandshakeEvent)) {
+                if (eventData instanceof HttpEvent && !(eventData instanceof WebSocketHandshakeEvent) && !(eventData instanceof HttpThroughEvent)) {
                     serverEvents.add(eventData);
                 }
                 return true;
@@ -78,7 +79,7 @@ public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
             WebSocketMessage msg = (WebSocketMessage) result.get(0);
             assertEquals(WebSocketOpcode.TEXT, msg.type());
             assertEquals(WebSocketMessage.FINAL_SEQUENCE, msg.sequence());
-            assertEquals("Hello", text(msg.content()));
+            assertEquals("Hello", text(msg.content().copy()));
         });
     }
 
@@ -108,9 +109,9 @@ public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
             assertEquals(0, ((WebSocketMessage) result.get(0)).sequence());
             assertEquals(1, ((WebSocketMessage) result.get(1)).sequence());
             assertEquals(-1, ((WebSocketMessage) result.get(2)).sequence());
-            assertEquals("Hel", text(((WebSocketMessage) result.get(0)).content()));
-            assertEquals("lo-", text(((WebSocketMessage) result.get(1)).content()));
-            assertEquals("world", text(((WebSocketMessage) result.get(2)).content()));
+            assertEquals("Hel", text(((WebSocketMessage) result.get(0)).content().copy()));
+            assertEquals("lo-", text(((WebSocketMessage) result.get(1)).content().copy()));
+            assertEquals("world", text(((WebSocketMessage) result.get(2)).content().copy()));
         });
     }
 
@@ -141,7 +142,7 @@ public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
             WebSocketMessage msg = (WebSocketMessage) result.get(0);
             assertEquals(WebSocketOpcode.TEXT, msg.type());
             assertEquals(WebSocketMessage.FINAL_SEQUENCE, msg.sequence());
-            assertEquals("Hello-world", text(msg.content()));
+            assertEquals("Hello-world", text(msg.content().copy()));
         });
     }
 

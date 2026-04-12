@@ -84,7 +84,7 @@ public class WebSocketClientServerFlowTest extends AbstractWebSocketTest {
             WebSocketMessage serverMessage = (WebSocketMessage) serverBatch.get(0);
             assertEquals(WebSocketOpcode.TEXT, serverMessage.type());
             assertEquals(WebSocketMessage.FINAL_SEQUENCE, serverMessage.sequence());
-            assertEquals("hello-server", text(serverMessage.content()));
+            assertEquals("hello-server", text(serverMessage.content().copy()));
 
             pipe.server().sendData(WebSocketUtils.textMessage(ascii("hello-client"))).get();
             assertTrue(waitUntil(() -> !pipe.clientInbound().isEmpty(), 1000L));
@@ -95,7 +95,7 @@ public class WebSocketClientServerFlowTest extends AbstractWebSocketTest {
             WebSocketMessage clientMessage = (WebSocketMessage) clientBatch.get(0);
             assertEquals(WebSocketOpcode.TEXT, clientMessage.type());
             assertEquals(WebSocketMessage.FINAL_SEQUENCE, clientMessage.sequence());
-            assertEquals("hello-client", text(clientMessage.content()));
+            assertEquals("hello-client", text(clientMessage.content().copy()));
         });
     }
 
@@ -124,7 +124,7 @@ public class WebSocketClientServerFlowTest extends AbstractWebSocketTest {
             WebSocketMessage serverMessage = (WebSocketMessage) serverBatch.get(0);
             assertEquals(WebSocketOpcode.BINARY, serverMessage.type());
             assertEquals(WebSocketMessage.FINAL_SEQUENCE, serverMessage.sequence());
-            assertEquals("ABCD", text(serverMessage.content()));
+            assertEquals("ABCD", text(serverMessage.content().copy()));
 
             pipe.server().sendData(WebSocketUtils.binaryMessage(ascii("WXYZ"))).get();
             assertTrue(waitUntil(() -> !pipe.clientInbound().isEmpty(), 1000L));
@@ -135,7 +135,7 @@ public class WebSocketClientServerFlowTest extends AbstractWebSocketTest {
             WebSocketMessage clientMessage = (WebSocketMessage) clientBatch.get(0);
             assertEquals(WebSocketOpcode.BINARY, clientMessage.type());
             assertEquals(WebSocketMessage.FINAL_SEQUENCE, clientMessage.sequence());
-            assertEquals("WXYZ", text(clientMessage.content()));
+            assertEquals("WXYZ", text(clientMessage.content().copy()));
         });
     }
 

@@ -70,10 +70,10 @@ public class PongWebSocketEvent extends AbstractHttpEvent {
 
     /**
      * Create a pong event with the specified payload.
-     * @param content pong payload
+     * @param content pong payload whose ownership is transferred to this event
      */
     public PongWebSocketEvent(ByteBuf content) {
-        this.content = content == null ? ByteBuf.EMPTY.retain() : content.retain();
+        this.content = content == null ? ByteBuf.EMPTY : content;
     }
 
     /**

@@ -14,9 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
-import java.util.ArrayList;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoRcvQueueView;
+import net.hasor.neta.channel.data.ProtoSndQueue;
+import net.hasor.neta.channel.routing.PartitionKey;
+import net.hasor.neta.channel.routing.ProtoRoutingControl;
 import net.hasor.neta.codec.http.*;
 
 /**
@@ -30,13 +35,24 @@ import net.hasor.neta.codec.http.*;
  * @version : 2026-03-24
  */
 public class WebSocketServerUpgradeRouteDuplexer implements ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> {
-    private final WebSocketServerHandshakeDuplexer delegate;
-    private final ProtoRoutingControl              routingControl;
-    private final String                           targetRoute;
-    private final HttpMessageParts                 requestParts         = new HttpMessageParts();
-    private final ArrayList<HttpObject>            bufferedRequestParts = new ArrayList<>();
-    private       boolean                          handshakePending;
-    private       Boolean                          currentRequestHandshake;
+    private static final String                           ROUTE_STATE_STORE_KEY   = WebSocketServerUpgradeRouteDuplexer.class.getName() + ".routeStateStore";
+    private static final String                           BUFFER_QUEUE_PREFIX     = WebSocketServerUpgradeRouteDuplexer.class.getName() + ".pendingRequest.";
+    private static final String                           RECEIVE_STAGE_QUEUE_KEY = WebSocketServerUpgradeRouteDuplexer.class.getName() + ".receive";
+    private static final String                           SEND_STAGE_QUEUE_KEY    = WebSocketServerUpgradeRouteDuplexer.class.getName() + ".send";
+    private final        WebSocketServerHandshakeDuplexer delegate;
+    private final        ProtoRoutingControl              routingControl;
+    private final        String                           targetRoute;
+
+    private static final class RouteState {
+        private final HttpMessageParts              requestParts = new HttpMessageParts();
+        private       ProtoRcvQueueView<HttpObject> bufferedRequestParts;
+        private       boolean                       handshakePending;
+        private       Boolean                       currentRequestHandshake;
+    }
+
+    private static final class RouteStateStore {
+        private final ConcurrentHashMap<PartitionKey, RouteState> states = new ConcurrentHashMap<>();
+    }
 
     /**
      * Create a server-side route bridge with default accept-all authorization.
@@ -67,6 +83,7 @@ public class WebSocketServerUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
     @Override
     public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) throws Throwable {
         this.delegate.onInit(name, rcvSize, sndSize, context);
+        state(context);
     }
 
     /**
@@ -107,55 +124,58 @@ public class WebSocketServerUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
                 continue;
             }
 
-            if (this.currentRequestHandshake != null) {
-                msg = rcvUp.takeMessage();
-                if (Boolean.TRUE.equals(this.currentRequestHandshake)) {
-                    this.forwardToHandshake(context, msg, rcvDown);
-                    this.switchIfReady(context);
+            RouteState state = state(context, msg);
+
+            if (state.currentRequestHandshake != null) {
+                if (state.currentRequestHandshake) {
+                    ProtoStatus status = this.forwardSingleToHandshake(context, rcvUp, RECEIVE_STAGE_QUEUE_KEY, rcvDown, true);
+                    if (status != ProtoStatus.Next) {
+                        return status;
+                    }
+                    this.switchIfReady(context, state);
                 } else {
-                    rcvDown.offerMessage(msg);
+                    rcvDown.offerMessage(rcvUp.takeMessage());
                 }
 
                 if (isRequestComplete(msg)) {
-                    this.resetRequestRoutingState(false);
+                    this.resetRequestRoutingState(state, false);
                 }
 
                 continue;
             }
 
-            if (!this.requestParts.isActive() && !(msg instanceof HttpRequest)) {
+            if (!state.requestParts.isActive() && !(msg instanceof HttpRequest)) {
                 rcvDown.offerMessage(rcvUp.takeMessage());
                 continue;
             }
 
-            msg = rcvUp.takeMessage();
-            this.bufferedRequestParts.add(msg);
-            this.requestParts.appendRequest(msg);
+            this.bufferNextRequestMessage(context, state, rcvUp, msg);
+            state.requestParts.appendRequest(msg);
 
             if (!isHeaderSectionClosed(msg)) {
                 if (isRequestComplete(msg)) {
-                    this.flushBufferedRequest(rcvDown);
-                    this.resetRequestRoutingState(false);
+                    this.flushBufferedRequest(state, rcvDown);
+                    this.resetRequestRoutingState(state, false);
                 }
                 continue;
             }
 
-            boolean handshakeRequest = isHandshakeRequest(this.requestParts);
+            boolean handshakeRequest = isHandshakeRequest(state.requestParts);
             boolean requestComplete = isRequestComplete(msg);
             if (handshakeRequest) {
-                this.handshakePending = true;
-                this.forwardBufferedToHandshake(context, rcvDown);
-                this.switchIfReady(context);
+                state.handshakePending = true;
+                this.forwardBufferedToHandshake(state, context, rcvDown);
+                this.switchIfReady(context, state);
             } else {
-                this.flushBufferedRequest(rcvDown);
+                this.flushBufferedRequest(state, rcvDown);
             }
 
             if (requestComplete) {
-                this.resetRequestRoutingState(false);
+                this.resetRequestRoutingState(state, false);
             } else {
-                this.currentRequestHandshake = handshakeRequest;
-                this.bufferedRequestParts.clear();
-                this.requestParts.reset();
+                state.currentRequestHandshake = handshakeRequest;
+                state.bufferedRequestParts = null;
+                state.requestParts.reset();
             }
         }
         return ProtoStatus.Next;
@@ -163,22 +183,25 @@ public class WebSocketServerUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
 
     private ProtoStatus handleSend(ProtoContext context, ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<HttpObject> sndDown) throws Throwable {
         while (sndUp.hasMore()) {
-            if (this.handshakePending) {
-                HttpObject msg = sndUp.takeMessage();
-                if (msg == null) {
-                    continue;
+            HttpObject peek = sndUp.peekMessage();
+            if (peek == null) {
+                sndUp.takeMessage();
+                continue;
+            }
+
+            RouteState state = state(context, peek);
+            if (state.handshakePending) {
+                ProtoStatus status = this.forwardSingleToHandshake(context, sndUp, SEND_STAGE_QUEUE_KEY, sndDown, false);
+                if (status != ProtoStatus.Next) {
+                    return status;
                 }
 
-                ProtoQueue<HttpObject> queue = new ProtoQueue<>(1);
-                queue.offerMessage(msg);
-                this.delegate.onMessage(context, false, ProtoQueue.emptyRcv(), null, queue, sndDown);
-
-                if (isResponseComplete(msg)) {
-                    if (WebSocketUtils.isReady(context)) {
-                        this.handshakePending = false;
+                if (isResponseComplete(peek)) {
+                    if (this.delegate.isHandshakeReady(context)) {
+                        state.handshakePending = false;
                         this.switchRoute(this.targetRoute);
                     } else {
-                        this.handshakePending = false;
+                        state.handshakePending = false;
                     }
                 }
                 continue;
@@ -197,8 +220,9 @@ public class WebSocketServerUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
      */
     @Override
     public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
-        this.handshakePending = false;
-        this.resetRequestRoutingState(true);
+        RouteState state = state(context);
+        state.handshakePending = false;
+        this.resetRequestRoutingState(state, true);
         return this.delegate.onError(context, isRcv, e, eh);
     }
 
@@ -207,50 +231,167 @@ public class WebSocketServerUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
      */
     @Override
     public void onClose(ProtoContext context) {
-        this.handshakePending = false;
-        this.resetRequestRoutingState(true);
+        RouteState state = state(context);
+        state.handshakePending = false;
+        this.resetRequestRoutingState(state, true);
+        removeState(context);
         this.delegate.onClose(context);
     }
 
-    private void switchIfReady(ProtoContext context) {
-        if (WebSocketUtils.isReady(context)) {
-            this.handshakePending = false;
+    private void switchIfReady(ProtoContext context, RouteState state) {
+        if (this.delegate.isHandshakeReady(context)) {
+            state.handshakePending = false;
             this.switchRoute(this.targetRoute);
         }
     }
 
     private void switchRoute(String targetRoute) {
-        this.routingControl.switchRoute(targetRoute);
+        this.routingControl.switchRouteNextTick(targetRoute);
     }
 
-    private void forwardBufferedToHandshake(ProtoContext context, ProtoSndQueue<HttpObject> rcvDown) throws Throwable {
-        ProtoQueue<HttpObject> queue = new ProtoQueue<>(this.bufferedRequestParts.size());
-        queue.offerMessage(this.bufferedRequestParts);
-        this.delegate.onMessage(context, true, queue, rcvDown, ProtoQueue.emptyRcv(), null);
-    }
+    private void forwardBufferedToHandshake(RouteState state, ProtoContext context, ProtoSndQueue<HttpObject> rcvDown) throws Throwable {
+        ProtoRcvQueueView<HttpObject> bufferedQueue = state.bufferedRequestParts;
+        if (bufferedQueue == null) {
+            return;
+        }
 
-    private void forwardToHandshake(ProtoContext context, HttpObject msg, ProtoSndQueue<HttpObject> rcvDown) throws Throwable {
-        ProtoQueue<HttpObject> queue = new ProtoQueue<>(1);
-        queue.offerMessage(msg);
-        this.delegate.onMessage(context, true, queue, rcvDown, ProtoQueue.emptyRcv(), null);
-    }
-
-    private void flushBufferedRequest(ProtoSndQueue<HttpObject> rcvDown) {
-        rcvDown.offerMessage(this.bufferedRequestParts);
-    }
-
-    private void resetRequestRoutingState(boolean releaseBuffered) {
-        if (releaseBuffered) {
-            for (HttpObject msg : this.bufferedRequestParts) {
-                if (msg != null) {
-                    msg.release();
+        try {
+            while (bufferedQueue.hasMore()) {
+                HttpObject buffered = bufferedQueue.takeMessage();
+                if (buffered == null) {
+                    continue;
                 }
+
+                ProtoStatus status = this.delegate.onReceiveMessage(context, buffered, rcvDown);
+                if (status != ProtoStatus.Next) {
+                    throw new IllegalStateException("unexpected server handshake status while forwarding buffered request: " + status);
+                }
+            }
+        } finally {
+            state.bufferedRequestParts = null;
+        }
+    }
+
+    private ProtoStatus forwardSingleToHandshake(ProtoContext context, ProtoRcvQueue<HttpObject> src, String stagingKey, ProtoSndQueue<HttpObject> down, boolean isRcv) throws Throwable {
+        ProtoRcvQueueView<HttpObject> stagedView = this.stageNextMessage(src, stagingKey);
+        if (isRcv) {
+            return this.delegate.onReceiveData(context, stagedView, down);
+        } else {
+            return this.delegate.onSendData(context, stagedView, down);
+        }
+    }
+
+    private ProtoRcvQueueView<HttpObject> stageNextMessage(ProtoRcvQueue<HttpObject> src, String stagingKey) {
+        src.drainToQueue(stagingKey, 1);
+        return src.queueView(stagingKey);
+    }
+
+    private void flushBufferedRequest(RouteState state, ProtoSndQueue<HttpObject> rcvDown) {
+        ProtoRcvQueueView<HttpObject> bufferedQueue = state.bufferedRequestParts;
+        if (bufferedQueue == null) {
+            return;
+        }
+
+        try {
+            if (bufferedQueue.hasMore()) {
+                rcvDown.offerMessage(bufferedQueue.takeMessage(-1));
+            }
+        } finally {
+            state.bufferedRequestParts = null;
+        }
+    }
+
+    private void resetRequestRoutingState(RouteState state, boolean releaseBuffered) {
+        if (state.bufferedRequestParts != null) {
+            if (releaseBuffered) {
+                state.bufferedRequestParts.discard();
+            }
+            state.bufferedRequestParts = null;
+        }
+        state.requestParts.reset();
+        state.currentRequestHandshake = null;
+    }
+
+    private void bufferNextRequestMessage(ProtoContext context, RouteState state, ProtoRcvQueue<HttpObject> src, HttpObject msg) {
+        ProtoRcvQueueView<HttpObject> bufferedQueue = state.bufferedRequestParts;
+        if (bufferedQueue == null) {
+            String key = BUFFER_QUEUE_PREFIX + partitionKey(context, msg).getKey();
+            src.drainToQueue(key, 1);
+            state.bufferedRequestParts = src.queueView(key);
+        } else {
+            src.drainToQueue(bufferedQueue.getKey(), 1);
+        }
+    }
+
+    private RouteState state(ProtoContext context) {
+        RouteState state = context.context(RouteState.class);
+        return state != null ? state : state(context, null);
+    }
+
+    private RouteState state(ProtoContext context, HttpObject msg) {
+        if (msg == null || msg.streamId() <= 0) {
+            RouteState localState = context.context(RouteState.class);
+            if (localState != null) {
+                return localState;
             }
         }
 
-        this.bufferedRequestParts.clear();
-        this.requestParts.reset();
-        this.currentRequestHandshake = null;
+        RouteStateStore store = stateStore(context);
+        PartitionKey key = partitionKey(context, msg);
+        RouteState state = store.states.get(key);
+        if (state == null) {
+            RouteState newState = new RouteState();
+            RouteState oldState = store.states.putIfAbsent(key, newState);
+            state = oldState != null ? oldState : newState;
+        }
+        context.context(RouteState.class, state);
+        return state;
+    }
+
+    private void removeState(ProtoContext context) {
+        RouteStateStore store = stateStore(context);
+        if (store != null) {
+            store.states.remove(partitionKey(context, null));
+        }
+    }
+
+    private RouteStateStore stateStore(ProtoContext context) {
+        SoChannel<?> channel = context.getChannel();
+        Object attr = channel != null ? channel.getAttribute(ROUTE_STATE_STORE_KEY) : null;
+        if (attr instanceof RouteStateStore) {
+            return (RouteStateStore) attr;
+        }
+
+        RouteStateStore store = new RouteStateStore();
+        if (channel != null) {
+            channel.setAttribute(ROUTE_STATE_STORE_KEY, store);
+        }
+        return store;
+    }
+
+    private static PartitionKey partitionKey(ProtoContext context, HttpObject msg) {
+        if (msg != null && msg.streamId() > 0 && isHttp2StreamMessage(context, msg)) {
+            return PartitionKey.newKey(msg.streamId());
+        }
+        PartitionKey key = PartitionKey.findKey(context);
+        if (key != null && !PartitionKey.defaultKey().equals(key)) {
+            return key;
+        }
+        return key != null ? key : PartitionKey.defaultKey();
+    }
+
+    private static boolean isHttp2StreamMessage(ProtoContext context, HttpObject msg) {
+        if (InternalUtils.resolveHttpScope(context) == HttpScope.STREAM) {
+            return true;
+        }
+        if (msg instanceof HttpRequest) {
+            return ((HttpRequest) msg).protocolVersion().majorVersion() == 2;
+        }
+        if (msg instanceof HttpResponse) {
+            return ((HttpResponse) msg).protocolVersion().majorVersion() == 2;
+        }
+        HttpVersion version = context.context(HttpVersion.class);
+        return version != null && version.majorVersion() == 2;
     }
 
     private static boolean isHandshakeRequest(HttpMessageParts request) {
@@ -272,7 +413,7 @@ public class WebSocketServerUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
     }
 
     private static boolean isResponseComplete(HttpObject msg) {
-        return msg instanceof LastHttpContent || isAggregateLikeResponse(msg);
+        return msg instanceof LastHttpHeaders || msg instanceof LastHttpContent || isAggregateLikeResponse(msg);
     }
 
     private static boolean isAggregateLikeResponse(HttpObject msg) {

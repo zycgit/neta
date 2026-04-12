@@ -43,7 +43,7 @@ class WebSocketContextImpl implements WebSocketContext {
      * @param extensions negotiated extensions, may be an empty list
      */
     WebSocketContextImpl(boolean server, String subProtocol, int version, String requestPath, List<String> extensions) {
-        this(server, subProtocol, version, requestPath, InnelUtils.parseExtensions(extensions), Collections.emptyList());
+        this(server, subProtocol, version, requestPath, InternalUtils.parseExtensions(extensions), Collections.emptyList());
     }
 
     /**

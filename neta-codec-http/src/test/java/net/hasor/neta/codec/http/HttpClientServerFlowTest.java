@@ -33,15 +33,14 @@ public class HttpClientServerFlowTest extends AbstractHttpTest {
             });
 
             // batch_1
-            List<HttpObject> batch_1 = clientSendRequestObjects(pipe,//
-                    new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/flow"),//
+            List<HttpObject> batch1 = clientSendRequestObjects(pipe, new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/flow"),//
                     joinHeaders(DefaultLastHttpHeaders.class,//
                             Tuple.of(HttpHeaderNames.HOST, "example.com"),//
                             Tuple.of(HttpHeaderNames.CONTENT_LENGTH, "4")),//
                     new DefaultLastHttpContent(ascii("Wiki")));
-            assertEquals(1, batch_1.size());
-            assertTrue(batch_1.get(0) instanceof FullHttpRequest);
-            FullHttpRequest request = (FullHttpRequest) batch_1.get(0);
+            assertEquals(1, batch1.size());
+            assertTrue(batch1.get(0) instanceof FullHttpRequest);
+            FullHttpRequest request = (FullHttpRequest) batch1.get(0);
             assertEquals(HttpMethod.POST, request.method());
             assertEquals("/flow", request.uri());
             assertEquals("example.com", request.getString(HttpHeaderNames.HOST));
@@ -90,7 +89,9 @@ public class HttpClientServerFlowTest extends AbstractHttpTest {
             assertEquals("0", provisional.getString(HttpHeaderNames.CONTENT_LENGTH));
             assertEquals("", body(provisional));
 
-            List<HttpObject> requests = clientSendRequestObjects(pipe, new DefaultLastHttpContent(ascii("Wiki")));
+            pipe.client().sendData(new DefaultLastHttpContent(ascii("Wiki"))).get();
+            waitUntil(() -> !pipe.serverInbound().isEmpty() || !pipe.serverInboundErrors().isEmpty() || !pipe.clientOutboundErrors().isEmpty(), 200L);
+            List<HttpObject> requests = drainQueue(pipe.serverInbound());
             assertEquals(1, requests.size());
             assertTrue(requests.get(0) instanceof FullHttpRequest);
             FullHttpRequest request = (FullHttpRequest) requests.get(0);

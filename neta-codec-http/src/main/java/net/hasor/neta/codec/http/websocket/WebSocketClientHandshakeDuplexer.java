@@ -14,13 +14,21 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.cobble.logging.LoggerFactory;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.channel.ProtoExceptionHolder;
+import net.hasor.neta.channel.ProtoStatus;
+import net.hasor.neta.channel.SoChannel;
+import net.hasor.neta.channel.data.ProtoRcvData;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
+import net.hasor.neta.channel.data.ProtoSndQueueView;
+import net.hasor.neta.channel.routing.PartitionKey;
 import net.hasor.neta.codec.http.*;
 
 /**
@@ -33,23 +41,30 @@ import net.hasor.neta.codec.http.*;
  * @version : 2026-03-22
  */
 public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake {
-    private static final Logger            logger = LoggerFactory.getLogger(WebSocketClientHandshakeDuplexer.class);
+    private static final Logger            logger              = LoggerFactory.getLogger(WebSocketClientHandshakeDuplexer.class);
+    private static final String            STATE_STORE_KEY     = WebSocketClientHandshakeDuplexer.class.getName() + ".stateStore";
+    private static final String            BUFFER_QUEUE_PREFIX = WebSocketClientHandshakeDuplexer.class.getName() + ".pendingRequest.";
     private final        WebSocketSettings settings;
 
     private static final class ClientHandshakeState {
-        private final HttpMessageParts      requestParts         = new HttpMessageParts();
-        private final HttpMessageParts      responseParts        = new HttpMessageParts();
-        private final ArrayList<HttpObject> bufferedRequestParts = new ArrayList<>();
-        private       boolean               requestPending;
-        private       boolean               ready;
-        private       WebSocketVersion      version;
-        private       String                path;
-        private       String                protocols;
-        private       String                extensions;
-        private       String                key;
-        private       String                key1;
-        private       String                key2;
-        private       byte[]                key3;
+        private final HttpMessageParts              requestParts  = new HttpMessageParts();
+        private final HttpMessageParts              responseParts = new HttpMessageParts();
+        private       ProtoSndQueueView<HttpObject> bufferedRequestParts;
+        private       boolean                       requestPending;
+        private       boolean                       ready;
+        private       long                          requestStreamId;
+        private       WebSocketVersion              version;
+        private       String                        path;
+        private       String                        protocols;
+        private       String                        extensions;
+        private       String                        key;
+        private       String                        key1;
+        private       String                        key2;
+        private       byte[]                        key3;
+    }
+
+    private static final class ClientHandshakeStateStore {
+        private final ConcurrentHashMap<PartitionKey, ClientHandshakeState> states = new ConcurrentHashMap<>();
     }
 
     /**
@@ -107,6 +122,14 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         resetHandshakeSession(state(context));
     }
 
+    boolean isHandshakeReady(ProtoContext context) {
+        return state(context).ready;
+    }
+
+    boolean isHandshakePending(ProtoContext context, HttpObject msg) {
+        return state(context, msg).requestPending;
+    }
+
     /**
      * Route inbound and outbound HTTP objects through the client handshake flow.
      */
@@ -121,6 +144,22 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         }
     }
 
+    ProtoStatus onReceiveData(ProtoContext context, ProtoRcvData<HttpObject> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
+        return this.handleReceive(context, src, dst);
+    }
+
+    ProtoStatus onSendData(ProtoContext context, ProtoRcvData<HttpObject> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
+        return this.handleSend(context, src, dst);
+    }
+
+    ProtoStatus onReceiveMessage(ProtoContext context, HttpObject msg, ProtoSndQueue<HttpObject> dst) throws Throwable {
+        return this.handleReceiveMessage(context, msg, dst);
+    }
+
+    ProtoStatus onSendMessage(ProtoContext context, HttpObject msg, ProtoSndQueue<HttpObject> dst) {
+        return this.handleSendMessage(context, msg, dst);
+    }
+
     /**
      * Consume handshake failures, reset local state, and close the channel when required.
      */
@@ -133,7 +172,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
             eh.clear();
 
             if (handshakeError.closeConnection()) {
-                InnelUtils.executeCloseAction(context, WebSocketCloseType.TERMINATE);
+                InternalUtils.executeCloseAction(context, WebSocketCloseType.TERMINATE);
                 return ProtoStatus.Stop;
             }
 
@@ -144,63 +183,82 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
     }
 
     // handleSend
-    private ProtoStatus handleSend(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<HttpObject> dst) {
-        ClientHandshakeState state = state(context);
+    private ProtoStatus handleSend(ProtoContext context, ProtoRcvData<HttpObject> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
         while (src.hasMore()) {
             HttpObject msg = src.takeMessage();
             if (msg == null) {
                 continue;
             }
 
-            if (state.ready) {
-                dst.offerMessage(msg);
-                continue;
+            ProtoStatus status = this.handleSendMessage(context, msg, dst);
+            if (status != ProtoStatus.Next) {
+                return status;
             }
+        }
+        return ProtoStatus.Next;
+    }
 
-            if (state.requestPending) {
-                this.warnDropReason(context, "client-snd", "drop outbound data while handshake response is pending.");
-                msg.release();
-                continue;
-            }
+    private ProtoStatus handleSendMessage(ProtoContext context, HttpObject msg, ProtoSndQueue<HttpObject> dst) {
+        ClientHandshakeState state = state(context, msg);
 
-            if (!isHttpRequestPart(msg)) {
-                this.warnAndDrop(context, "client-snd", msg);
-                msg.release();
-                this.resetHandshakeSession(state);
-                continue;
-            }
+        if (state.ready) {
+            dst.offerMessage(msg);
+            return ProtoStatus.Next;
+        }
 
-            if (msg instanceof HttpRequest) {
-                if (state.requestParts.isActive()) {
-                    this.releaseBuffers(state);
-                    state.requestParts.reset();
-                }
-                if (state.ready || state.requestPending) {
-                    this.resetHandshakeSession(state);
-                }
-            }
+        if (state.requestPending) {
+            this.warnDropReason(context, "client-snd", "drop outbound data while handshake response is pending.");
+            msg.release();
+            return ProtoStatus.Next;
+        }
 
-            state.bufferedRequestParts.add(msg);
-            state.requestParts.appendRequest(msg);
-            if (!state.requestParts.isComplete()) {
-                continue;
-            }
+        if (!isHttpRequestPart(msg)) {
+            this.warnAndDrop(context, "client-snd", msg);
+            msg.release();
+            this.resetHandshakeSession(state);
+            return ProtoStatus.Next;
+        }
 
-            if (!rememberHandshakeData(state, state.requestParts) || !isCompatible(state.version)) {
-                this.warnDropReason(context, "client-snd", "drop non-websocket or incompatible handshake request.");
+        if (msg instanceof HttpRequest) {
+            if (state.requestParts.isActive()) {
                 this.releaseBuffers(state);
                 state.requestParts.reset();
-                this.discardHandshakeRequestSnapshot(state);
-                continue;
             }
-
-            state.ready = false;
-            for (HttpObject buffered : state.bufferedRequestParts) {
-                dst.offerMessage(buffered);
+            if (state.ready || state.requestPending) {
+                this.resetHandshakeSession(state);
             }
-            state.bufferedRequestParts.clear();
-            state.requestParts.reset();
         }
+
+        ProtoSndQueueView<HttpObject> bufferedQueue = this.ensureBufferedRequestQueue(context, state, msg, dst);
+        if (!bufferedQueue.offerMessage(msg)) {
+            this.warnDropReason(context, "client-snd", "drop outbound handshake request because the pending subqueue has no remaining slot.");
+            msg.release();
+            this.resetHandshakeSession(state);
+            return ProtoStatus.Stop;
+        }
+
+        state.requestParts.appendRequest(msg);
+        boolean complete = state.requestParts.isComplete();
+        if (!complete && this.isHttp2HeaderOnlyRequestBoundary(msg, state.requestParts)) {
+            complete = true;
+        }
+        if (!complete) {
+            return ProtoStatus.Next;
+        }
+
+        if (!rememberHandshakeData(state, state.requestParts) || !isCompatible(state.version)) {
+            this.warnDropReason(context, "client-snd", "drop non-websocket or incompatible handshake request.");
+            this.releaseBuffers(state);
+            state.requestParts.reset();
+            this.discardHandshakeRequestSnapshot(state);
+            return ProtoStatus.Next;
+        }
+
+        state = this.bindPendingStateToStream(context, state);
+
+        state.ready = false;
+        this.flushBufferedRequest(state);
+        state.requestParts.reset();
         return ProtoStatus.Next;
     }
 
@@ -235,6 +293,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         }
 
         state.requestPending = true;
+        state.requestStreamId = request.streamId();
         state.version = version;
         state.path = request.uri();
         state.protocols = request.header(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL);
@@ -248,91 +307,104 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
 
     //
     // handleReceive
-    private ProtoStatus handleReceive(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
-        ClientHandshakeState state = state(context);
+    private ProtoStatus handleReceive(ProtoContext context, ProtoRcvData<HttpObject> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
         while (src.hasMore()) {
             HttpObject msg = src.takeMessage();
             if (msg == null) {
                 continue;
             }
-            if (state.ready) {
-                dst.offerMessage(msg);
-                continue;
+
+            ProtoStatus status = this.handleReceiveMessage(context, msg, dst);
+            if (status != ProtoStatus.Next) {
+                return status;
             }
+        }
+        return ProtoStatus.Next;
+    }
 
-            // ERROR1: before handshake finish, only allow HTTP response fragments.
-            if (!isHttpResponsePart(msg)) {
-                this.warnAndDrop(context, "client-rcv", msg);
-                msg.release();
-                this.resetHandshakeSession(state);
-                continue;
-            }
+    private ProtoStatus handleReceiveMessage(ProtoContext context, HttpObject msg, ProtoSndQueue<HttpObject> dst) throws Throwable {
+        ClientHandshakeState state = state(context, msg);
+        if (state.ready) {
+            dst.offerMessage(msg);
+            return ProtoStatus.Next;
+        }
 
-            boolean complete = false;
-            try {
-                // valid handshake
-                if (msg instanceof HttpResponse) {
-                    if (state.responseParts.isActive()) {
-                        state.responseParts.reset();
-                    }
-                    if (state.ready) {
-                        state.ready = false;
-                    }
-                }
+        // ERROR1: before handshake finish, only allow HTTP response fragments.
+        if (!isHttpResponsePart(msg)) {
+            this.warnAndDrop(context, "client-rcv", msg);
+            msg.release();
+            this.resetHandshakeSession(state);
+            return ProtoStatus.Next;
+        }
 
-                // collect data.
-                state.responseParts.appendResponse(msg);
-                complete = state.responseParts.isComplete();
-                if (!complete) {
-                    continue;
-                }
-
-                // test and waiting for handshake data
-                if (!state.requestPending) {
-                    continue;
-                }
-
-                // verify handshake
-                String subProtocol;
-                try {
-                    this.verifyUpgrade(state.version, state.protocols, state.extensions, state.responseParts, state.key, state.key1, state.key2, state.key3);
-                    subProtocol = state.responseParts.header(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL);
-                } catch (WebSocketHandshakeException e) {
-                    logger.warn("Websocket client handshake protocol violation: " + e.getMessage());
-                    this.resetHandshakeSession(state);
-                    InnelUtils.executeCloseAction(context, WebSocketCloseType.TERMINATE);
-                    return ProtoStatus.Next;
-                }
-                String extStr = state.responseParts.header(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS);
-                WebSocketVersion acceptedVersion = state.version;
-                String acceptedPath = state.path;
-
-                // finsh handshake
-                try {
-                    int versionCode = acceptedVersion != null ? acceptedVersion.code() : 13;
-                    List<WebSocketExtensionResult> extResults = InnelUtils.parseExtensions(extStr);
-                    List<WebSocketExtensionRuntime> runtimeExt = InnelUtils.resolveRuntimeExtensions(extResults, this.settings);
-
-                    WebSocketContext wsContext = new WebSocketContextImpl(false, subProtocol, versionCode, acceptedPath, extResults, runtimeExt);
-                    this.finishWebSocketUpgrade(context, wsContext, state.requestParts.streamId());
-                    state.ready = true;
-                    discardHandshakeRequestSnapshot(state);
-                } catch (Throwable e) {
-                    logger.error("Error occurred while finalizing websocket client handshake protocol state.", e);
-                    this.resetHandshakeSession(state);
-                    InnelUtils.executeCloseAction(context, WebSocketCloseType.TERMINATE);
-                    return ProtoStatus.Next;
-                }
-            } finally {
-                msg.release();
-                if (complete) {
+        boolean complete = false;
+        try {
+            // valid handshake
+            if (msg instanceof HttpResponse) {
+                if (state.responseParts.isActive()) {
                     state.responseParts.reset();
-                    if (!state.ready) {
-                        discardHandshakeRequestSnapshot(state);
-                    }
+                }
+                if (state.ready) {
+                    state.ready = false;
+                }
+            }
+
+            // collect data.
+            state.responseParts.appendResponse(msg);
+            complete = state.responseParts.isComplete();
+            if (!complete && this.isHttp2HeaderOnlyHandshakeBoundary(msg, state.responseParts)) {
+                complete = true;
+            }
+            if (!complete) {
+                return ProtoStatus.Next;
+            }
+
+            // test and waiting for handshake data
+            if (!state.requestPending) {
+                return ProtoStatus.Next;
+            }
+
+            // verify handshake
+            String subProtocol;
+            try {
+                this.verifyUpgrade(state.version, state.protocols, state.extensions, state.responseParts, state.key, state.key1, state.key2, state.key3);
+                subProtocol = state.responseParts.header(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL);
+            } catch (WebSocketHandshakeException e) {
+                logger.warn("Websocket client handshake protocol violation: " + e.getMessage());
+                this.resetHandshakeSession(state);
+                InternalUtils.executeCloseAction(context, WebSocketCloseType.TERMINATE);
+                return ProtoStatus.Next;
+            }
+            String extStr = state.responseParts.header(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS);
+            WebSocketVersion acceptedVersion = state.version;
+            String acceptedPath = state.path;
+
+            // finsh handshake
+            try {
+                int versionCode = acceptedVersion != null ? acceptedVersion.code() : 13;
+                List<WebSocketExtensionResult> extResults = InternalUtils.parseExtensions(extStr);
+                List<WebSocketExtensionRuntime> runtimeExt = InternalUtils.resolveRuntimeExtensions(extResults, this.settings);
+
+                WebSocketContext wsContext = new WebSocketContextImpl(false, subProtocol, versionCode, acceptedPath, extResults, runtimeExt);
+                this.finishWebSocketUpgrade(context, wsContext, state.requestStreamId);
+                state.ready = true;
+                discardHandshakeRequestSnapshot(state);
+            } catch (Throwable e) {
+                logger.error("Error occurred while finalizing websocket client handshake protocol state.", e);
+                this.resetHandshakeSession(state);
+                InternalUtils.executeCloseAction(context, WebSocketCloseType.TERMINATE);
+                return ProtoStatus.Next;
+            }
+        } finally {
+            msg.release();
+            if (complete) {
+                state.responseParts.reset();
+                if (!state.ready) {
+                    discardHandshakeRequestSnapshot(state);
                 }
             }
         }
+
         return ProtoStatus.Next;
     }
 
@@ -377,6 +449,31 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         }
     }
 
+    private boolean isHttp2HeaderOnlyHandshakeBoundary(HttpObject msg, HttpMessageParts responseParts) {
+        if (!(msg instanceof LastHttpHeaders) || responseParts == null || responseParts.protocolVersion() == null) {
+            return false;
+        }
+        if (responseParts.protocolVersion().majorVersion() != 2) {
+            return false;
+        }
+        if (responseParts.status() == null || responseParts.status().code() != HttpStatus.SWITCHING_PROTOCOLS.code()) {
+            return false;
+        }
+        ByteBuf body = responseParts.body();
+        return body == null || body.readableBytes() == 0;
+    }
+
+    private boolean isHttp2HeaderOnlyRequestBoundary(HttpObject msg, HttpMessageParts requestParts) {
+        if (!(msg instanceof LastHttpHeaders) || requestParts == null || requestParts.protocolVersion() == null) {
+            return false;
+        }
+        if (requestParts.protocolVersion().majorVersion() != 2) {
+            return false;
+        }
+        ByteBuf body = requestParts.body();
+        return body == null || body.readableBytes() == 0;
+    }
+
     private void validateNegotiatedHeaders(String reqProtocols, String reqExtensions, HttpMessageParts response) {
         String selectedProtocol = response.header(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL);
         validateSelectedSubProtocol(reqProtocols, selectedProtocol);
@@ -395,8 +492,8 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
             throw new WebSocketHandshakeException(HttpStatus.BAD_REQUEST, "websocket upgrade failed: negotiated extensions are disabled by current settings.");
         }
 
-        List<WebSocketExtensionResult> requested = InnelUtils.parseExtensions(requestedExtensions);
-        List<WebSocketExtensionResult> negotiated = InnelUtils.parseExtensions(negotiatedExtensions);
+        List<WebSocketExtensionResult> requested = InternalUtils.parseExtensions(requestedExtensions);
+        List<WebSocketExtensionResult> negotiated = InternalUtils.parseExtensions(negotiatedExtensions);
         this.ensureNoDuplicateExtensions(negotiated, "websocket upgrade failed: duplicated negotiated websocket extension: ");
 
         for (WebSocketExtensionResult negotiatedItem : negotiated) {
@@ -431,11 +528,129 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
     // tools
     private ClientHandshakeState state(ProtoContext context) {
         ClientHandshakeState state = context.context(ClientHandshakeState.class);
-        if (state == null) {
-            state = new ClientHandshakeState();
-            context.context(ClientHandshakeState.class, state);
+        return state != null ? state : state(context, null);
+    }
+
+    private ClientHandshakeState state(ProtoContext context, HttpObject msg) {
+        if (msg == null || msg.streamId() <= 0) {
+            ClientHandshakeState localState = context.context(ClientHandshakeState.class);
+            if (localState != null) {
+                return localState;
+            }
         }
+
+        ClientHandshakeStateStore store = stateStore(context);
+
+        PartitionKey key = partitionKey(context, msg);
+        ClientHandshakeState state = store.states.get(key);
+        if (state == null) {
+            ClientHandshakeState newState = new ClientHandshakeState();
+            ClientHandshakeState oldState = store.states.putIfAbsent(key, newState);
+            state = oldState != null ? oldState : newState;
+        }
+
+        if (msg != null && msg.streamId() > 0 && !state.requestPending) {
+            ClientHandshakeState pendingState = findPendingState(store, msg.streamId());
+            if (pendingState != null) {
+                store.states.put(key, pendingState);
+                state = pendingState;
+            }
+        }
+
+        context.context(ClientHandshakeState.class, state);
         return state;
+    }
+
+    private ClientHandshakeState state(ProtoContext context, long streamId) {
+        ClientHandshakeStateStore store = stateStore(context);
+        PartitionKey key = PartitionKey.newKey(streamId);
+        ClientHandshakeState state = store.states.get(key);
+        if (state == null) {
+            ClientHandshakeState newState = new ClientHandshakeState();
+            ClientHandshakeState oldState = store.states.putIfAbsent(key, newState);
+            state = oldState != null ? oldState : newState;
+        }
+        context.context(ClientHandshakeState.class, state);
+        return state;
+    }
+
+    private ClientHandshakeStateStore stateStore(ProtoContext context) {
+        SoChannel<?> channel = context.getChannel();
+        Object attr = channel != null ? channel.getAttribute(STATE_STORE_KEY) : null;
+        if (attr instanceof ClientHandshakeStateStore) {
+            return (ClientHandshakeStateStore) attr;
+        }
+
+        ClientHandshakeStateStore store = new ClientHandshakeStateStore();
+        if (channel != null) {
+            channel.setAttribute(STATE_STORE_KEY, store);
+        }
+        return store;
+    }
+
+    private static PartitionKey partitionKey(ProtoContext context, HttpObject msg) {
+        if (msg != null && msg.streamId() > 0 && isHttp2StreamMessage(context, msg)) {
+            return PartitionKey.newKey(msg.streamId());
+        }
+        PartitionKey key = PartitionKey.findKey(context);
+        if (key != null && !PartitionKey.defaultKey().equals(key)) {
+            return key;
+        }
+        return key != null ? key : PartitionKey.defaultKey();
+    }
+
+    private static boolean isHttp2StreamMessage(ProtoContext context, HttpObject msg) {
+        if (InternalUtils.resolveHttpScope(context) == HttpScope.STREAM) {
+            return true;
+        }
+        if (msg instanceof HttpRequest) {
+            return ((HttpRequest) msg).protocolVersion().majorVersion() == 2;
+        }
+        if (msg instanceof HttpResponse) {
+            return ((HttpResponse) msg).protocolVersion().majorVersion() == 2;
+        }
+        HttpVersion version = context.context(HttpVersion.class);
+        return version != null && version.majorVersion() == 2;
+    }
+
+    private ClientHandshakeState bindPendingStateToStream(ProtoContext context, ClientHandshakeState state) {
+        long streamId = state.requestStreamId;
+        if (streamId <= 0) {
+            return state;
+        }
+
+        ClientHandshakeState streamState = state(context, streamId);
+        if (streamState == state) {
+            return state;
+        }
+
+        streamState.requestPending = state.requestPending;
+        streamState.ready = state.ready;
+        streamState.requestStreamId = state.requestStreamId;
+        streamState.version = state.version;
+        streamState.path = state.path;
+        streamState.protocols = state.protocols;
+        streamState.extensions = state.extensions;
+        streamState.key = state.key;
+        streamState.key1 = state.key1;
+        streamState.key2 = state.key2;
+        streamState.key3 = state.key3;
+        streamState.bufferedRequestParts = state.bufferedRequestParts;
+        state.bufferedRequestParts = null;
+        this.discardHandshakeRequestSnapshot(state);
+        return streamState;
+    }
+
+    private static ClientHandshakeState findPendingState(ClientHandshakeStateStore store, long streamId) {
+        if (store == null || streamId <= 0) {
+            return null;
+        }
+        for (ClientHandshakeState item : store.states.values()) {
+            if (item != null && item.requestPending && item.requestStreamId == streamId) {
+                return item;
+            }
+        }
+        return null;
     }
 
     // Discard only the remembered request snapshot that is needed to validate the
@@ -443,6 +658,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
     // handshake session and are reset separately.
     private void discardHandshakeRequestSnapshot(ClientHandshakeState state) {
         state.requestPending = false;
+        state.requestStreamId = 0;
         state.version = null;
         state.path = null;
         state.protocols = null;
@@ -464,9 +680,27 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
     }
 
     private void releaseBuffers(ClientHandshakeState state) {
-        for (HttpObject buffered : state.bufferedRequestParts) {
-            buffered.release();
+        if (state.bufferedRequestParts != null) {
+            state.bufferedRequestParts.discard();
+            state.bufferedRequestParts = null;
         }
-        state.bufferedRequestParts.clear();
+    }
+
+    private ProtoSndQueueView<HttpObject> ensureBufferedRequestQueue(ProtoContext context, ClientHandshakeState state, HttpObject msg, ProtoSndQueue<HttpObject> dst) {
+        if (state.bufferedRequestParts != null) {
+            return state.bufferedRequestParts;
+        }
+
+        String key = BUFFER_QUEUE_PREFIX + partitionKey(context, msg).getKey();
+        ProtoSndQueueView<HttpObject> subQueue = dst.subQueue(key);
+        state.bufferedRequestParts = subQueue;
+        return subQueue;
+    }
+
+    private void flushBufferedRequest(ClientHandshakeState state) {
+        if (state.bufferedRequestParts != null) {
+            state.bufferedRequestParts.push();
+            state.bufferedRequestParts = null;
+        }
     }
 }

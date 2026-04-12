@@ -16,7 +16,10 @@
 package net.hasor.neta.codec.http.websocket;
 import java.util.concurrent.atomic.AtomicReference;
 import net.hasor.cobble.concurrent.future.BasicFuture;
-import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.channel.ProtoHandler;
+import net.hasor.neta.channel.ProtoStatus;
+import net.hasor.neta.channel.SoEvent;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.channel.routing.PartitionKey;
@@ -127,7 +130,7 @@ public class WebSocketCloseActionDispatchTest extends AbstractWebSocketTest {
                 if (futureRef != null) {
                     futureRef.set(future);
                 }
-                InnelUtils.executeCloseAction(context, closeType, future);
+                InternalUtils.executeCloseAction(context, closeType, future);
                 return ProtoStatus.Next;
             }
         };

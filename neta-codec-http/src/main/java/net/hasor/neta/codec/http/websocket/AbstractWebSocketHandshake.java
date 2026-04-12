@@ -21,10 +21,8 @@ import java.util.*;
 import net.hasor.cobble.ExceptionUtils;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
-import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.ProtoDuplexer;
-import net.hasor.neta.channel.ProtoExceptionHolder;
-import net.hasor.neta.channel.ProtoStatus;
+import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.routing.PartitionKey;
 import net.hasor.neta.codec.http.*;
 
 /**
@@ -41,7 +39,7 @@ import net.hasor.neta.codec.http.*;
  */
 public abstract class AbstractWebSocketHandshake implements ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> {
     private static final Logger           logger         = Logger.getLogger(AbstractWebSocketHandshake.class);
-    private static final String           WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+    private static final String           WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"; // RFC 6455
     protected final      WebSocketVersion codecVersion;
 
     /**
@@ -64,10 +62,20 @@ public abstract class AbstractWebSocketHandshake implements ProtoDuplexer<HttpOb
      * @throws Throwable thrown if subsequent events fail to publish
      */
     protected final void finishWebSocketUpgrade(ProtoContext context, WebSocketContext wsContext, long streamId) throws Throwable {
-        WebSocketRegistry.bind(context, WebSocketRegistryKey.connectionScope(), wsContext);
+        WebSocketRegistryKey endpointKey = resolveEndpointKey(context, streamId);
 
+        context.context(WebSocketContext.class, wsContext);
+        if (endpointKey.isConnectionScope()) {
+            context.rootContext(WebSocketContext.class, wsContext);
+        }
+        WebSocketRegistry.bind(context, endpointKey, wsContext);
+
+        context.fireEventRcv(HttpThroughEvent.class, new HttpThroughEvent(true, streamId));
         context.fireEventSnd(HttpThroughEvent.class, new HttpThroughEvent(true, streamId));
-        context.fireEventRcv(WebSocketHandshakeEvent.class, new WebSocketHandshakeEvent(wsContext));
+        context.fireEventSnd(WebSocketHandshakeEvent.class, new WebSocketHandshakeEvent(streamId, wsContext));
+        context.fireEventRcv(WebSocketHandshakeEvent.class, new WebSocketHandshakeEvent(streamId, wsContext));
+        publishRootHandshakeEvent(context, true, new WebSocketHandshakeEvent(streamId, wsContext));
+        publishRootHandshakeEvent(context, false, new WebSocketHandshakeEvent(streamId, wsContext));
     }
 
     /**
@@ -86,7 +94,12 @@ public abstract class AbstractWebSocketHandshake implements ProtoDuplexer<HttpOb
     public void onClose(ProtoContext context) {
         resetState(context);
 
-        WebSocketRegistry.remove(context, WebSocketRegistryKey.connectionScope());
+        WebSocketRegistryKey endpointKey = WebSocketRegistry.resolveEndpointKey(context);
+        WebSocketRegistry.remove(context, endpointKey);
+        if (endpointKey == null || endpointKey.isConnectionScope()) {
+            context.rootContext(WebSocketContext.class, null);
+        }
+        context.context(WebSocketContext.class, null);
     }
 
     /**
@@ -165,8 +178,9 @@ public abstract class AbstractWebSocketHandshake implements ProtoDuplexer<HttpOb
 
         if (values.isEmpty()) {
             return Collections.emptyList();
+        } else {
+            return values;
         }
-        return values;
     }
 
     /**
@@ -248,6 +262,62 @@ public abstract class AbstractWebSocketHandshake implements ProtoDuplexer<HttpOb
         return copy;
     }
 
+    private static WebSocketRegistryKey resolveEndpointKey(ProtoContext context, long streamId) {
+        HttpScope scope = InternalUtils.resolveHttpScope(context);
+        PartitionKey partitionKey = PartitionKey.findKey(context);
+        HttpVersion httpVersion = context != null ? context.context(HttpVersion.class) : null;
+        boolean streamScopedPartition = partitionKey != null && !PartitionKey.defaultKey().equals(partitionKey);
+        boolean streamScopedHttp = httpVersion != null && httpVersion.majorVersion() >= 2;
+        if (streamId > 0 && (scope == HttpScope.STREAM || streamScopedPartition || streamScopedHttp)) {
+            return WebSocketRegistryKey.streamScope(streamId);
+        }
+        return WebSocketRegistryKey.connectionScope();
+    }
+
+    private static void publishRootHandshakeEvent(ProtoContext context, boolean rcvDirection, WebSocketHandshakeEvent event) {
+        if (context == null || event == null) {
+            return;
+        }
+
+        PartitionKey partitionKey = PartitionKey.findKey(context);
+        if (partitionKey == null || PartitionKey.defaultKey().equals(partitionKey)) {
+            return;
+        }
+
+        if (!(context.getSoContext() instanceof SoContextService)) {
+            return;
+        }
+
+        SoChannel<?> channel = context.getChannel();
+        if (channel == null) {
+            return;
+        }
+
+        SoEvent rootEvent = new SoEvent() {
+            @Override
+            public SoChannel<?> getSource() {
+                return channel;
+            }
+
+            @Override
+            public Class<?> getEventType() {
+                return WebSocketHandshakeEvent.class;
+            }
+
+            @Override
+            public Object getData() {
+                return event;
+            }
+        };
+
+        SoContextService soContext = (SoContextService) context.getSoContext();
+        if (rcvDirection) {
+            soContext.notifyRcvEvent(channel.getChannelId(), null, rootEvent);
+        } else {
+            soContext.notifySndEvent(channel.getChannelId(), null, rootEvent);
+        }
+    }
+
     /**
      * Join header fragments back into one websocket extension header.
      * @param headerValues header fragments to join
@@ -268,6 +338,7 @@ public abstract class AbstractWebSocketHandshake implements ProtoDuplexer<HttpOb
             }
             sb.append(item);
         }
+
         return sb.length() == 0 ? null : sb.toString();
     }
 

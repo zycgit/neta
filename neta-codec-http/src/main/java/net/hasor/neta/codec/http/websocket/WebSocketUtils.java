@@ -56,6 +56,16 @@ public final class WebSocketUtils {
             return null;
         }
 
+        WebSocketContext localContext = context.context(WebSocketContext.class);
+        if (localContext != null && localContext.isReady()) {
+            return localContext;
+        }
+
+        WebSocketContext rootContext = context.rootContext(WebSocketContext.class);
+        if (rootContext != null && rootContext.isReady()) {
+            return rootContext;
+        }
+
         return WebSocketRegistry.resolve(context);
     }
 
@@ -140,7 +150,7 @@ public final class WebSocketUtils {
             throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "control frames must not be fragmented.");
         }
 
-        InnelUtils.validateControlPayload(opcode, frame.content(), senderIsClient);
+        InternalUtils.validateControlPayload(opcode, frame.content(), senderIsClient);
     }
 
     /**
@@ -405,7 +415,7 @@ public final class WebSocketUtils {
     /**
      * Create a text message chunk with the given sequence number.
      * @param sequence message chunk sequence
-     * @param content message payload
+     * @param content message payload whose ownership is transferred to the message
      * @return text message chunk
      */
     public static TextWebSocketMessage textMessage(int sequence, ByteBuf content) {
@@ -424,7 +434,7 @@ public final class WebSocketUtils {
     /**
      * Create a binary message chunk with the given sequence number.
      * @param sequence message chunk sequence
-     * @param content message payload
+     * @param content message payload whose ownership is transferred to the message
      * @return binary message chunk
      */
     public static BinaryWebSocketMessage binaryMessage(int sequence, ByteBuf content) {
@@ -441,7 +451,7 @@ public final class WebSocketUtils {
 
     /**
      * Create a ping event carrying an application payload.
-     * @param content event payload
+     * @param content event payload whose ownership is transferred to the event
      * @return ping event
      */
     public static PingWebSocketEvent pingEvent(ByteBuf content) {
@@ -458,7 +468,7 @@ public final class WebSocketUtils {
 
     /**
      * Create a pong event carrying an application payload.
-     * @param content event payload
+     * @param content event payload whose ownership is transferred to the event
      * @return pong event
      */
     public static PongWebSocketEvent pongEvent(ByteBuf content) {

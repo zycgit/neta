@@ -19,8 +19,8 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoHandler;
-import net.hasor.neta.channel.routing.ProtoRoutingControl;
 import net.hasor.neta.channel.SoEvent;
+import net.hasor.neta.channel.routing.ProtoRoutingControl;
 import net.hasor.neta.codec.http.AbstractHttpTest;
 import net.hasor.neta.codec.http.HttpObject;
 
@@ -31,7 +31,7 @@ public class AbstractWebSocketTest extends AbstractHttpTest {
             public boolean onEvent(ProtoContext context, SoEvent event) {
                 if (event.getData() instanceof WebSocketHandshakeEvent) {
                     if (routingControl != null) {
-                        routingControl.switchRoute(targetRoute);
+                        routingControl.switchRouteNextTick(targetRoute);
                     }
                 }
                 return true;

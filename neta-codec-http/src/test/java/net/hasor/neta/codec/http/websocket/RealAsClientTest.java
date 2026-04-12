@@ -111,7 +111,7 @@ public class RealAsClientTest extends AbstractWebSocketTest {
                 // socket Message
                 WebSocketMessage ack = awaitInbound(inbound, WebSocketMessage.class, 5000L);
                 assertTrue(ack instanceof TextWebSocketMessage);
-                assertEquals("[Ack] hello-real", text(ack.content().retain()));
+                assertEquals("[Ack] hello-real", text(ack.content().copy()));
                 ack.release();
             }
         });
@@ -159,7 +159,7 @@ public class RealAsClientTest extends AbstractWebSocketTest {
                 // socket Message
                 WebSocketMessage ack = awaitInbound(inbound, WebSocketMessage.class, 5000L);
                 assertTrue(ack instanceof TextWebSocketMessage);
-                assertEquals("[Ack] hello-real", text(ack.content().retain()));
+                assertEquals("[Ack] hello-real", text(ack.content().copy()));
                 ack.release();
             }
         });
@@ -238,7 +238,7 @@ public class RealAsClientTest extends AbstractWebSocketTest {
                 // socket Message
                 WebSocketMessage ack = awaitInbound(inbound, WebSocketMessage.class, 5000L);
                 assertTrue(ack instanceof TextWebSocketMessage);
-                assertEquals("[Ack] hello-real", text(ack.content().retain()));
+                assertEquals("[Ack] hello-real", text(ack.content().copy()));
                 ack.release();
             }
         });

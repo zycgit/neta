@@ -39,16 +39,17 @@ public abstract class AbstractWebSocketMessage extends AbstractHttpObject<WebSoc
     /**
      * Initialize the message chunk state.
      * @param sequence chunk sequence
-     * @param content payload content
+     * @param content payload content whose ownership has already been transferred
      */
     protected final void initMessage(int sequence, ByteBuf content) {
         if (content == null) {
             throw new IllegalArgumentException("content must not be null");
         }
+
         this.resetHttpObjectState();
         this.sequence = sequence;
         this.payloadLength = content.readableBytes();
-        this.content = content.retain();
+        this.content = content;
     }
 
     @Override
@@ -80,7 +81,7 @@ public abstract class AbstractWebSocketMessage extends AbstractHttpObject<WebSoc
      */
     @Override
     public ByteBuf content() {
-        return this.content;
+        return this.content == null ? ByteBuf.EMPTY : this.content;
     }
 
     /**

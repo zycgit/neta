@@ -59,10 +59,10 @@ public class PingWebSocketEvent extends AbstractHttpEvent {
 
     /**
      * Create a ping event with the specified payload.
-     * @param content ping payload
+     * @param content ping payload whose ownership is transferred to this event
      */
     public PingWebSocketEvent(ByteBuf content) {
-        this.content = content == null ? ByteBuf.EMPTY.retain() : content.retain();
+        this.content = content == null ? ByteBuf.EMPTY : content;
     }
 
     /**

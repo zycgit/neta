@@ -17,9 +17,15 @@ package net.hasor.neta.codec.http.websocket;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
-import net.hasor.neta.bytebuf.CompositeByteBuf;
-import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.channel.ProtoExceptionHolder;
+import net.hasor.neta.channel.ProtoHandler;
+import net.hasor.neta.channel.ProtoStatus;
+import net.hasor.neta.channel.data.ProtoQueue;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.codec.http.HttpByteBuf;
+import net.hasor.neta.codec.http.HttpContent;
 import net.hasor.neta.codec.http.HttpObject;
 
 /**
@@ -55,8 +61,10 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
     private final        WebSocketVersion    defaultVersion;
     private final        boolean             detectVersion;
     private final        int                 maxPayloadChunkLength;
-    private              CompositeByteBuf    accumulator;
+    private final        ProtoQueue<ByteBuf> payloadQueue     = new ProtoQueue<>(-1);
+    private              ByteBuf             accumulator;
     private              Rfc6455PayloadState streamingState;
+    private              long                currentStreamId;
 
     /**
      * Streaming state used when a large RFC 6455 payload is emitted as multiple
@@ -170,35 +178,54 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<WebSocketFrame> dst) throws Throwable {
         while (src.hasMore()) {
-            HttpByteBuf obj = (HttpByteBuf) src.takeMessage();
+            HttpObject obj = src.takeMessage();
             if (obj == null) {
                 continue;
             }
 
             try {
-                ByteBuf content = obj.content();
+                if (obj.streamId() > 0) {
+                    this.currentStreamId = obj.streamId();
+                }
+                ByteBuf content = rawContent(obj);
                 if (content != null && content.readableBytes() > 0) {
-                    if (this.accumulator == null) {
-                        this.accumulator = ByteBufUtils.compositeBuffer();
-                    }
-                    this.accumulator.addComponent(content);
+                    this.payloadQueue.offerMessage(content.retain());
                 }
             } finally {
                 obj.release();
             }
         }
 
+        if (this.payloadQueue.queueSize() > 0) {
+            this.accumulator = ByteBufUtils.queueBuffer(this.payloadQueue);
+        }
+
         if (this.accumulator != null && this.accumulator.readableBytes() > 0) {
             WebSocketVersion version = resolveVersion(context);
-            if (version.isRfc6455Framing()) {
-                while (decodeRfc6455Frame(context, dst)) { /* loop */ }
-            } else {
-                while (decodeHixie76Frame(context, dst)) { /* loop */ }
+            try {
+                if (version.isRfc6455Framing()) {
+                    while (decodeRfc6455Frame(context, dst)) { /* loop */ }
+                } else {
+                    while (decodeHixie76Frame(context, dst)) { /* loop */ }
+                }
+                this.accumulator.markReader();
+            } finally {
+                this.accumulator.free();
+                this.accumulator = null;
             }
-            this.accumulator.discardReadBytes();
         }
 
         return ProtoStatus.Next;
+    }
+
+    private static ByteBuf rawContent(HttpObject obj) {
+        if (obj instanceof HttpByteBuf) {
+            return ((HttpByteBuf) obj).content();
+        }
+        if (obj instanceof HttpContent) {
+            return ((HttpContent) obj).content();
+        }
+        throw new ClassCastException(obj.getClass().getName() + " cannot be cast to HttpByteBuf or HttpContent");
     }
 
     /**
@@ -380,6 +407,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
                 throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "unsupported WebSocket opcode: " + opcodeVal);
         }
 
+        frame.streamId(this.currentStreamId);
         dst.offerMessage(frame);
         return true;
     }
@@ -441,6 +469,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         boolean finalFragment = lastSlice && this.streamingState.finalFragment;
         byte[] maskKey = this.streamingState.masked ? new byte[] { this.streamingState.maskKey[0], this.streamingState.maskKey[1], this.streamingState.maskKey[2], this.streamingState.maskKey[3] } : null;
         WebSocketFrame frame = WebSocketFrame.create(emittedOpcode, finalFragment, firstSlice && this.streamingState.rsv1, firstSlice && this.streamingState.rsv2, firstSlice && this.streamingState.rsv3, this.streamingState.masked, maskKey, contentBuf, chunkLength);
+        frame.streamId(this.currentStreamId);
 
         this.streamingState.emittedPayloadLength += chunkLength;
         this.streamingState.remainingPayloadLength -= chunkLength;
@@ -488,7 +517,9 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
                     return false;
                 }
                 this.accumulator.skipReadableBytes(2);
-                dst.offerMessage(WebSocketUtils.closeFrame(false, null, ByteBuf.EMPTY));
+                WebSocketFrame closeFrame = WebSocketUtils.closeFrame(false, null, ByteBuf.EMPTY);
+                closeFrame.streamId(this.currentStreamId);
+                dst.offerMessage(closeFrame);
                 return true;
             }
 
@@ -563,6 +594,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
             this.accumulator.free();
             this.accumulator = null;
         }
+        this.payloadQueue.skipMessage(this.payloadQueue.queueSize());
         this.streamingState = null;
     }
 }

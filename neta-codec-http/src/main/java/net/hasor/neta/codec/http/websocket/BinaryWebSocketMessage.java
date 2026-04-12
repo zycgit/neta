@@ -54,7 +54,7 @@ public final class BinaryWebSocketMessage extends AbstractWebSocketMessage {
     /**
      * Create a binary message with the specified chunk sequence.
      * @param sequence chunk sequence
-     * @param content payload content
+     * @param content payload content whose ownership is transferred to the message
      * @return binary message object
      */
     public static BinaryWebSocketMessage request(int sequence, ByteBuf content) {

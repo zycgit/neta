@@ -139,9 +139,9 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
         try {
             WebSocketMessage controlMessage;
             if (ping) {
-                controlMessage = InternalWebSocketMessage.of(event.streamId(), WebSocketOpcode.PING, content);
+                controlMessage = InternalWebSocketMessage.of(event.streamId(), WebSocketOpcode.PING, retainContent(content));
             } else {
-                controlMessage = InternalWebSocketMessage.of(event.streamId(), WebSocketOpcode.PONG, content);
+                controlMessage = InternalWebSocketMessage.of(event.streamId(), WebSocketOpcode.PONG, retainContent(content));
             }
             context.sendData(controlMessage);
         } finally {
@@ -170,7 +170,7 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
             return WebSocketUtils.pongFrame(masked, maskingKey(masked), content);
         }
         if (opcode == WebSocketOpcode.CLOSE) {
-            InnelUtils.markCloseSent(context);
+            InternalUtils.markCloseSent(context);
             return WebSocketUtils.closeFrame(masked, maskingKey(masked), content);
         }
 

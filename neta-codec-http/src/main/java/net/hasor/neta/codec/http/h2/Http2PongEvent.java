@@ -53,7 +53,8 @@ public class Http2PongEvent extends AbstractHttp2Event {
     /**
      * Creates a PONG event with the specified 8-byte payload.
      * @param streamId the associated stream ID
-     * @param data the PONG payload, which must be exactly 8 bytes
+     * @param data the PONG payload, which must be exactly 8 bytes and whose ownership
+     * is transferred to this event
      */
     public Http2PongEvent(long streamId, ByteBuf data) {
         this.streamId(streamId);
@@ -65,7 +66,7 @@ public class Http2PongEvent extends AbstractHttp2Event {
         if (data.readableBytes() != 8) {
             throw new IllegalArgumentException("HTTP/2 pong payload must be exactly 8 bytes.");
         }
-        this.data = data.retain();
+        this.data = data;
     }
 
     /**

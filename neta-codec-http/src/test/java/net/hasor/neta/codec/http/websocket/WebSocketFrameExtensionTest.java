@@ -61,22 +61,22 @@ public class WebSocketFrameExtensionTest extends AbstractWebSocketTest {
 
     private static WebSocketContextImpl negotiatedPerMessageDeflateContext(boolean server, String extHeader) {
         WebSocketSettings settings = WebSocketSettings.of(WebSocketVersion.V13).usePerMessageDeflateDefaults();
-        List<WebSocketExtensionResult> extResults = InnelUtils.parseExtensions(extHeader);
-        List<WebSocketExtensionRuntime> runtimeExtensions = InnelUtils.resolveRuntimeExtensions(extResults, settings);
+        List<WebSocketExtensionResult> extResults = InternalUtils.parseExtensions(extHeader);
+        List<WebSocketExtensionRuntime> runtimeExtensions = InternalUtils.resolveRuntimeExtensions(extResults, settings);
         return new WebSocketContextImpl(server, null, WebSocketVersion.V13.code(), "/chat", extResults, runtimeExtensions);
     }
 
     private static WebSocketContextImpl negotiatedDeflateFrameContext(boolean server) {
         WebSocketSettings settings = WebSocketSettings.of(WebSocketVersion.V13).useDeflateFrameDefaults();
-        List<WebSocketExtensionResult> extResults = InnelUtils.parseExtensions(DeflateFrameSupport.EXTENSION_NAME);
-        List<WebSocketExtensionRuntime> runtimeExtensions = InnelUtils.resolveRuntimeExtensions(extResults, settings);
+        List<WebSocketExtensionResult> extResults = InternalUtils.parseExtensions(DeflateFrameSupport.EXTENSION_NAME);
+        List<WebSocketExtensionRuntime> runtimeExtensions = InternalUtils.resolveRuntimeExtensions(extResults, settings);
         return new WebSocketContextImpl(server, null, WebSocketVersion.V13.code(), "/chat", extResults, runtimeExtensions);
     }
 
     private static WebSocketContextImpl negotiatedXWebkitDeflateFrameContext(boolean server) {
         WebSocketSettings settings = WebSocketSettings.of(WebSocketVersion.V13).useXWebkitDeflateFrameDefaults();
-        List<WebSocketExtensionResult> extResults = InnelUtils.parseExtensions(XWebkitDeflateFrameSupport.EXTENSION_NAME);
-        List<WebSocketExtensionRuntime> runtimeExtensions = InnelUtils.resolveRuntimeExtensions(extResults, settings);
+        List<WebSocketExtensionResult> extResults = InternalUtils.parseExtensions(XWebkitDeflateFrameSupport.EXTENSION_NAME);
+        List<WebSocketExtensionRuntime> runtimeExtensions = InternalUtils.resolveRuntimeExtensions(extResults, settings);
         return new WebSocketContextImpl(server, null, WebSocketVersion.V13.code(), "/chat", extResults, runtimeExtensions);
     }
 

@@ -54,7 +54,7 @@ public final class TextWebSocketMessage extends AbstractWebSocketMessage {
     /**
      * Create a text message with the specified chunk sequence.
      * @param sequence chunk sequence
-     * @param content payload content
+     * @param content payload content whose ownership is transferred to the message
      * @return text message object
      */
     public static TextWebSocketMessage request(int sequence, ByteBuf content) {

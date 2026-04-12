@@ -7,6 +7,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.NetConfig;
@@ -1302,6 +1303,15 @@ public class Http3CodecTest {
         }
 
         @Override
+        public void drainToQueue(String key, int cnt, Predicate<T> predicate) {
+            throw new UnsupportedOperationException("test receive queue does not support named views.");
+        }
+
+        @Override
+        public void discard(String key) {
+        }
+
+        @Override
         public List<String> queueNames() {
             return Collections.emptyList();
         }
@@ -1359,7 +1369,7 @@ public class Http3CodecTest {
         }
 
         @Override
-        public ProtoSndQueueView<T> newSub(String key) {
+        public ProtoSndQueueView<T> subQueue(String key) {
             throw new UnsupportedOperationException("test send queue does not support named views.");
         }
 

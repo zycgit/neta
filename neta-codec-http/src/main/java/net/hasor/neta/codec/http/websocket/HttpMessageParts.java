@@ -68,6 +68,7 @@ final class HttpMessageParts {
             this.streamId = request.streamId();
             this.active = true;
         }
+
         if (msg instanceof HttpHeaders) {
             this.headers().appendHeaders((HttpHeaders) msg);
         }
@@ -92,6 +93,7 @@ final class HttpMessageParts {
             this.streamId = response.streamId();
             this.active = true;
         }
+
         if (msg instanceof HttpHeaders) {
             this.headers().appendHeaders((HttpHeaders) msg);
         }
@@ -179,6 +181,7 @@ final class HttpMessageParts {
         if (this.body != null) {
             this.body.free();
         }
+
         this.protocolVersion = null;
         this.method = null;
         this.status = null;
@@ -201,9 +204,11 @@ final class HttpMessageParts {
         if (content == null || content.readableBytes() == 0) {
             return;
         }
+
         if (this.body == null) {
             this.body = ByteBufUtils.compositeBuffer();
         }
+
         this.body.addComponent(cloneContent(content));
     }
 
@@ -211,6 +216,7 @@ final class HttpMessageParts {
         if (source == null || source.readableBytes() == 0) {
             return ByteBuf.EMPTY;
         }
+
         int length = source.readableBytes();
         byte[] copied = new byte[length];
         source.getBytes(0, copied, 0, length);

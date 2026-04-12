@@ -59,6 +59,12 @@ public interface WebSocketMessage extends HttpObject {
 
     /**
      * Return the raw payload content.
+     * <p>
+     * The returned buffer is a borrowed reference owned by this message object.
+     * Callers that need to keep the payload beyond the lifetime of the current
+     * message, or pass it to code that will release the buffer, must first call
+     * {@link ByteBuf#retain()} or {@link ByteBuf#copy()} explicitly.
+     * </p>
      */
     ByteBuf content();
 

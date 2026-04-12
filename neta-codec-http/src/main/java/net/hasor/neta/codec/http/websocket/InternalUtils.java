@@ -27,26 +27,29 @@ import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.channel.routing.PartitionKey;
 import net.hasor.neta.codec.http.HttpScope;
 import net.hasor.neta.codec.http.HttpVersion;
+import net.hasor.neta.codec.http.h2.Http2ResetEvent;
 
 /**
  * Package-private websocket helpers used only by the local codec implementation.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-04-09
  */
-final class InnelUtils {
-    private static final Logger logger                = Logger.getLogger(InnelUtils.class);
+final class InternalUtils {
+    private static final Logger logger                = Logger.getLogger(InternalUtils.class);
     private static final String WS_CLOSE_SENT_KEY     = "neta.websocket.close.sent";
     private static final String WS_CLOSE_RECEIVED_KEY = "neta.websocket.close.received";
 
-    private InnelUtils() {
+    private InternalUtils() {
     }
 
     static List<WebSocketExtensionResult> parseExtensions(String extensions) {
         if (StringUtils.isBlank(extensions)) {
             return Collections.emptyList();
         }
+
         return WebSocketExtensionResult.parse(extensions);
     }
 
@@ -60,8 +63,10 @@ final class InnelUtils {
             if (StringUtils.isBlank(extension)) {
                 continue;
             }
+
             results.addAll(WebSocketExtensionResult.parse(extension));
         }
+
         return results.isEmpty() ? Collections.emptyList() : results;
     }
 
@@ -86,10 +91,12 @@ final class InnelUtils {
                 runtimeExtension = support.createRuntimeExtension(negotiated);
                 break;
             }
+
             if (runtimeExtension != null) {
                 runtimeExtensions.add(runtimeExtension);
             }
         }
+
         return runtimeExtensions.isEmpty() ? Collections.emptyList() : runtimeExtensions;
     }
 
@@ -131,12 +138,14 @@ final class InnelUtils {
         if (statusCode == WebSocketCode.NO_STATUS || statusCode == WebSocketCode.ABNORMAL_CLOSURE) {
             throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "close frame status code is invalid: " + statusCode);
         }
+
         if (statusCode == WebSocketCode.MANDATORY_EXTENSION) {
             if (!senderIsClient) {
                 throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "close frame status code is invalid: " + statusCode);
             }
             return;
         }
+
         if (statusCode == WebSocketCode.RESERVED || statusCode == 1012 || statusCode == 1013 || statusCode == 1014 || statusCode == WebSocketCode.TLS_HANDSHAKE) {
             throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "close frame status code is invalid: " + statusCode);
         }
@@ -188,6 +197,8 @@ final class InnelUtils {
         HttpScope scope = resolveHttpScope(context);
         if (version.majorVersion() == 1 && scope == HttpScope.CONNECTION) {
             executeHttp1ConnectionAction(context, actionType, future);
+        } else if (version.majorVersion() == 2 && scope == HttpScope.STREAM) {
+            executeHttp2StreamAction(context, actionType, future);
         } else {
             unsupportedCloseAction(context, actionType, version, scope);
         }
@@ -224,13 +235,64 @@ final class InnelUtils {
         }
     }
 
+    private static void executeHttp2StreamAction(ProtoContext context, WebSocketCloseType actionType, Future<?> future) {
+        if (context == null) {
+            return;
+        }
+
+        long streamId = resolveStreamId(context);
+        if (streamId <= 0) {
+            unsupportedCloseAction(context, actionType, HttpVersion.HTTP_2_0, HttpScope.STREAM);
+            return;
+        }
+
+        Runnable closeStream = () -> {
+            try {
+                Http2ResetEvent resetEvent = new Http2ResetEvent(streamId, Http2ResetEvent.CANCEL).remote(false);
+                context.fireEventSnd(Http2ResetEvent.class, resetEvent);
+                context.fireEventRcv(Http2ResetEvent.class, new Http2ResetEvent(streamId, Http2ResetEvent.CANCEL).remote(false));
+            } catch (Throwable e) {
+                throw new IllegalStateException("failed to publish http2 reset event for websocket close. streamId=" + streamId, e);
+            }
+        };
+
+        switch (actionType) {
+            case SEND_CLOSE_AND_TERMINATE:
+                if (future == null) {
+                    closeStream.run();
+                } else {
+                    future.onFinal(f -> closeStream.run());
+                }
+                return;
+            case TERMINATE:
+                closeStream.run();
+                return;
+            default:
+                unsupportedCloseAction(context, actionType, HttpVersion.HTTP_2_0, HttpScope.STREAM);
+        }
+    }
+
     private static void unsupportedCloseAction(ProtoContext context, WebSocketCloseType actionType, HttpVersion version, HttpScope scope) {
         String message = "unsupported websocket close strategy: actionType=" + actionType + ", httpVersion=" + version + ", httpScope=" + scope;
         logger.error(message);
         if (context != null && context.getChannel() != null) {
             context.getChannel().close();
         }
+
         throw new IllegalStateException(message);
+    }
+
+    private static long resolveStreamId(ProtoContext context) {
+        PartitionKey partitionKey = context != null ? PartitionKey.findKey(context) : null;
+        if (partitionKey == null || PartitionKey.defaultKey().equals(partitionKey)) {
+            return 0;
+        }
+
+        try {
+            return Long.parseLong(partitionKey.getKey());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     private static boolean hasChannelFlag(ProtoContext context, String key) {
@@ -238,7 +300,7 @@ final class InnelUtils {
             return false;
         }
 
-        return Boolean.TRUE.equals(context.getChannel().getAttribute(key));
+        return Boolean.TRUE.equals(context.getChannel().getAttribute(scopedFlagKey(context, key)));
     }
 
     private static void setChannelFlag(ProtoContext context, String key, boolean value) {
@@ -246,6 +308,18 @@ final class InnelUtils {
             return;
         }
 
-        context.getChannel().setAttribute(key, value ? Boolean.TRUE : null);
+        context.getChannel().setAttribute(scopedFlagKey(context, key), value ? Boolean.TRUE : null);
+    }
+
+    private static String scopedFlagKey(ProtoContext context, String key) {
+        HttpVersion version = resolveHttpVersion(context);
+        HttpScope scope = resolveHttpScope(context);
+        if (version.majorVersion() == 2 && scope == HttpScope.STREAM) {
+            long streamId = resolveStreamId(context);
+            if (streamId > 0) {
+                return key + '.' + streamId;
+            }
+        }
+        return key;
     }
 }

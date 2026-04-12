@@ -33,7 +33,8 @@ final class InternalWebSocketMessage extends AbstractWebSocketMessage {
     /**
      * Create an internal control message for a supported control opcode.
      * @param opcode control opcode, must be PING, PONG, or CLOSE
-     * @param content optional payload content; {@code null} is normalized to an empty buffer
+     * @param content optional payload content whose ownership is transferred to the message;
+     * {@code null} is normalized to an empty buffer
      * @return internal message instance
      */
     static InternalWebSocketMessage of(long streamId, WebSocketOpcode opcode, ByteBuf content) {

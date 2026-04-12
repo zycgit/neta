@@ -103,10 +103,10 @@ public class RealAsServerTest extends AbstractWebSocketTest {
                 WebSocketMessage message = (WebSocketMessage) data;
                 try {
                     if (message instanceof TextWebSocketMessage) {
-                        String content = text(message.content().retain());
+                        String content = text(message.content().copy());
                         ((NetChannel) payload.getSource()).sendData(WebSocketUtils.textMessage(ascii("[Ack] " + content)));
                     } else if (message instanceof BinaryWebSocketMessage) {
-                        ((NetChannel) payload.getSource()).sendData(WebSocketUtils.binaryMessage(message.content().retain()));
+                        ((NetChannel) payload.getSource()).sendData(WebSocketUtils.binaryMessage(message.content().copy()));
                     }
                 } finally {
                     message.release();
@@ -185,10 +185,10 @@ public class RealAsServerTest extends AbstractWebSocketTest {
                 WebSocketMessage message = (WebSocketMessage) data;
                 try {
                     if (message instanceof TextWebSocketMessage) {
-                        String content = text(message.content().retain());
+                        String content = text(message.content().copy());
                         ((NetChannel) payload.getSource()).sendData(WebSocketUtils.textMessage(ascii("[Ack] " + content)));
                     } else if (message instanceof BinaryWebSocketMessage) {
-                        ((NetChannel) payload.getSource()).sendData(WebSocketUtils.binaryMessage(message.content().retain()));
+                        ((NetChannel) payload.getSource()).sendData(WebSocketUtils.binaryMessage(message.content().copy()));
                     }
                 } finally {
                     message.release();

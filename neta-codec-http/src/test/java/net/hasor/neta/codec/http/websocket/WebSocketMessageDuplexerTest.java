@@ -54,7 +54,7 @@ public class WebSocketMessageDuplexerTest extends AbstractWebSocketTest {
             WebSocketMessage message = (WebSocketMessage) result.get(0);
             assertEquals(WebSocketOpcode.TEXT, message.type());
             assertEquals(WebSocketMessage.FINAL_SEQUENCE, message.sequence());
-            assertEquals("Hello-world", text(message.content()));
+            assertEquals("Hello-world", text(message.content().copy()));
         });
     }
 
@@ -119,15 +119,15 @@ public class WebSocketMessageDuplexerTest extends AbstractWebSocketTest {
             assertEquals(WebSocketOpcode.TEXT, first.type());
             assertEquals(WebSocketMessage.START_SEQUENCE, first.sequence());
             assertEquals(3, first.payloadLength());
-            assertEquals("ABC", text(first.content()));
+            assertEquals("ABC", text(first.content().copy()));
             assertEquals(WebSocketOpcode.TEXT, second.type());
             assertEquals(1, second.sequence());
             assertEquals(3, second.payloadLength());
-            assertEquals("DEF", text(second.content()));
+            assertEquals("DEF", text(second.content().copy()));
             assertEquals(WebSocketOpcode.TEXT, third.type());
             assertEquals(WebSocketMessage.FINAL_SEQUENCE, third.sequence());
             assertEquals(1, third.payloadLength());
-            assertEquals("G", text(third.content()));
+            assertEquals("G", text(third.content().copy()));
         });
     }
 }

@@ -23,6 +23,7 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.bytebuf.CompositeByteBuf;
 import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.data.ProtoQueue;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.codec.http.HttpEvent;
@@ -37,17 +38,17 @@ import net.hasor.neta.codec.http.HttpEvent;
  * @version : 2026-03-22
  */
 public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, WebSocketMessage> {
-    private static final Logger           logger         = Logger.getLogger(WebSocketInboundHandler.class);
-    private static final byte[]           EMPTY_BYTES    = new byte[0];
-    private final        boolean          aggregateFragments;
-    private final        int              maxMessagePayloadLength;
-    private              WebSocketOpcode  fragmentType;
-    private              int              fragmentSequence;
-    private              boolean          closeReceived;
-    private              CompositeByteBuf aggregatedContent;
-    private              long             aggregatedStreamId;
-    private              CharsetDecoder   textDecoder;
-    private              byte[]           utf8CarryBytes = EMPTY_BYTES;
+    private static final Logger              logger                 = Logger.getLogger(WebSocketInboundHandler.class);
+    private static final byte[]              EMPTY_BYTES            = new byte[0];
+    private final        boolean             aggregateFragments;
+    private final        int                 maxMessagePayloadLength;
+    private              WebSocketOpcode     fragmentType;
+    private              int                 fragmentSequence;
+    private              boolean             closeReceived;
+    private final        ProtoQueue<ByteBuf> aggregatedContentQueue = new ProtoQueue<>(-1);
+    private              long                aggregatedStreamId;
+    private              CharsetDecoder      textDecoder;
+    private              byte[]              utf8CarryBytes         = EMPTY_BYTES;
 
     /**
      * Create an inbound handler with fragment passthrough and no size limit.
@@ -86,7 +87,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
         Object eventData = event.getData();
         if (eventData instanceof WebSocketCloseEvent) {
             this.closeReceived = true;
-            InnelUtils.markCloseReceived(context);
+            InternalUtils.markCloseReceived(context);
             resetFragmentState();
         } else if (eventData instanceof PingWebSocketEvent) {
             PingWebSocketEvent pingEvent = (PingWebSocketEvent) eventData;
@@ -113,7 +114,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
             }
 
             try {
-                if (this.closeReceived || InnelUtils.hasCloseReceived(context)) {
+                if (this.closeReceived || InternalUtils.hasCloseReceived(context)) {
                     continue;
                 }
                 handleFrame(context, frame, dst);
@@ -224,7 +225,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
     }
 
     private WebSocketMessage createMessage(WebSocketOpcode opcode, int sequence, WebSocketFrame frame) {
-        return createMessage(opcode, sequence, frame.content(), frame.streamId());
+        return createMessage(opcode, sequence, retainContent(frame.content()), frame.streamId());
     }
 
     private WebSocketMessage createMessage(WebSocketOpcode opcode, int sequence, ByteBuf content, long streamId) {
@@ -241,28 +242,24 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
         this.fragmentType = frame.opcode();
         this.fragmentSequence = 1;
         this.aggregatedStreamId = frame.streamId();
-        this.aggregatedContent = ByteBufUtils.compositeBuffer();
-        this.aggregatedContent.addComponent(frame.content());
+        this.aggregatedContentQueue.offerMessage(frame.content().retain());
     }
 
     private void appendAggregation(WebSocketFrame frame) {
         ByteBuf content = frame.content();
-        ensureMessagePayloadLength(this.aggregatedContent.readableBytes() + content.readableBytes());
-        this.aggregatedContent.addComponent(content);
+        ensureMessagePayloadLength(this.aggregatedReadableBytes() + content.readableBytes());
+        this.aggregatedContentQueue.offerMessage(content.retain());
     }
 
     private WebSocketMessage finishAggregation() {
-        CompositeByteBuf content = this.aggregatedContent;
+        ByteBuf content = this.takeAggregatedContent();
         WebSocketOpcode opcode = this.fragmentType;
         long streamId = this.aggregatedStreamId;
 
-        this.aggregatedContent = null;
         this.aggregatedStreamId = 0;
         resetFragmentState();
 
-        WebSocketMessage message = createMessage(opcode, WebSocketMessage.FINAL_SEQUENCE, content, streamId);
-        content.release();
-        return message;
+        return createMessage(opcode, WebSocketMessage.FINAL_SEQUENCE, content, streamId);
     }
 
     private void handlePing(ProtoContext context, WebSocketFrame frame) {
@@ -278,17 +275,17 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
 
     private void handleProtocolViolation(ProtoContext context, WebSocketFrame frame, WebSocketProtocolViolationException e) {
         this.closeReceived = true;
-        InnelUtils.markCloseReceived(context);
+        InternalUtils.markCloseReceived(context);
         resetState();
 
-        if (InnelUtils.hasCloseSent(context)) {
-            InnelUtils.executeCloseAction(context, WebSocketCloseType.TERMINATE);
+        if (InternalUtils.hasCloseSent(context)) {
+            InternalUtils.executeCloseAction(context, WebSocketCloseType.TERMINATE);
             return;
         }
 
         WebSocketMessage closeReply = InternalWebSocketMessage.of(frame.streamId(), WebSocketOpcode.CLOSE, closePayload(e.closeStatusCode()));
-        InnelUtils.markCloseSent(context);
-        InnelUtils.executeCloseAction(context, WebSocketCloseType.SEND_CLOSE_AND_TERMINATE, context.sendData(closeReply));
+        InternalUtils.markCloseSent(context);
+        InternalUtils.executeCloseAction(context, WebSocketCloseType.SEND_CLOSE_AND_TERMINATE, context.sendData(closeReply));
     }
 
     private static ByteBuf retainContent(ByteBuf content) {
@@ -314,36 +311,36 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
             if (reasonLen > 0) {
                 byte[] reasonBytes = new byte[reasonLen];
                 content.getBytes(2, reasonBytes, 0, reasonLen);
-                reason = InnelUtils.decodeUtf8(reasonBytes, "close frame reason must be valid UTF-8.");
+                reason = InternalUtils.decodeUtf8(reasonBytes, "close frame reason must be valid UTF-8.");
             }
         }
 
         this.closeReceived = true;
-        InnelUtils.markCloseReceived(context);
+        InternalUtils.markCloseReceived(context);
         resetFragmentState();
 
         WebSocketCloseEvent event = new WebSocketCloseEvent(statusCode, reason);
         event.streamId(frame.streamId());
         fireEvent(context, WebSocketCloseEvent.class, event);
 
-        if (InnelUtils.hasCloseSent(context)) {
-            InnelUtils.executeCloseAction(context, WebSocketCloseType.TERMINATE);
+        if (InternalUtils.hasCloseSent(context)) {
+            InternalUtils.executeCloseAction(context, WebSocketCloseType.TERMINATE);
             return;
         }
 
         ByteBuf replyContent = buildCloseReplyContent(context, content);
         WebSocketMessage closeReply = InternalWebSocketMessage.of(frame.streamId(), WebSocketOpcode.CLOSE, replyContent);
-        InnelUtils.markCloseSent(context);
-        InnelUtils.executeCloseAction(context, WebSocketCloseType.SEND_CLOSE_AND_TERMINATE, context.sendData(closeReply));
+        InternalUtils.markCloseSent(context);
+        InternalUtils.executeCloseAction(context, WebSocketCloseType.SEND_CLOSE_AND_TERMINATE, context.sendData(closeReply));
     }
 
     private void sendControlEventFrame(ProtoContext context, HttpEvent event, ByteBuf content, boolean ping) {
         try {
             WebSocketMessage controlMessage;
             if (ping) {
-                controlMessage = InternalWebSocketMessage.of(event.streamId(), WebSocketOpcode.PING, content);
+                controlMessage = InternalWebSocketMessage.of(event.streamId(), WebSocketOpcode.PING, retainContent(content));
             } else {
-                controlMessage = InternalWebSocketMessage.of(event.streamId(), WebSocketOpcode.PONG, content);
+                controlMessage = InternalWebSocketMessage.of(event.streamId(), WebSocketOpcode.PONG, retainContent(content));
             }
             context.sendData(controlMessage);
         } finally {
@@ -376,11 +373,34 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
     }
 
     private void releaseAggregatedContent() {
-        if (this.aggregatedContent != null) {
-            this.aggregatedContent.release();
-            this.aggregatedContent = null;
-        }
+        this.aggregatedContentQueue.skipMessage(this.aggregatedContentQueue.queueSize());
         this.aggregatedStreamId = 0;
+    }
+
+    private int aggregatedReadableBytes() {
+        int readable = 0;
+        for (ByteBuf buf : this.aggregatedContentQueue.peekMessage(this.aggregatedContentQueue.queueSize())) {
+            if (buf != null) {
+                readable += buf.readableBytes();
+            }
+        }
+        return readable;
+    }
+
+    private ByteBuf takeAggregatedContent() {
+        int size = this.aggregatedContentQueue.queueSize();
+        if (size <= 0) {
+            return ByteBuf.EMPTY;
+        }
+        if (size == 1) {
+            return this.aggregatedContentQueue.takeMessage();
+        }
+
+        CompositeByteBuf composite = ByteBufUtils.compositeBuffer();
+        for (ByteBuf buf : this.aggregatedContentQueue.takeMessage(size)) {
+            composite.addComponent(buf);
+        }
+        return composite;
     }
 
     private void resetFragmentState() {
@@ -477,7 +497,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
 
         int statusCode = ((content.getByte(0) & 0xFF) << 8) | (content.getByte(1) & 0xFF);
         try {
-            InnelUtils.validateCloseStatusCode(statusCode, resolveLocalClientMode(context));
+            InternalUtils.validateCloseStatusCode(statusCode, resolveLocalClientMode(context));
             return retainContent(content);
         } catch (WebSocketProtocolViolationException e) {
             return ByteBuf.EMPTY;
@@ -501,6 +521,6 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
     public void onClose(ProtoContext context) {
         resetState();
         this.closeReceived = false;
-        InnelUtils.clearCloseState(context);
+        InternalUtils.clearCloseState(context);
     }
 }
