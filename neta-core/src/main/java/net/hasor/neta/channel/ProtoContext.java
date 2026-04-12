@@ -157,6 +157,45 @@ public interface ProtoContext {
     Future<?> sendData(Object writeData);
 
     /**
+     * Send data that has already been encoded by the <b>current handler</b> and should therefore
+     * continue from the <b>previous SND handler</b> instead of re-entering the current one.
+     * <p>This is primarily intended for callbacks such as {@code onActive}, {@code onEvent}, and
+     * {@code onError}, where the current handler may need to emit its own downstream object type
+     * directly. Typical examples include protocol control frames, locally generated acknowledgements,
+     * or error replies already expressed in the current layer's outbound type.</p>
+     * <h3>Main pipeline</h3>
+     * The data starts from the handler immediately before the caller in SND direction; if the
+     * caller is already the head-most SND handler, the data goes directly to the network layer.
+     * <pre>
+     *   [A] ◀── [B*] ◀── [C]
+     *            │
+     *      sendEncoded() path: A → wire
+     * </pre>
+     * <h3>Branch pipeline</h3>
+     * In a branch context, the data first continues through any remaining branch-local SND
+     * handlers before the caller. After the branch boundary is reached, propagation resumes in the
+     * parent pipeline segment before the current routing node.
+     * <pre>
+     *   Main:   [A] ◀── [Router] ◀── [Z]
+     *                      │
+     *             Branch: [B] ◀── [C*]
+     *   sendEncoded() path: B → A → wire
+     * </pre>
+     * @param encodedData outbound object already encoded for the current handler's downstream type
+     * @return a {@link Future} that completes when the encoded bytes have been handed off to the
+     * network task queue; on failure, the cause is available from {@link Future#getCause()}
+     */
+    Future<?> sendEncoded(Object encodedData);
+
+    /**
+     * Batch variant of {@link #sendEncoded(Object)}.
+     * @param encodedData outbound objects already encoded for the current handler's downstream type
+     * @return a {@link Future} that completes when the encoded bytes have been handed off to the
+     * network task queue; on failure, the cause is available from {@link Future#getCause()}
+     */
+    Future<?> sendEncoded(Object[] encodedData);
+
+    /**
      * Fire a typed network event along the current data-flow direction in the current pipeline,
      * starting from the <b>next handler after the current handler position</b>.
      * <h3>Main pipeline</h3>

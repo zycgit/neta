@@ -373,6 +373,112 @@ public class ProtoRoutingModeTest {
     }
 
     @Test
+    public void switchRouteMultipleTimes_shouldApplyOnlyLastRouteInSameEntry() throws Throwable {
+        RecordHandler.reset();
+
+        ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class).nextRouteAsStatic("router", (ProtoRoutingDataSelector<Integer, Integer>) (ctx, rcvUp, rcvDown) -> rcvUp.queueSize() == 0 ? null : "alpha", r -> {
+            ProtoRoutingControl routingControl = r.control();
+            r.branch("alpha", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("alpha", new MultiRouteSwitchHandler(routingControl, false, "beta", "gamma")));
+            r.branch("beta", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("beta", new RecordHandler("beta")));
+            r.branch("gamma", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("gamma", new RecordHandler("gamma")));
+        }).build();
+
+        VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
+        List<Object> received = new ArrayList<>();
+        channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> received.add(data.getData()));
+
+        channel.receiveData(10);
+        Assert.assertEquals(0, received.size());
+        Assert.assertEquals(0, RecordHandler.activeCount("beta"));
+        Assert.assertEquals(1, RecordHandler.activeCount("gamma"));
+        Assert.assertEquals(0, RecordHandler.messageCount("beta"));
+        Assert.assertEquals(1, RecordHandler.messageCount("gamma"));
+
+        channel.receiveData(20);
+        Assert.assertEquals(1, received.size());
+        Assert.assertEquals(20, received.get(0));
+        Assert.assertEquals(0, RecordHandler.messageCount("beta"));
+        Assert.assertEquals(2, RecordHandler.messageCount("gamma"));
+    }
+
+    @Test
+    public void switchRouteNextTickMultipleTimes_shouldApplyOnlyLastRouteOnNextEntry() throws Throwable {
+        RecordHandler.reset();
+
+        ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class).nextRouteAsStatic("router", (ProtoRoutingDataSelector<Integer, Integer>) (ctx, rcvUp, rcvDown) -> rcvUp.queueSize() == 0 ? null : "alpha", r -> {
+            ProtoRoutingControl routingControl = r.control();
+            r.branch("alpha", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("alpha", new MultiRouteSwitchHandler(routingControl, true, "beta", "gamma")));
+            r.branch("beta", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("beta", new RecordHandler("beta")));
+            r.branch("gamma", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("gamma", new RecordHandler("gamma")));
+        }).build();
+
+        VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
+        List<Object> received = new ArrayList<>();
+        channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> received.add(data.getData()));
+
+        channel.receiveData(10);
+        Assert.assertEquals(0, received.size());
+        Assert.assertEquals(0, RecordHandler.activeCount("beta"));
+        Assert.assertEquals(0, RecordHandler.activeCount("gamma"));
+        Assert.assertEquals(0, RecordHandler.messageCount("beta"));
+        Assert.assertEquals(0, RecordHandler.messageCount("gamma"));
+
+        channel.receiveData(20);
+        Assert.assertEquals(1, received.size());
+        Assert.assertEquals(20, received.get(0));
+        Assert.assertEquals(0, RecordHandler.activeCount("beta"));
+        Assert.assertEquals(1, RecordHandler.activeCount("gamma"));
+        Assert.assertEquals(0, RecordHandler.messageCount("beta"));
+        Assert.assertEquals(1, RecordHandler.messageCount("gamma"));
+    }
+
+    @Test
+    public void switchRouteWithSeedMultipleTimes_shouldExposeOnlyLastSeed() throws Throwable {
+        List<String> stepLog = new ArrayList<>();
+
+        ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class).nextRouteAsStatic("router", (ProtoRoutingDataSelector<Integer, Integer>) (ctx, rcvUp, rcvDown) -> rcvUp.queueSize() == 0 ? null : "alpha", r -> {
+            ProtoRoutingControl routingControl = r.control();
+            r.branch("alpha", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("alpha", new MultiSeedSwitchHandler(routingControl, false, "beta", 1010, "gamma", 2020)));
+            r.branch("beta", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("beta", new SeedAwareHandler(routingControl, stepLog)));
+            r.branch("gamma", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("gamma", new SeedAwareHandler(routingControl, stepLog, "gamma")));
+        }).build();
+
+        VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
+
+        channel.receiveData(10);
+        Assert.assertEquals(2, stepLog.size());
+        Assert.assertEquals("gamma-hasSeed=true", stepLog.get(0));
+        Assert.assertEquals("gamma-seed=2020", stepLog.get(1));
+    }
+
+    @Test
+    public void switchRouteNextTickWithSeedMultipleTimes_shouldExposeOnlyLastSeedOnNextEntry() throws Throwable {
+        List<String> stepLog = new ArrayList<>();
+        List<Object> received = new ArrayList<>();
+
+        ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class).nextRouteAsStatic("router", (ProtoRoutingDataSelector<Integer, Integer>) (ctx, rcvUp, rcvDown) -> rcvUp.queueSize() == 0 ? null : "alpha", r -> {
+            ProtoRoutingControl routingControl = r.control();
+            r.branch("alpha", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("alpha", new MultiSeedSwitchHandler(routingControl, true, "beta", 1010, "gamma", 2020)));
+            r.branch("beta", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("beta", new SeedAwareHandler(routingControl, stepLog)));
+            r.branch("gamma", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("gamma", new SeedAwareHandler(routingControl, stepLog, "gamma")));
+        }).build();
+
+        VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
+        channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> received.add(data.getData()));
+
+        channel.receiveData(10);
+        Assert.assertTrue(received.isEmpty());
+        Assert.assertTrue(stepLog.isEmpty());
+
+        channel.receiveData(20);
+        Assert.assertEquals(1, received.size());
+        Assert.assertEquals(20, received.get(0));
+        Assert.assertEquals(2, stepLog.size());
+        Assert.assertEquals("gamma-hasSeed=true", stepLog.get(0));
+        Assert.assertEquals("gamma-seed=2020", stepLog.get(1));
+    }
+
+    @Test
     public void switchRouteWithSeed_shouldReleaseOverriddenSeedAndExposeLatestSeed() throws Throwable {
         ByteBuf seedA = ByteBuf.wrap(new byte[] { 1 });
         ByteBuf seedB = ByteBuf.wrap(new byte[] { 2 });
@@ -681,19 +787,89 @@ public class ProtoRoutingModeTest {
     private static class SeedAwareHandler implements ProtoHandler<Integer, Integer> {
         private final ProtoRoutingControl routingControl;
         private final List<String>        stepLog;
+        private final String              prefix;
 
         private SeedAwareHandler(ProtoRoutingControl routingControl, List<String> stepLog) {
+            this(routingControl, stepLog, "beta");
+        }
+
+        private SeedAwareHandler(ProtoRoutingControl routingControl, List<String> stepLog, String prefix) {
             this.routingControl = routingControl;
             this.stepLog = stepLog;
+            this.prefix = prefix;
         }
 
         @Override
         public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Integer> src, ProtoSndQueue<Integer> dst) {
-            this.stepLog.add("beta-hasSeed=" + this.routingControl.hasSeed());
-            this.stepLog.add("beta-seed=" + this.routingControl.takeSeed());
+            this.stepLog.add(this.prefix + "-hasSeed=" + this.routingControl.hasSeed());
+            this.stepLog.add(this.prefix + "-seed=" + this.routingControl.takeSeed());
             Integer value = src.takeMessage();
             if (value != null) {
                 dst.offerMessage(value);
+            }
+            return ProtoStatus.Next;
+        }
+    }
+
+    private static class MultiRouteSwitchHandler implements ProtoHandler<Integer, Integer> {
+        private final ProtoRoutingControl routingControl;
+        private final boolean             nextTick;
+        private final String              firstRoute;
+        private final String              secondRoute;
+
+        private MultiRouteSwitchHandler(ProtoRoutingControl routingControl, boolean nextTick, String firstRoute, String secondRoute) {
+            this.routingControl = routingControl;
+            this.nextTick = nextTick;
+            this.firstRoute = firstRoute;
+            this.secondRoute = secondRoute;
+        }
+
+        @Override
+        public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Integer> src, ProtoSndQueue<Integer> dst) {
+            Integer value = src.takeMessage();
+            if (value != null) {
+                if (this.nextTick) {
+                    this.routingControl.switchRouteNextTick(this.firstRoute);
+                    this.routingControl.switchRouteNextTick(this.secondRoute);
+                } else {
+                    this.routingControl.switchRoute(this.firstRoute);
+                    this.routingControl.switchRoute(this.secondRoute);
+                }
+                return ProtoStatus.Stop;
+            }
+            return ProtoStatus.Next;
+        }
+    }
+
+    private static class MultiSeedSwitchHandler implements ProtoHandler<Integer, Integer> {
+        private final ProtoRoutingControl routingControl;
+        private final boolean             nextTick;
+        private final String              firstRoute;
+        private final Integer             firstSeed;
+        private final String              secondRoute;
+        private final Integer             secondSeed;
+
+        private MultiSeedSwitchHandler(ProtoRoutingControl routingControl, boolean nextTick, String firstRoute, Integer firstSeed, String secondRoute, Integer secondSeed) {
+            this.routingControl = routingControl;
+            this.nextTick = nextTick;
+            this.firstRoute = firstRoute;
+            this.firstSeed = firstSeed;
+            this.secondRoute = secondRoute;
+            this.secondSeed = secondSeed;
+        }
+
+        @Override
+        public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Integer> src, ProtoSndQueue<Integer> dst) {
+            Integer value = src.takeMessage();
+            if (value != null) {
+                if (this.nextTick) {
+                    this.routingControl.switchRouteNextTick(this.firstRoute, this.firstSeed);
+                    this.routingControl.switchRouteNextTick(this.secondRoute, this.secondSeed);
+                } else {
+                    this.routingControl.switchRoute(this.firstRoute, this.firstSeed);
+                    this.routingControl.switchRoute(this.secondRoute, this.secondSeed);
+                }
+                return ProtoStatus.Stop;
             }
             return ProtoStatus.Next;
         }

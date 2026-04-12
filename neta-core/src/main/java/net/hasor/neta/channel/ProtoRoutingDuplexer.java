@@ -185,9 +185,9 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
         this.pendingRoute = newBranchName;
         this.pendingRouteImmediate = immediate;
         this.pendingRouteApplyEntry = this.currentRoutingEntry + (nextTick ? 1 : 0);
+        this.pendingRouteSeed = this.releaseSeed(this.pendingRouteSeed);
 
         if (seed != null) {
-            this.pendingRouteSeed = this.releaseSeed(this.pendingRouteSeed);
             this.deliveredSeed = this.releaseSeed(this.deliveredSeed);
             this.pendingRouteSeed = seed;
         }

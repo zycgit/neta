@@ -317,6 +317,53 @@ class ProtoContextService implements ProtoBuildContext {
 
     /** {@inheritDoc} */
     @Override
+    public Future<?> sendEncoded(Object encodedData) {
+        Objects.requireNonNull(encodedData, "the encoded data is null.");
+        return this.sendEncoded(new Object[] { encodedData });
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Future<?> sendEncoded(Object[] encodedData) {
+        if (!(this.channel instanceof NetChannel)) {
+            throw new UnsupportedOperationException("only NetChannel support sendEncoded.");
+        }
+        Objects.requireNonNull(encodedData, "the encoded data is null.");
+
+        NetChannel netChannel = (NetChannel) this.channel;
+        String current = this.statusCurrent.safeStackName();
+        String previous = current != null ? this.chainRoot.findPreviousStack(current) : null;
+
+        if (this.parentCtx != null) {
+            if (previous != null) {
+                try {
+                    ChainResult cr = this.chainRoot.onSnd(this, previous, encodedData, null);
+                    return this.sendOrFlushUpward(cr.data);
+                } catch (Throwable e) {
+                    return Futures.buildFailed(e);
+                }
+            }
+            try {
+                return this.sendOrFlushUpward(encodedData);
+            } catch (Throwable e) {
+                return Futures.buildFailed(e);
+            }
+        }
+
+        if (previous != null) {
+            try {
+                ChainResult cr = this.chainRoot.onSnd(this, previous, encodedData, null);
+                return netChannel.sendEncoded(cr.data);
+            } catch (Throwable e) {
+                return Futures.buildFailed(e);
+            }
+        }
+
+        return netChannel.sendEncoded(encodedData);
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public Future<?> flush() {
         if (!(this.channel instanceof NetChannel)) {
             throw new UnsupportedOperationException("only NetChannel support flush.");
