@@ -222,7 +222,7 @@ public class WebSocketHttp2NonStandardRfc6455Test extends AbstractHttp2Test {
     }
 
     private FullHttpRequest webSocketHandshake(int streamId, String path) {
-        FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, path);
+        FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "ws://example.com" + path);
         request.streamId(streamId);
         return request;
     }

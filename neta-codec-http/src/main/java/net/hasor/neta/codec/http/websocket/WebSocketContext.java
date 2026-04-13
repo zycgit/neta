@@ -60,6 +60,18 @@ public interface WebSocketContext {
     String requestPath();
 
     /**
+     * Return the request Host header captured from the opening handshake.
+     * @return request Host header, or {@code null} if unavailable
+     */
+    String requestHost();
+
+    /**
+     * Return the request Origin header captured from the opening handshake.
+     * @return request Origin header, or {@code null} if unavailable
+     */
+    String requestOrigin();
+
+    /**
      * Return the negotiated extension string in comma-separated form,
      * for example {@code "permessage-deflate"}; returns {@code null} if no
      * extensions were negotiated.

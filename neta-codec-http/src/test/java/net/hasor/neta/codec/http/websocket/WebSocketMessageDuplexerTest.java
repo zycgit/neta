@@ -22,8 +22,10 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class WebSocketMessageDuplexerTest extends AbstractWebSocketTest {
+    private static final String WS_URI = "ws://example.com/chat";
+
     private void completeHandshake(VirtualPipe pipe) throws Throwable {
-        pipe.client().sendData(WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat"), "ws-client").get();
+        pipe.client().sendData(WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI), "ws-client").get();
         assertTrue(waitUntil(() -> WebSocketUtils.isReady(pipe.client()) && WebSocketUtils.isReady(pipe.server()), 1000L));
         assertTrue(drainQueue(pipe.clientInbound()).isEmpty());
         assertTrue(drainQueue(pipe.serverInbound()).isEmpty());

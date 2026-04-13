@@ -25,6 +25,7 @@ import static org.junit.Assert.*;
 
 public class WebSocketClientServerFlowTest extends AbstractWebSocketTest {
     private static final String WS_PATH = "/chat";
+    private static final String WS_URI  = "ws://example.com" + WS_PATH;
 
     private static PongWebSocketEvent pongEvent(Iterable<SoEvent> events) {
         if (events == null) {
@@ -43,7 +44,7 @@ public class WebSocketClientServerFlowTest extends AbstractWebSocketTest {
     }
 
     private void completeHandshake(VirtualPipe pipe, WebSocketVersion version) throws Throwable {
-        pipe.client().sendData(WebSocketUtils.createHandshake(version, WS_PATH), "ws-client").get();
+        pipe.client().sendData(WebSocketUtils.createHandshake(version, WS_URI), "ws-client").get();
         assertTrue(waitUntil(() -> WebSocketUtils.isReady(pipe.client()) && WebSocketUtils.isReady(pipe.server()), 1000L));
 
         WebSocketContext clientContext = webSocketContext(pipe.client());

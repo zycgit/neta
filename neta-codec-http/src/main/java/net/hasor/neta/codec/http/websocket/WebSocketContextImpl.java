@@ -31,6 +31,8 @@ class WebSocketContextImpl implements WebSocketContext {
     private final String                          subProtocol;
     private final int                             version;
     private final String                          requestPath;
+    private final String                          requestHost;
+    private final String                          requestOrigin;
     private final List<WebSocketExtensionResult>  extResults;
     private final List<WebSocketExtensionRuntime> runExtensions;
 
@@ -42,8 +44,8 @@ class WebSocketContextImpl implements WebSocketContext {
      * @param requestPath URI path from the handshake request
      * @param extensions negotiated extensions, may be an empty list
      */
-    WebSocketContextImpl(boolean server, String subProtocol, int version, String requestPath, List<String> extensions) {
-        this(server, subProtocol, version, requestPath, InternalUtils.parseExtensions(extensions), Collections.emptyList());
+    WebSocketContextImpl(boolean server, String subProtocol, int version, String requestPath, String requestHost, String requestOrigin, List<String> extensions) {
+        this(server, subProtocol, version, requestPath, requestHost, requestOrigin, InternalUtils.parseExtensions(extensions), Collections.emptyList());
     }
 
     /**
@@ -55,12 +57,14 @@ class WebSocketContextImpl implements WebSocketContext {
      * @param extResults structured extension results
      * @param runExtensions runtime extension list
      */
-    WebSocketContextImpl(boolean server, String subProtocol, int version, String requestPath,//
+    WebSocketContextImpl(boolean server, String subProtocol, int version, String requestPath, String requestHost, String requestOrigin,//
             List<WebSocketExtensionResult> extResults, List<WebSocketExtensionRuntime> runExtensions) {
         this.server = server;
         this.subProtocol = subProtocol;
         this.version = version;
         this.requestPath = requestPath;
+        this.requestHost = requestHost;
+        this.requestOrigin = requestOrigin;
         this.extResults = extResults != null ? Collections.unmodifiableList(extResults) : Collections.emptyList();
         this.runExtensions = runExtensions != null ? Collections.unmodifiableList(runExtensions) : Collections.emptyList();
     }
@@ -111,6 +115,22 @@ class WebSocketContextImpl implements WebSocketContext {
     @Override
     public String requestPath() {
         return this.requestPath;
+    }
+
+    /**
+     * Return the request Host header captured during the handshake.
+     */
+    @Override
+    public String requestHost() {
+        return this.requestHost;
+    }
+
+    /**
+     * Return the request Origin header captured during the handshake.
+     */
+    @Override
+    public String requestOrigin() {
+        return this.requestOrigin;
     }
 
     /**

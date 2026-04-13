@@ -49,12 +49,14 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
     private static final class ClientHandshakeState {
         private final HttpMessageParts              requestParts  = new HttpMessageParts();
         private final HttpMessageParts              responseParts = new HttpMessageParts();
-        private       ProtoSndQueueView<HttpObject> bufferedRequestParts;
+        private       ProtoSndQueueView<HttpObject> bufferedRequestViewRef;
         private       boolean                       requestPending;
         private       boolean                       ready;
         private       long                          requestStreamId;
         private       WebSocketVersion              version;
         private       String                        path;
+        private       String                        host;
+        private       String                        origin;
         private       String                        protocols;
         private       String                        extensions;
         private       String                        key;
@@ -296,6 +298,8 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         state.requestStreamId = request.streamId();
         state.version = version;
         state.path = request.uri();
+        state.host = request.header(HttpHeaderNames.HOST);
+        state.origin = request.header(HttpHeaderNames.ORIGIN);
         state.protocols = request.header(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL);
         state.extensions = request.header(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS);
         state.key = requestKey;
@@ -385,7 +389,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
                 List<WebSocketExtensionResult> extResults = InternalUtils.parseExtensions(extStr);
                 List<WebSocketExtensionRuntime> runtimeExt = InternalUtils.resolveRuntimeExtensions(extResults, this.settings);
 
-                WebSocketContext wsContext = new WebSocketContextImpl(false, subProtocol, versionCode, acceptedPath, extResults, runtimeExt);
+                WebSocketContext wsContext = new WebSocketContextImpl(false, subProtocol, versionCode, acceptedPath, state.host, state.origin, extResults, runtimeExt);
                 this.finishWebSocketUpgrade(context, wsContext, state.requestStreamId);
                 state.ready = true;
                 discardHandshakeRequestSnapshot(state);
@@ -629,14 +633,16 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         streamState.requestStreamId = state.requestStreamId;
         streamState.version = state.version;
         streamState.path = state.path;
+        streamState.host = state.host;
+        streamState.origin = state.origin;
         streamState.protocols = state.protocols;
         streamState.extensions = state.extensions;
         streamState.key = state.key;
         streamState.key1 = state.key1;
         streamState.key2 = state.key2;
         streamState.key3 = state.key3;
-        streamState.bufferedRequestParts = state.bufferedRequestParts;
-        state.bufferedRequestParts = null;
+        streamState.bufferedRequestViewRef = state.bufferedRequestViewRef;
+        state.bufferedRequestViewRef = null;
         this.discardHandshakeRequestSnapshot(state);
         return streamState;
     }
@@ -661,6 +667,8 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         state.requestStreamId = 0;
         state.version = null;
         state.path = null;
+        state.host = null;
+        state.origin = null;
         state.protocols = null;
         state.extensions = null;
         state.key = null;
@@ -680,27 +688,27 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
     }
 
     private void releaseBuffers(ClientHandshakeState state) {
-        if (state.bufferedRequestParts != null) {
-            state.bufferedRequestParts.discard();
-            state.bufferedRequestParts = null;
+        if (state.bufferedRequestViewRef != null) {
+            state.bufferedRequestViewRef.discard();
+            state.bufferedRequestViewRef = null;
         }
     }
 
     private ProtoSndQueueView<HttpObject> ensureBufferedRequestQueue(ProtoContext context, ClientHandshakeState state, HttpObject msg, ProtoSndQueue<HttpObject> dst) {
-        if (state.bufferedRequestParts != null) {
-            return state.bufferedRequestParts;
+        if (state.bufferedRequestViewRef != null) {
+            return state.bufferedRequestViewRef;
         }
 
         String key = BUFFER_QUEUE_PREFIX + partitionKey(context, msg).getKey();
         ProtoSndQueueView<HttpObject> subQueue = dst.subQueue(key);
-        state.bufferedRequestParts = subQueue;
+        state.bufferedRequestViewRef = subQueue;
         return subQueue;
     }
 
     private void flushBufferedRequest(ClientHandshakeState state) {
-        if (state.bufferedRequestParts != null) {
-            state.bufferedRequestParts.push();
-            state.bufferedRequestParts = null;
+        if (state.bufferedRequestViewRef != null) {
+            state.bufferedRequestViewRef.push();
+            state.bufferedRequestViewRef = null;
         }
     }
 }

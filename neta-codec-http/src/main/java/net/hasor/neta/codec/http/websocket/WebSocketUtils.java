@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -40,8 +41,17 @@ import net.hasor.neta.codec.http.cookie.CookieEncoder;
  * @version : 2026-03-15
  */
 public final class WebSocketUtils {
-    private static final String DEFAULT_HANDSHAKE_HOST   = "localhost";
-    private static final String DEFAULT_HANDSHAKE_ORIGIN = "http://localhost";
+    private static final class HandshakeTarget {
+        private final String requestUri;
+        private final String hostHeader;
+        private final String originHeader;
+
+        private HandshakeTarget(String requestUri, String hostHeader, String originHeader) {
+            this.requestUri = requestUri;
+            this.hostHeader = hostHeader;
+            this.originHeader = originHeader;
+        }
+    }
 
     private WebSocketUtils() {
     }
@@ -162,7 +172,7 @@ public final class WebSocketUtils {
      * @return complete HTTP handshake request
      */
     public static FullHttpRequest createHandshake(WebSocketVersion version, String uri, HttpHeaders headers, Cookie... cookies) {
-        FullHttpRequest request = createHandshake(version, uri);
+        FullHttpRequest request = createHandshake(version, uri, headers);
         List<Cookie> mergedCookies = new ArrayList<>();
 
         if (headers != null && headers.headerSize() > 0) {
@@ -203,9 +213,15 @@ public final class WebSocketUtils {
      * @return complete HTTP handshake request
      */
     public static FullHttpRequest createHandshake(WebSocketVersion version, String uri) {
+        return createHandshake(version, uri, null);
+    }
+
+    private static FullHttpRequest createHandshake(WebSocketVersion version, String uri, HttpHeaders headers) {
         if (version == null) {
             throw new IllegalArgumentException("version must not be null");
         }
+
+        HandshakeTarget target = resolveHandshakeTarget(uri, headers);
 
         if (version == WebSocketVersion.V0) {
             String key1 = randomHixie76Key();
@@ -215,26 +231,99 @@ public final class WebSocketUtils {
             body.writeBytes(key3, 0, key3.length);
             body.markWriter();
 
-            DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, uri, body);
-            request.setHeader(HttpHeaderNames.HOST, DEFAULT_HANDSHAKE_HOST);
+            DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, target.requestUri, body);
+            request.setHeader(HttpHeaderNames.HOST, target.hostHeader);
             request.setHeader(HttpHeaderNames.UPGRADE, "WebSocket");
             request.setHeader(HttpHeaderNames.CONNECTION, "Upgrade");
-            request.setHeader(HttpHeaderNames.ORIGIN, DEFAULT_HANDSHAKE_ORIGIN);
+            request.setHeader(HttpHeaderNames.ORIGIN, target.originHeader);
             request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_KEY1, key1);
             request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_KEY2, key2);
             request.setHeader(HttpHeaderNames.CONTENT_LENGTH, String.valueOf(key3.length));
             return request;
         } else {
-            DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, uri);
-            request.setHeader(HttpHeaderNames.HOST, DEFAULT_HANDSHAKE_HOST);
+            DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, target.requestUri);
+            request.setHeader(HttpHeaderNames.HOST, target.hostHeader);
             request.setHeader(HttpHeaderNames.UPGRADE, "websocket");
             request.setHeader(HttpHeaderNames.CONNECTION, "Upgrade");
-            request.setHeader(HttpHeaderNames.ORIGIN, DEFAULT_HANDSHAKE_ORIGIN);
+            request.setHeader(HttpHeaderNames.ORIGIN, target.originHeader);
             request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_KEY, randomRfc6455Key());
             request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_VERSION, String.valueOf(version.code()));
             request.setHeader(HttpHeaderNames.CONTENT_LENGTH, "0");
             return request;
         }
+    }
+
+    private static HandshakeTarget resolveHandshakeTarget(String uri, HttpHeaders headers) {
+        if (StringUtils.isBlank(uri)) {
+            throw new IllegalArgumentException("handshake uri must not be blank");
+        }
+
+        URI parsedUri;
+        try {
+            parsedUri = URI.create(uri);
+        } catch (IllegalArgumentException e) {
+            parsedUri = null;
+        }
+
+        if (parsedUri != null && parsedUri.isAbsolute() && StringUtils.isNotBlank(parsedUri.getHost())) {
+            String requestUri = normalizeRequestUri(parsedUri);
+            String hostHeader = toHostHeader(parsedUri);
+            String originHeader = toOriginHeader(parsedUri, hostHeader);
+            return new HandshakeTarget(requestUri, hostHeader, originHeader);
+        }
+
+        String hostHeader = headers != null ? headers.getString(HttpHeaderNames.HOST) : null;
+        String originHeader = headers != null ? headers.getString(HttpHeaderNames.ORIGIN) : null;
+        if (StringUtils.isBlank(hostHeader) || StringUtils.isBlank(originHeader)) {
+            throw new IllegalArgumentException("relative websocket handshake URI requires explicit Host and Origin headers or an absolute URI");
+        }
+        return new HandshakeTarget(uri, hostHeader, originHeader);
+    }
+
+    private static String normalizeRequestUri(URI parsedUri) {
+        String rawPath = parsedUri.getRawPath();
+        StringBuilder builder = new StringBuilder(StringUtils.isBlank(rawPath) ? "/" : rawPath);
+        String rawQuery = parsedUri.getRawQuery();
+        if (StringUtils.isNotBlank(rawQuery)) {
+            builder.append('?').append(rawQuery);
+        }
+        return builder.toString();
+    }
+
+    private static String toHostHeader(URI parsedUri) {
+        String host = formatAuthorityHost(parsedUri.getHost());
+        int port = parsedUri.getPort();
+        if (port < 0 || port == defaultPort(parsedUri.getScheme())) {
+            return host;
+        }
+        return host + ':' + port;
+    }
+
+    private static String toOriginHeader(URI parsedUri, String hostHeader) {
+        String scheme = parsedUri.getScheme();
+        if (StringUtils.equalsIgnoreCase("ws", scheme)) {
+            scheme = "http";
+        } else if (StringUtils.equalsIgnoreCase("wss", scheme)) {
+            scheme = "https";
+        }
+        return scheme.toLowerCase() + "://" + hostHeader;
+    }
+
+    private static String formatAuthorityHost(String host) {
+        if (host.indexOf(':') >= 0 && !(host.startsWith("[") && host.endsWith("]"))) {
+            return '[' + host + ']';
+        }
+        return host;
+    }
+
+    private static int defaultPort(String scheme) {
+        if (StringUtils.equalsIgnoreCase("ws", scheme) || StringUtils.equalsIgnoreCase("http", scheme)) {
+            return 80;
+        }
+        if (StringUtils.equalsIgnoreCase("wss", scheme) || StringUtils.equalsIgnoreCase("https", scheme)) {
+            return 443;
+        }
+        return -1;
     }
 
     private static String randomRfc6455Key() {

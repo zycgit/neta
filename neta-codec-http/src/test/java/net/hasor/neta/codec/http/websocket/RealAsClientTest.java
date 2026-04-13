@@ -92,7 +92,7 @@ public class RealAsClientTest extends AbstractWebSocketTest {
                 });
 
                 // handshake
-                FullHttpRequest handshake = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
+                FullHttpRequest handshake = WebSocketUtils.createHandshake(WebSocketVersion.V13, "ws://127.0.0.1:" + port + "/chat");
                 channel.sendData(handshake, "ws-client").get();// "ws-client" is WebSocketClientHandshakeDuplexer target
                 assertTrue(waitUntil(() -> WebSocketUtils.isReady(channel), 5000L));
                 server.awaitOpen();
@@ -130,7 +130,7 @@ public class RealAsClientTest extends AbstractWebSocketTest {
                 Queue<Object> inbound = new ConcurrentLinkedQueue<>();
                 NetChannel channel = neta.connectSync(new InetSocketAddress("127.0.0.1", port), ctx -> {
                     ctx.addLast("http-client", new HttpClientDuplexe());
-                    ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13, new WebSocketAutoHandshakeConfig("/chat")));
+                    ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13, new WebSocketAutoHandshakeConfig("ws://127.0.0.1:" + port + "/chat")));
                     ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
                     ctx.addLast("ws-message", new WebSocketMessageDuplexer());
                     ctx.addLastDecoder("ws-event-tap", inboundEventTap(inbound));
@@ -215,8 +215,7 @@ public class RealAsClientTest extends AbstractWebSocketTest {
                 assertEquals("/http-echo", server.httpRequestPath());
 
                 // websocket upgrade on the same channel using staged request parts
-                FullHttpRequest handshake = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
-                handshake.setHeader(HttpHeaderNames.HOST, "127.0.0.1:" + port);
+                FullHttpRequest handshake = WebSocketUtils.createHandshake(WebSocketVersion.V13, "ws://127.0.0.1:" + port + "/chat");
                 channel.sendData(new DefaultHttpRequest(handshake.protocolVersion(), handshake.method(), handshake.uri())).get();
                 channel.sendData(new DefaultLastHttpHeaders(handshake)).get();
                 channel.sendData(new DefaultLastHttpContent(ByteBuf.EMPTY)).get();

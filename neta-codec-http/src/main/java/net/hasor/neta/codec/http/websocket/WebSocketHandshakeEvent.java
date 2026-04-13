@@ -94,6 +94,20 @@ public class WebSocketHandshakeEvent extends AbstractHttpEvent {
     }
 
     /**
+     * Return the request Host header.
+     */
+    public String requestHost() {
+        return this.context.requestHost();
+    }
+
+    /**
+     * Return the request Origin header.
+     */
+    public String requestOrigin() {
+        return this.context.requestOrigin();
+    }
+
+    /**
      * Return the negotiated sub-protocol.
      */
     public String subProtocol() {
@@ -128,6 +142,6 @@ public class WebSocketHandshakeEvent extends AbstractHttpEvent {
      */
     @Override
     public String toString() {
-        return "WebSocketHandshakeEvent{" + "server=" + this.isServer() + ", version=" + this.version() + ", path='" + this.requestPath() + '\'' + (this.subProtocol() != null ? ", subProtocol='" + this.subProtocol() + '\'' : "") + '}';
+        return "WebSocketHandshakeEvent{" + "server=" + this.isServer() + ", version=" + this.version() + ", path='" + this.requestPath() + '\'' + (this.requestHost() != null ? ", host='" + this.requestHost() + '\'' : "") + (this.subProtocol() != null ? ", subProtocol='" + this.subProtocol() + '\'' : "") + '}';
     }
 }

@@ -17,12 +17,13 @@ package net.hasor.neta.codec.http.websocket;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
+import net.hasor.neta.bytebuf.CompositeByteBuf;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoExceptionHolder;
 import net.hasor.neta.channel.ProtoHandler;
 import net.hasor.neta.channel.ProtoStatus;
-import net.hasor.neta.channel.data.ProtoQueue;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoRcvQueueView;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.codec.http.HttpByteBuf;
 import net.hasor.neta.codec.http.HttpContent;
@@ -53,18 +54,19 @@ import net.hasor.neta.codec.http.HttpObject;
  * @version : 2026-02-18
  */
 public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocketFrame> {
-    private static final Logger              logger           = Logger.getLogger(WebSocketFrameDecoder.class);
-    private static final int                 XOR_SCRATCH_SIZE = 4096;
-    private final        byte[]              maskKeyBuf       = new byte[4];
-    private final        byte[]              headerBuf        = new byte[14]; // 2 base + 8 ext-len + 4 mask-key
-    private final        byte[]              xorScratch       = new byte[XOR_SCRATCH_SIZE];
-    private final        WebSocketVersion    defaultVersion;
-    private final        boolean             detectVersion;
-    private final        int                 maxPayloadChunkLength;
-    private final        ProtoQueue<ByteBuf> payloadQueue     = new ProtoQueue<>(-1);
-    private              ByteBuf             accumulator;
-    private              Rfc6455PayloadState streamingState;
-    private              long                currentStreamId;
+    private static final String                        PAYLOAD_STAGE_QUEUE_KEY = WebSocketFrameDecoder.class.getName() + ".payload.stage";
+    private static final Logger                        logger                  = Logger.getLogger(WebSocketFrameDecoder.class);
+    private static final int                           XOR_SCRATCH_SIZE        = 4096;
+    private final        byte[]                        maskKeyBuf              = new byte[4];
+    private final        byte[]                        headerBuf               = new byte[14]; // 2 base + 8 ext-len + 4 mask-key
+    private final        byte[]                        xorScratch              = new byte[XOR_SCRATCH_SIZE];
+    private final        WebSocketVersion              defaultVersion;
+    private final        boolean                       detectVersion;
+    private final        int                           maxPayloadChunkLength;
+    private              ByteBuf                       accumulator;
+    private              ProtoRcvQueueView<HttpObject> bufferedPayloadViewRef;
+    private              Rfc6455PayloadState           streamingState;
+    private              long                          currentStreamId;
 
     /**
      * Streaming state used when a large RFC 6455 payload is emitted as multiple
@@ -177,28 +179,8 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
      */
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<WebSocketFrame> dst) throws Throwable {
-        while (src.hasMore()) {
-            HttpObject obj = src.takeMessage();
-            if (obj == null) {
-                continue;
-            }
-
-            try {
-                if (obj.streamId() > 0) {
-                    this.currentStreamId = obj.streamId();
-                }
-                ByteBuf content = rawContent(obj);
-                if (content != null && content.readableBytes() > 0) {
-                    this.payloadQueue.offerMessage(content.retain());
-                }
-            } finally {
-                obj.release();
-            }
-        }
-
-        if (this.payloadQueue.queueSize() > 0) {
-            this.accumulator = ByteBufUtils.queueBuffer(this.payloadQueue);
-        }
+        this.stageInboundPayload(src);
+        this.accumulator = this.buildAccumulator();
 
         if (this.accumulator != null && this.accumulator.readableBytes() > 0) {
             WebSocketVersion version = resolveVersion(context);
@@ -208,7 +190,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
                 } else {
                     while (decodeHixie76Frame(context, dst)) { /* loop */ }
                 }
-                this.accumulator.markReader();
+                this.consumeBufferedPayload(this.accumulator.readBytes());
             } finally {
                 this.accumulator.free();
                 this.accumulator = null;
@@ -226,6 +208,101 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
             return ((HttpContent) obj).content();
         }
         throw new ClassCastException(obj.getClass().getName() + " cannot be cast to HttpByteBuf or HttpContent");
+    }
+
+    private void stageInboundPayload(ProtoRcvQueue<HttpObject> src) {
+        if (src == null) {
+            return;
+        }
+
+        this.bufferedPayloadViewRef = src.queueView(PAYLOAD_STAGE_QUEUE_KEY);
+        while (src.hasMore()) {
+            HttpObject next = src.peekMessage();
+            if (next == null) {
+                src.skipMessage(1);
+                continue;
+            }
+
+            if (next.streamId() > 0) {
+                this.currentStreamId = next.streamId();
+            }
+
+            ByteBuf content;
+            try {
+                content = rawContent(next);
+            } catch (RuntimeException e) {
+                HttpObject invalid = src.takeMessage();
+                if (invalid != null) {
+                    invalid.release();
+                }
+                throw e;
+            }
+
+            if (content != null && content.readableBytes() > 0) {
+                src.drainToQueue(PAYLOAD_STAGE_QUEUE_KEY, 1);
+                this.bufferedPayloadViewRef = src.queueView(PAYLOAD_STAGE_QUEUE_KEY);
+                continue;
+            }
+
+            HttpObject empty = src.takeMessage();
+            if (empty != null) {
+                empty.release();
+            }
+        }
+    }
+
+    private ByteBuf buildAccumulator() {
+        if (this.bufferedPayloadViewRef == null || !this.bufferedPayloadViewRef.hasMore()) {
+            return null;
+        }
+
+        CompositeByteBuf composite = ByteBufUtils.compositeBuffer();
+        for (HttpObject obj : this.bufferedPayloadViewRef.peekMessage(-1)) {
+            ByteBuf content = rawContent(obj);
+            if (content != null && content.readableBytes() > 0) {
+                composite.addComponent(content);
+            }
+        }
+
+        if (composite.readableBytes() <= 0) {
+            composite.free();
+            return null;
+        }
+        return composite;
+    }
+
+    private void consumeBufferedPayload(int consumedBytes) {
+        if (consumedBytes <= 0 || this.bufferedPayloadViewRef == null) {
+            return;
+        }
+
+        int remaining = consumedBytes;
+        while (remaining > 0 && this.bufferedPayloadViewRef.hasMore()) {
+            HttpObject next = this.bufferedPayloadViewRef.peekMessage();
+            if (next == null) {
+                this.bufferedPayloadViewRef.skipMessage(1);
+                continue;
+            }
+
+            ByteBuf content = rawContent(next);
+            int readable = content == null ? 0 : content.readableBytes();
+            if (readable <= 0) {
+                this.bufferedPayloadViewRef.skipMessage(1);
+                continue;
+            }
+
+            if (remaining >= readable) {
+                remaining -= readable;
+                this.bufferedPayloadViewRef.skipMessage(1);
+            } else {
+                content.skipReadableBytes(remaining);
+                remaining = 0;
+            }
+        }
+
+        if (!this.bufferedPayloadViewRef.hasMore()) {
+            this.bufferedPayloadViewRef = null;
+        }
     }
 
     /**
@@ -594,7 +671,10 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
             this.accumulator.free();
             this.accumulator = null;
         }
-        this.payloadQueue.skipMessage(this.payloadQueue.queueSize());
+        if (this.bufferedPayloadViewRef != null) {
+            this.bufferedPayloadViewRef.discard();
+            this.bufferedPayloadViewRef = null;
+        }
         this.streamingState = null;
     }
 }

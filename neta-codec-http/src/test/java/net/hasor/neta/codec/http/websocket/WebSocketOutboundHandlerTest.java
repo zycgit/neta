@@ -27,6 +27,8 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class WebSocketOutboundHandlerTest extends AbstractWebSocketTest {
+    private static final String WS_URI = "ws://example.com/chat";
+
     private ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> relayOutboundEvents() {
         return new ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject>() {
             @Override
@@ -62,7 +64,7 @@ public class WebSocketOutboundHandlerTest extends AbstractWebSocketTest {
     }
 
     private void completeHandshake(VirtualPipe pipe, WebSocketVersion version) throws Throwable {
-        pipe.client().sendData(WebSocketUtils.createHandshake(version, "/chat"), "ws-client").get();
+        pipe.client().sendData(WebSocketUtils.createHandshake(version, WS_URI), "ws-client").get();
         assertTrue(waitUntil(() -> WebSocketUtils.isReady(pipe.client()) && WebSocketUtils.isReady(pipe.server()), 1000L));
         assertTrue(drainQueue(pipe.clientInbound()).isEmpty());
         assertTrue(drainQueue(pipe.serverInbound()).isEmpty());

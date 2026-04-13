@@ -85,6 +85,16 @@ final class MockWebSocketContext implements WebSocketContext {
     }
 
     @Override
+    public String requestHost() {
+        return null;
+    }
+
+    @Override
+    public String requestOrigin() {
+        return null;
+    }
+
+    @Override
     public String extensions() {
         return this.extensions;
     }

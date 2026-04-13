@@ -568,7 +568,7 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
             List<WebSocketExtensionResult> extensionResults = InternalUtils.parseExtensions(negotiatedExtensions);
 
             List<WebSocketExtensionRuntime> runtimeExtensions = InternalUtils.resolveRuntimeExtensions(extensionResults, this.settings);
-            WebSocketContextImpl socketContext = new WebSocketContextImpl(true, negotiatedProtocol, versionCode, state.path, extensionResults, runtimeExtensions);
+            WebSocketContextImpl socketContext = new WebSocketContextImpl(true, negotiatedProtocol, versionCode, state.path, state.host, state.origin, extensionResults, runtimeExtensions);
 
             this.finishWebSocketUpgrade(context, socketContext, state.streamId);
             state.ready = true;

@@ -25,6 +25,9 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class WebSocketUtilsTest extends AbstractWebSocketTest {
+    private static final String WS_URI     = "ws://example.com/chat";
+    private static final String LEGACY_URI = "ws://example.com/legacy";
+
     private static String readContent(WebSocketFrame frame) {
         ByteBuf content = frame.content();
         return content.readString(content.readableBytes(), StandardCharsets.UTF_8);
@@ -180,17 +183,17 @@ public class WebSocketUtilsTest extends AbstractWebSocketTest {
 
     @Test
     public void testHandshakeRequestDefaults() {
-        HttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
+        HttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI);
 
         assertTrue(request instanceof FullHttpRequest);
         FullHttpRequest fullRequest = (FullHttpRequest) request;
         assertEquals(HttpVersion.HTTP_1_1, fullRequest.protocolVersion());
         assertEquals(HttpMethod.GET, fullRequest.method());
         assertEquals("/chat", fullRequest.uri());
-        assertEquals("localhost", fullRequest.getString(HttpHeaderNames.HOST));
+        assertEquals("example.com", fullRequest.getString(HttpHeaderNames.HOST));
         assertEquals("websocket", fullRequest.getString(HttpHeaderNames.UPGRADE));
         assertEquals("Upgrade", fullRequest.getString(HttpHeaderNames.CONNECTION));
-        assertEquals("http://localhost", fullRequest.getString(HttpHeaderNames.ORIGIN));
+        assertEquals("http://example.com", fullRequest.getString(HttpHeaderNames.ORIGIN));
         String handshakeKey = fullRequest.getString(HttpHeaderNames.SEC_WEBSOCKET_KEY);
         assertNotNull(handshakeKey);
         assertEquals(16, Base64.getDecoder().decode(handshakeKey).length);
@@ -200,8 +203,18 @@ public class WebSocketUtilsTest extends AbstractWebSocketTest {
     }
 
     @Test
+    public void testHandshakeRequestUsesAbsoluteUriAuthority() {
+        HttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "wss://prod.example.com:8443/chat?room=blue");
+
+        FullHttpRequest fullRequest = (FullHttpRequest) request;
+        assertEquals("/chat?room=blue", fullRequest.uri());
+        assertEquals("prod.example.com:8443", fullRequest.getString(HttpHeaderNames.HOST));
+        assertEquals("https://prod.example.com:8443", fullRequest.getString(HttpHeaderNames.ORIGIN));
+    }
+
+    @Test
     public void testLegacyHandshakeRequestUsesRandomChallengeMaterial() {
-        FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V0, "/legacy");
+        FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V0, LEGACY_URI);
 
         String key1 = request.getString(HttpHeaderNames.SEC_WEBSOCKET_KEY1);
         String key2 = request.getString(HttpHeaderNames.SEC_WEBSOCKET_KEY2);
@@ -220,7 +233,7 @@ public class WebSocketUtilsTest extends AbstractWebSocketTest {
         headers.setHeader(HttpHeaderNames.ORIGIN, "https://example.com");
         headers.setHeader(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL, "graphql-transport-ws");
 
-        HttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/graphql", headers, new DefaultCookie("sid", "abc"), new DefaultCookie("lang", "zh-CN"));
+        HttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "ws://example.com/graphql", headers, new DefaultCookie("sid", "abc"), new DefaultCookie("lang", "zh-CN"));
 
         FullHttpRequest fullRequest = (FullHttpRequest) request;
         assertEquals("example.com", fullRequest.getString(HttpHeaderNames.HOST));
@@ -234,7 +247,7 @@ public class WebSocketUtilsTest extends AbstractWebSocketTest {
         DefaultHttpHeaders headers = new DefaultHttpHeaders();
         headers.setHeader(HttpHeaderNames.COOKIE, "token=old");
 
-        FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/ws", headers, new DefaultCookie("sid", "abc"));
+        FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "ws://example.com/ws", headers, new DefaultCookie("sid", "abc"));
         assertEquals("token=old; sid=abc", request.getString(HttpHeaderNames.COOKIE));
     }
 
@@ -244,13 +257,13 @@ public class WebSocketUtilsTest extends AbstractWebSocketTest {
         headers.addHeader(HttpHeaderNames.COOKIE, "token=old");
         headers.addHeader(HttpHeaderNames.COOKIE, "lang=zh-CN");
 
-        FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/ws", headers, new DefaultCookie("sid", "abc"), new DefaultCookie("theme", "light"));
+        FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "ws://example.com/ws", headers, new DefaultCookie("sid", "abc"), new DefaultCookie("theme", "light"));
         assertEquals("token=old; lang=zh-CN; sid=abc; theme=light", request.getString(HttpHeaderNames.COOKIE));
     }
 
     @Test
     public void testHandshakeRequestReturnsFullRequestBackedByHttpRequest() {
-        HttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/ws");
+        HttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "ws://example.com/ws");
         assertNotNull(request);
         assertTrue(request instanceof FullHttpRequest);
     }

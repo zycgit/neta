@@ -30,6 +30,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
+    private static final String WS_URI = "ws://example.com/chat";
+
     private static int closeStatusCode(WebSocketFrame frame) {
         return ((frame.content().getByte(0) & 0xFF) << 8) | (frame.content().getByte(1) & 0xFF);
     }
@@ -48,7 +50,7 @@ public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
     }
 
     private void completeHandshake(VirtualPipe pipe) throws Throwable {
-        pipe.client().sendData(WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat"), "ws-client").get();
+        pipe.client().sendData(WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI), "ws-client").get();
         assertTrue(waitUntil(() -> WebSocketUtils.isReady(pipe.client()) && WebSocketUtils.isReady(pipe.server()), 1000L));
         assertTrue(drainQueue(pipe.clientInbound()).isEmpty());
         assertTrue(drainQueue(pipe.serverInbound()).isEmpty());

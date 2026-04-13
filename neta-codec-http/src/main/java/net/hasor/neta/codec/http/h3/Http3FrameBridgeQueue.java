@@ -17,6 +17,7 @@ package net.hasor.neta.codec.http.h3;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Predicate;
 import net.hasor.neta.channel.SoUtils;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoRcvQueueView;
@@ -134,6 +135,11 @@ final class Http3FrameBridgeQueue implements ProtoRcvQueue<Http3Frame>, ProtoSnd
     }
 
     @Override
+    public void drainToQueue(String key, int cnt, Predicate<Http3Frame> predicate) {
+        throw new UnsupportedOperationException("bridge queue does not support receive views.");
+    }
+
+    @Override
     public List<String> queueNames() {
         return Collections.emptyList();
     }
@@ -144,12 +150,16 @@ final class Http3FrameBridgeQueue implements ProtoRcvQueue<Http3Frame>, ProtoSnd
     }
 
     @Override
+    public void discard(String key) {
+    }
+
+    @Override
     public ProtoRcvQueueView<Http3Frame> queueView(String key) {
         throw new UnsupportedOperationException("bridge queue does not support receive views.");
     }
 
     @Override
-    public ProtoSndQueueView<Http3Frame> newSub(String key) {
+    public ProtoSndQueueView<Http3Frame> subQueue(String key) {
         throw new UnsupportedOperationException("bridge queue does not support send views.");
     }
 

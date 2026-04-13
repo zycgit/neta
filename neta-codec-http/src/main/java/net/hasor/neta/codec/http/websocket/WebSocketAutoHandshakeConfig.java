@@ -30,6 +30,8 @@ import net.hasor.neta.codec.http.cookie.Cookie;
  */
 public class WebSocketAutoHandshakeConfig {
     private final String             requestPath;
+    private final String             requestHost;
+    private final String             requestOrigin;
     private final DefaultHttpHeaders headers;
     private final Cookie[]           cookies;
 
@@ -38,7 +40,17 @@ public class WebSocketAutoHandshakeConfig {
      * @param requestPath handshake request path
      */
     public WebSocketAutoHandshakeConfig(String requestPath) {
-        this(requestPath, null);
+        this(requestPath, null, null, (HttpHeaders) null);
+    }
+
+    /**
+     * Create the auto-handshake configuration with explicit target authority.
+     * @param requestPath handshake request path or absolute websocket URI
+     * @param requestHost Host header used when requestPath is relative
+     * @param requestOrigin Origin header used when requestPath is relative
+     */
+    public WebSocketAutoHandshakeConfig(String requestPath, String requestHost, String requestOrigin) {
+        this(requestPath, requestHost, requestOrigin, null);
     }
 
     /**
@@ -48,13 +60,33 @@ public class WebSocketAutoHandshakeConfig {
      * @param cookies additional cookies
      */
     public WebSocketAutoHandshakeConfig(String requestPath, HttpHeaders headers, Cookie... cookies) {
+        this(requestPath, null, null, headers, cookies);
+    }
+
+    /**
+     * Create the auto-handshake configuration with the specified arguments.
+     * @param requestPath handshake request path or absolute websocket URI
+     * @param requestHost Host header used when requestPath is relative
+     * @param requestOrigin Origin header used when requestPath is relative
+     * @param headers additional request headers
+     * @param cookies additional cookies
+     */
+    public WebSocketAutoHandshakeConfig(String requestPath, String requestHost, String requestOrigin, HttpHeaders headers, Cookie... cookies) {
         if (StringUtils.isBlank(requestPath)) {
             throw new IllegalArgumentException("requestPath must not be blank");
         }
         this.requestPath = requestPath;
+        this.requestHost = requestHost;
+        this.requestOrigin = requestOrigin;
         this.headers = new DefaultHttpHeaders();
         if (headers != null) {
             this.headers.appendHeaders(headers);
+        }
+        if (StringUtils.isNotBlank(requestHost)) {
+            this.headers.setHeader("Host", requestHost);
+        }
+        if (StringUtils.isNotBlank(requestOrigin)) {
+            this.headers.setHeader("Origin", requestOrigin);
         }
         this.cookies = cookies == null ? new Cookie[0] : Arrays.copyOf(cookies, cookies.length);
     }
@@ -64,6 +96,20 @@ public class WebSocketAutoHandshakeConfig {
      */
     public String requestPath() {
         return this.requestPath;
+    }
+
+    /**
+     * Return the configured handshake Host header.
+     */
+    public String requestHost() {
+        return this.requestHost;
+    }
+
+    /**
+     * Return the configured handshake Origin header.
+     */
+    public String requestOrigin() {
+        return this.requestOrigin;
     }
 
     /**

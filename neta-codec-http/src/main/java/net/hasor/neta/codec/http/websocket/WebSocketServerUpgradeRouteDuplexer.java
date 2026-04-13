@@ -45,7 +45,7 @@ public class WebSocketServerUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
 
     private static final class RouteState {
         private final HttpMessageParts              requestParts = new HttpMessageParts();
-        private       ProtoRcvQueueView<HttpObject> bufferedRequestParts;
+        private       ProtoRcvQueueView<HttpObject> bufferedRequestViewRef;
         private       boolean                       handshakePending;
         private       Boolean                       currentRequestHandshake;
     }
@@ -174,7 +174,7 @@ public class WebSocketServerUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
                 this.resetRequestRoutingState(state, false);
             } else {
                 state.currentRequestHandshake = handshakeRequest;
-                state.bufferedRequestParts = null;
+                state.bufferedRequestViewRef = null;
                 state.requestParts.reset();
             }
         }
@@ -250,7 +250,7 @@ public class WebSocketServerUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
     }
 
     private void forwardBufferedToHandshake(RouteState state, ProtoContext context, ProtoSndQueue<HttpObject> rcvDown) throws Throwable {
-        ProtoRcvQueueView<HttpObject> bufferedQueue = state.bufferedRequestParts;
+        ProtoRcvQueueView<HttpObject> bufferedQueue = state.bufferedRequestViewRef;
         if (bufferedQueue == null) {
             return;
         }
@@ -268,7 +268,7 @@ public class WebSocketServerUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
                 }
             }
         } finally {
-            state.bufferedRequestParts = null;
+            state.bufferedRequestViewRef = null;
         }
     }
 
@@ -287,7 +287,7 @@ public class WebSocketServerUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
     }
 
     private void flushBufferedRequest(RouteState state, ProtoSndQueue<HttpObject> rcvDown) {
-        ProtoRcvQueueView<HttpObject> bufferedQueue = state.bufferedRequestParts;
+        ProtoRcvQueueView<HttpObject> bufferedQueue = state.bufferedRequestViewRef;
         if (bufferedQueue == null) {
             return;
         }
@@ -297,27 +297,27 @@ public class WebSocketServerUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
                 rcvDown.offerMessage(bufferedQueue.takeMessage(-1));
             }
         } finally {
-            state.bufferedRequestParts = null;
+            state.bufferedRequestViewRef = null;
         }
     }
 
     private void resetRequestRoutingState(RouteState state, boolean releaseBuffered) {
-        if (state.bufferedRequestParts != null) {
+        if (state.bufferedRequestViewRef != null) {
             if (releaseBuffered) {
-                state.bufferedRequestParts.discard();
+                state.bufferedRequestViewRef.discard();
             }
-            state.bufferedRequestParts = null;
+            state.bufferedRequestViewRef = null;
         }
         state.requestParts.reset();
         state.currentRequestHandshake = null;
     }
 
     private void bufferNextRequestMessage(ProtoContext context, RouteState state, ProtoRcvQueue<HttpObject> src, HttpObject msg) {
-        ProtoRcvQueueView<HttpObject> bufferedQueue = state.bufferedRequestParts;
+        ProtoRcvQueueView<HttpObject> bufferedQueue = state.bufferedRequestViewRef;
         if (bufferedQueue == null) {
             String key = BUFFER_QUEUE_PREFIX + partitionKey(context, msg).getKey();
             src.drainToQueue(key, 1);
-            state.bufferedRequestParts = src.queueView(key);
+            state.bufferedRequestViewRef = src.queueView(key);
         } else {
             src.drainToQueue(bufferedQueue.getKey(), 1);
         }

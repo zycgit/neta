@@ -33,6 +33,9 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class WebSocketHandshakeExtensionTest extends AbstractWebSocketTest {
+    private static final String WS_URI     = "ws://example.com/chat";
+    private static final String LEGACY_URI = "ws://example.com/legacy";
+
     private static class PassthroughExtensionSupport implements WebSocketExtension {
         private final String extensionName;
 
@@ -171,7 +174,7 @@ public class WebSocketHandshakeExtensionTest extends AbstractWebSocketTest {
                 ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13, authorizer));
             }, VrtSoConfig.asServer());
 
-            List<HttpObject> inbound = receiveAndIntBound(pipe, WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat"));
+            List<HttpObject> inbound = receiveAndIntBound(pipe, WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI));
             List<Object> outbound = drainQueue(pipe.channelOutbound());
             HttpResponse response = (HttpResponse) outbound.get(0);
 
@@ -196,7 +199,7 @@ public class WebSocketHandshakeExtensionTest extends AbstractWebSocketTest {
             }, ctx -> {
                 ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(serverSettings));
             }, VrtTransfer.direct());
-            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
+            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI);
             request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, PerMessageDeflateSupport.EXTENSION_NAME);
             pipe.client().sendData(request, "ws-client").get();
             assertTrue(waitUntil(() -> WebSocketUtils.isReady(pipe.client()) && WebSocketUtils.isReady(pipe.server()), 1000L));
@@ -229,7 +232,7 @@ public class WebSocketHandshakeExtensionTest extends AbstractWebSocketTest {
             WebSocketSettings clientSettings = WebSocketSettings.of(WebSocketVersion.V13).usePerMessageDeflateDefaults();
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(clientSettings)), ctx -> ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(serverSettings)), VrtTransfer.direct());
 
-            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
+            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI);
             request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, extHeader);
             pipe.client().sendData(request, "ws-client").get();
             assertTrue(waitUntil(() -> WebSocketUtils.isReady(pipe.client()) && WebSocketUtils.isReady(pipe.server()), 1000L));
@@ -257,7 +260,7 @@ public class WebSocketHandshakeExtensionTest extends AbstractWebSocketTest {
             WebSocketSettings clientSettings = WebSocketSettings.of(WebSocketVersion.V13).usePerMessageDeflateDefaults();
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(clientSettings)), ctx -> ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(serverSettings)), VrtTransfer.direct());
 
-            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
+            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI);
             request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, requestHeader);
             pipe.client().sendData(request, "ws-client").get();
             assertTrue(waitUntil(() -> WebSocketUtils.isReady(pipe.client()) && WebSocketUtils.isReady(pipe.server()), 1000L));
@@ -283,7 +286,7 @@ public class WebSocketHandshakeExtensionTest extends AbstractWebSocketTest {
             WebSocketSettings clientSettings = WebSocketSettings.of(WebSocketVersion.V13).usePerMessageDeflateDefaults();
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(clientSettings)), ctx -> ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(serverSettings)), VrtTransfer.direct());
 
-            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
+            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI);
             request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, requestHeader);
             pipe.client().sendData(request, "ws-client").get();
             assertTrue(waitUntil(() -> WebSocketUtils.isReady(pipe.client()) && WebSocketUtils.isReady(pipe.server()), 1000L));
@@ -304,7 +307,7 @@ public class WebSocketHandshakeExtensionTest extends AbstractWebSocketTest {
             });
 
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(settings)), VrtSoConfig.asServer());
-            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
+            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI);
             request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, "permessage-deflate; client_max_window_bits=14");
             List<HttpObject> inbound = receiveAndIntBound(pipe, request);
             List<Object> outbound = drainQueue(pipe.channelOutbound());
@@ -326,7 +329,7 @@ public class WebSocketHandshakeExtensionTest extends AbstractWebSocketTest {
             WebSocketSettings clientSettings = WebSocketSettings.of(WebSocketVersion.V13).usePerMessageDeflateDefaults();
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(clientSettings)), ctx -> ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(serverSettings)), VrtTransfer.direct());
 
-            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
+            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI);
             request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, extHeader);
             pipe.client().sendData(request, "ws-client").get();
             assertTrue(waitUntil(() -> WebSocketUtils.isReady(pipe.client()) && WebSocketUtils.isReady(pipe.server()), 1000L));
@@ -348,7 +351,7 @@ public class WebSocketHandshakeExtensionTest extends AbstractWebSocketTest {
             });
 
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(settings)), VrtSoConfig.asServer());
-            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
+            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI);
             request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, "permessage-deflate; server_max_window_bits");
             List<HttpObject> inbound = receiveAndIntBound(pipe, request);
             List<Object> outbound = drainQueue(pipe.channelOutbound());
@@ -368,7 +371,7 @@ public class WebSocketHandshakeExtensionTest extends AbstractWebSocketTest {
             });
 
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(settings)), VrtSoConfig.asServer());
-            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
+            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI);
             request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, "permessage-deflate; client_max_window_bits=015");
             List<HttpObject> inbound = receiveAndIntBound(pipe, request);
             List<Object> outbound = drainQueue(pipe.channelOutbound());
@@ -388,7 +391,7 @@ public class WebSocketHandshakeExtensionTest extends AbstractWebSocketTest {
             });
 
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(settings)), VrtSoConfig.asServer());
-            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
+            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI);
             request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, "permessage-deflate; client_no_context_takeover; CLIENT_NO_CONTEXT_TAKEOVER");
             List<HttpObject> inbound = receiveAndIntBound(pipe, request);
             List<Object> outbound = drainQueue(pipe.channelOutbound());
@@ -409,7 +412,7 @@ public class WebSocketHandshakeExtensionTest extends AbstractWebSocketTest {
 
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(settings)), VrtSoConfig.asServer());
 
-            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
+            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI);
             request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, "permessage-deflate, x-test-ext");
             List<HttpObject> inbound = receiveAndIntBound(pipe, request);
             List<Object> outbound = drainQueue(pipe.channelOutbound());
@@ -437,7 +440,7 @@ public class WebSocketHandshakeExtensionTest extends AbstractWebSocketTest {
 
             DefaultHttpHeaders headers = new DefaultHttpHeaders();
             headers.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, "permessage-deflate");
-            List<HttpObject> inbound = receiveAndIntBound(pipe, WebSocketUtils.createHandshake(WebSocketVersion.V0, "/legacy", headers));
+            List<HttpObject> inbound = receiveAndIntBound(pipe, WebSocketUtils.createHandshake(WebSocketVersion.V0, LEGACY_URI, headers));
             List<Object> outbound = drainQueue(pipe.channelOutbound());
             HttpResponse response = (HttpResponse) outbound.get(0);
 
@@ -459,7 +462,7 @@ public class WebSocketHandshakeExtensionTest extends AbstractWebSocketTest {
 
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(clientSettings)), ctx -> ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(serverSettings)), VrtTransfer.direct());
 
-            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
+            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI);
             request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, "permessage-deflate");
             pipe.client().sendData(request, "ws-client").get();
             assertTrue(waitUntil(() -> WebSocketUtils.isReady(pipe.client()) && WebSocketUtils.isReady(pipe.server()), 1000L));
@@ -478,7 +481,7 @@ public class WebSocketHandshakeExtensionTest extends AbstractWebSocketTest {
 
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(settings)), VrtSoConfig.asClient());
 
-            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
+            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI);
             request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, PerMessageDeflateSupport.EXTENSION_NAME);
             sendAndOutBound(pipe, request);
 
@@ -497,7 +500,7 @@ public class WebSocketHandshakeExtensionTest extends AbstractWebSocketTest {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13)), VrtSoConfig.asClient());
 
-            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
+            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI);
             sendAndOutBound(pipe, request);
             DefaultFullHttpResponse response = newUpgradeResponse(request.getString(HttpHeaderNames.SEC_WEBSOCKET_KEY));
             response.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, "permessage-deflate");
@@ -520,7 +523,7 @@ public class WebSocketHandshakeExtensionTest extends AbstractWebSocketTest {
             WebSocketSettings clientSettings = WebSocketSettings.of(WebSocketVersion.V13).useDeflateFrameDefaults();
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(clientSettings)), ctx -> ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(serverSettings)), VrtTransfer.direct());
 
-            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
+            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI);
             request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, DeflateFrameSupport.EXTENSION_NAME);
             pipe.client().sendData(request, "ws-client").get();
             assertTrue(waitUntil(() -> WebSocketUtils.isReady(pipe.client()) && WebSocketUtils.isReady(pipe.server()), 1000L));
@@ -543,7 +546,7 @@ public class WebSocketHandshakeExtensionTest extends AbstractWebSocketTest {
             WebSocketSettings clientSettings = WebSocketSettings.of(WebSocketVersion.V13).useXWebkitDeflateFrameDefaults();
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(clientSettings)), ctx -> ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(serverSettings)), VrtTransfer.direct());
 
-            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
+            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI);
             request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, XWebkitDeflateFrameSupport.EXTENSION_NAME);
             pipe.client().sendData(request, "ws-client").get();
             assertTrue(waitUntil(() -> WebSocketUtils.isReady(pipe.client()) && WebSocketUtils.isReady(pipe.server()), 1000L));
@@ -583,7 +586,7 @@ public class WebSocketHandshakeExtensionTest extends AbstractWebSocketTest {
             WebSocketSettings clientSettings = WebSocketSettings.of(WebSocketVersion.V13).usePerMessageDeflateDefaults().useDeflateFrameDefaults();
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(clientSettings)), ctx -> ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(serverSettings)), VrtTransfer.direct());
 
-            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
+            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI);
             request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, PerMessageDeflateSupport.EXTENSION_NAME + ", " + DeflateFrameSupport.EXTENSION_NAME);
             pipe.client().sendData(request, "ws-client").get();
             assertTrue(waitUntil(() -> WebSocketUtils.isReady(pipe.client()) && WebSocketUtils.isReady(pipe.server()), 1000L));
@@ -609,7 +612,7 @@ public class WebSocketHandshakeExtensionTest extends AbstractWebSocketTest {
             WebSocketSettings clientSettings = WebSocketSettings.of(WebSocketVersion.V13).addExtensionSupport(extensionA).addExtensionSupport(extensionB);
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(clientSettings)), ctx -> ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(serverSettings)), VrtTransfer.direct());
 
-            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
+            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI);
             request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, "x-order-a, x-order-b");
             pipe.client().sendData(request, "ws-client").get();
             assertTrue(waitUntil(() -> WebSocketUtils.isReady(pipe.client()) && WebSocketUtils.isReady(pipe.server()), 1000L));

@@ -35,6 +35,8 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class WebSocketFrameExtensionTest extends AbstractWebSocketTest {
+    private static final String WS_URI = "ws://example.com/chat";
+
     private static String computeAcceptKey(String key) {
         try {
             MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
@@ -63,25 +65,25 @@ public class WebSocketFrameExtensionTest extends AbstractWebSocketTest {
         WebSocketSettings settings = WebSocketSettings.of(WebSocketVersion.V13).usePerMessageDeflateDefaults();
         List<WebSocketExtensionResult> extResults = InternalUtils.parseExtensions(extHeader);
         List<WebSocketExtensionRuntime> runtimeExtensions = InternalUtils.resolveRuntimeExtensions(extResults, settings);
-        return new WebSocketContextImpl(server, null, WebSocketVersion.V13.code(), "/chat", extResults, runtimeExtensions);
+        return new WebSocketContextImpl(server, null, WebSocketVersion.V13.code(), "/chat", "example.com", "http://example.com", extResults, runtimeExtensions);
     }
 
     private static WebSocketContextImpl negotiatedDeflateFrameContext(boolean server) {
         WebSocketSettings settings = WebSocketSettings.of(WebSocketVersion.V13).useDeflateFrameDefaults();
         List<WebSocketExtensionResult> extResults = InternalUtils.parseExtensions(DeflateFrameSupport.EXTENSION_NAME);
         List<WebSocketExtensionRuntime> runtimeExtensions = InternalUtils.resolveRuntimeExtensions(extResults, settings);
-        return new WebSocketContextImpl(server, null, WebSocketVersion.V13.code(), "/chat", extResults, runtimeExtensions);
+        return new WebSocketContextImpl(server, null, WebSocketVersion.V13.code(), "/chat", "example.com", "http://example.com", extResults, runtimeExtensions);
     }
 
     private static WebSocketContextImpl negotiatedXWebkitDeflateFrameContext(boolean server) {
         WebSocketSettings settings = WebSocketSettings.of(WebSocketVersion.V13).useXWebkitDeflateFrameDefaults();
         List<WebSocketExtensionResult> extResults = InternalUtils.parseExtensions(XWebkitDeflateFrameSupport.EXTENSION_NAME);
         List<WebSocketExtensionRuntime> runtimeExtensions = InternalUtils.resolveRuntimeExtensions(extResults, settings);
-        return new WebSocketContextImpl(server, null, WebSocketVersion.V13.code(), "/chat", extResults, runtimeExtensions);
+        return new WebSocketContextImpl(server, null, WebSocketVersion.V13.code(), "/chat", "example.com", "http://example.com", extResults, runtimeExtensions);
     }
 
     private void performServerPerMessageDeflateHandshake(VirtualPipe pipe) throws Throwable {
-        FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
+        FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI);
         request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, PerMessageDeflateSupport.EXTENSION_NAME);
         receiveAndIntBound(pipe, request);
         drainQueue(pipe.channelOutbound());
@@ -89,7 +91,7 @@ public class WebSocketFrameExtensionTest extends AbstractWebSocketTest {
     }
 
     private void performClientPerMessageDeflateHandshake(VirtualPipe pipe) throws Throwable {
-        FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
+        FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI);
         request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, PerMessageDeflateSupport.EXTENSION_NAME);
         pipe.channel().sendData(request, "ws-client").get();
         drainQueue(pipe.channelOutbound());
