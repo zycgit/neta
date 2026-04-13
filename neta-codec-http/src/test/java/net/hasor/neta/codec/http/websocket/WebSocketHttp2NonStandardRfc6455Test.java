@@ -29,6 +29,7 @@ import net.hasor.neta.channel.routing.ProtoRoutingControl;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.h2.*;
+import net.hasor.neta.codec.http.routing.H2CUpgradeServerDuplexe;
 import net.hasor.neta.codec.http.routing.HttpAggregatorRoute;
 import net.hasor.neta.codec.http.routing.HttpRouteKey;
 import org.junit.Test;

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.codec.http.h2;
+package net.hasor.neta.codec.http.routing;
 import java.util.*;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
@@ -29,7 +29,8 @@ import net.hasor.neta.channel.data.ProtoRcvQueueView;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.channel.routing.ProtoRoutingControl;
 import net.hasor.neta.codec.http.*;
-import net.hasor.neta.codec.http.routing.HttpRouteKey;
+import net.hasor.neta.codec.http.h2.Http2ContextImpl;
+import net.hasor.neta.codec.http.h2.Http2Settings;
 
 /**
  * Server-side bridge handling the RFC 7540 h2c upgrade flow over HTTP/1.1.
@@ -97,31 +98,7 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
 
     @Override
     public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) throws Throwable {
-        Http2DecoderContent decoderState = context.rootContext(Http2DecoderContent.class);
-        if (decoderState == null) {
-            decoderState = new Http2DecoderContent(true, this.http2Settings);
-            Http2DecoderContent shared = context.rootContext(Http2DecoderContent.class, decoderState);
-            if (shared != null) {
-                decoderState = shared;
-            }
-        }
-
-        if (context.context(Http2DecoderContent.class) == null) {
-            context.context(Http2DecoderContent.class, decoderState);
-        }
-
-        Http2Context h2Context = context.rootContext(Http2Context.class);
-        if (h2Context == null) {
-            h2Context = new Http2ContextImpl(true, decoderState);
-            Http2Context shared = context.rootContext(Http2Context.class, h2Context);
-            if (shared != null) {
-                h2Context = shared;
-            }
-        }
-
-        if (context.context(Http2Context.class) == null) {
-            context.context(Http2Context.class, h2Context);
-        }
+        Http2ContextImpl.ensureInitialized(context, true, this.http2Settings);
     }
 
     @Override
@@ -276,16 +253,9 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
 
     private void performUpgrade(ProtoContext context, FullHttpRequest request) throws Throwable {
         byte[] settingsPayload = decodeSettingsPayload(request.getString(HttpHeaderNames.HTTP2_SETTINGS));
-        Http2DecoderContent decoderState = context.context(Http2DecoderContent.class);
-        for (int i = 0; i < settingsPayload.length; i += 6) {
-            int id = ((settingsPayload[i] & 0xFF) << 8) | (settingsPayload[i + 1] & 0xFF);
-            long value = ((settingsPayload[i + 2] & 0xFFL) << 24) | ((settingsPayload[i + 3] & 0xFFL) << 16) | ((settingsPayload[i + 4] & 0xFFL) << 8) | (settingsPayload[i + 5] & 0xFFL);
-            decoderState.applyRemoteSetting(id, value);
-        }
-
-        Http2Stream stream = decoderState.getOrCreateStream(1);
-        stream.state(Http2StreamState.HALF_CLOSED_REMOTE);
-        decoderState.offerResponseStreamId(1);
+        Http2ContextImpl h2Context = Http2ContextImpl.require(context);
+        h2Context.applyH2cUpgradeSettings(settingsPayload);
+        h2Context.openH2cUpgradeStream(1);
 
         sendSwitchingProtocols(context);
         context.fireEventSnd(HttpThroughEvent.class, new HttpThroughEvent(true, request.streamId()));
@@ -334,8 +304,7 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
 
         fullRequest.protocolVersion(HttpVersion.HTTP_2_0);
         fullRequest.streamId(1);
-        Http2DecoderContent decoderState = context.context(Http2DecoderContent.class);
-        decoderState.setLastEmittedStreamId(1);
+        Http2ContextImpl.require(context).markH2cUpgradedRequestEmitted(1);
     }
 
     private ProtoStatus forwardSendPassthrough(ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<HttpObject> sndDown) {

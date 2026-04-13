@@ -8,6 +8,7 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.channel.routing.ProtoRoutingControl;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.codec.http.*;
+import net.hasor.neta.codec.http.routing.H2CUpgradeServerDuplexe;
 import net.hasor.neta.codec.http.routing.HttpAggregatorRoute;
 import net.hasor.neta.codec.http.routing.HttpRouteKey;
 import org.junit.Test;
@@ -121,21 +122,26 @@ public class H2CUpgradeServerDuplexeTest extends AbstractHttp2Test {
             VirtualPipe transport = openVirtualPipe(neta, null, ctx -> {
                 ProtoHelper.standard().nextRouteAsStatic("protocol-detect", new HttpAggregatorRoute(), routing -> {
                     ProtoRoutingControl routingControl = routing.control();
-                    routing.branch(HttpRouteKey.BRANCH_H1, branch -> {
-                        branch.nextDuplex("http-codec", new HttpServerDuplexe()).nextDecoder("http-aggregator", new HttpRequestAggregator(MAX_CONTENT_LENGTH)).nextDecoder("http-handler", new InlineDispatchHandler("h1"));
-                    }).branch(HttpRouteKey.BRANCH_H2, branch -> {
-                        branch.nextDuplex("h2-frame", new Http2FrameDuplexe(true)).nextDuplex("h2-message", new Http2ObjectDuplexe(true, routingControl)).nextPartition("h2-stream", new Http2ObjectPartitionSelector(), partition -> {
-                            Http2ObjectPartitionPolicy policy = new Http2ObjectPartitionPolicy();
-                            partition.policy(policy).byDefault(partitionCtx -> {
-                                partitionCtx.addLast("h2-control-lifecycle", new Http2ObjectStreamManager(partition.control(), policy));
-                            }).byInitializer(partitionCtx -> {
-                                partitionCtx.addLast("h2-aggregator", new HttpServerDuplexeAggregator(MAX_CONTENT_LENGTH));
-                                partitionCtx.addLastDecoder("h2-handler", new InlineDispatchHandler("h2"));
-                            });
-                        });
-                    }).branch(HttpRouteKey.BRANCH_H2C, branch -> {
-                        branch.nextDuplex("http-codec", new HttpServerDuplexe()).nextDuplex("h2c-upgrade", new H2CUpgradeServerDuplexe(routingControl)).nextDecoder("h2c-handler", new InlineDispatchHandler("h2c"));
-                    });
+                    routing.branch(HttpRouteKey.BRANCH_H1, b -> b//
+                                    .nextDuplex("http-codec", new HttpServerDuplexe())//
+                                    .nextDecoder("http-aggregator", new HttpRequestAggregator(MAX_CONTENT_LENGTH))//
+                                    .nextDecoder("http-handler", new InlineDispatchHandler("h1")))//
+                            .branch(HttpRouteKey.BRANCH_H2C, b -> b//
+                                    .nextDuplex("http-codec", new HttpServerDuplexe())//
+                                    .nextDuplex("h2c-upgrade", new H2CUpgradeServerDuplexe(routingControl))//
+                                    .nextDecoder("h2c-handler", new InlineDispatchHandler("h2c")))//
+                            .branch(HttpRouteKey.BRANCH_H2, b -> b//
+                                    .nextDuplex("h2-frame", new Http2FrameDuplexe(true))//
+                                    .nextDuplex("h2-message", new Http2ObjectDuplexe(true, routingControl))//
+                                    .nextPartition("h2-stream", new Http2ObjectPartitionSelector(), partition -> {
+                                        Http2ObjectPartitionPolicy policy = new Http2ObjectPartitionPolicy();
+                                        partition.policy(policy).byDefault(partitionCtx -> {
+                                            partitionCtx.addLast("h2-control-lifecycle", new Http2ObjectStreamManager(partition.control(), policy));
+                                        }).byInitializer(partitionCtx -> {
+                                            partitionCtx.addLast("h2-aggregator", new HttpServerDuplexeAggregator(MAX_CONTENT_LENGTH));
+                                            partitionCtx.addLastDecoder("h2-handler", new InlineDispatchHandler("h2"));
+                                        });
+                                    }));
                 }).config(ctx);
             });
 

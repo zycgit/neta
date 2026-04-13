@@ -19,6 +19,7 @@ import net.hasor.neta.channel.routing.ProtoPartitionControl;
 import net.hasor.neta.channel.routing.ProtoRoutingControl;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.codec.http.*;
+import net.hasor.neta.codec.http.routing.H2CUpgradeServerDuplexe;
 import net.hasor.neta.codec.http.routing.HttpAggregatorOverTlsRoute;
 import net.hasor.neta.codec.http.routing.HttpRouteKey;
 import net.hasor.neta.codec.ssl.SslConfig;
