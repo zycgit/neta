@@ -124,6 +124,14 @@ public class WebSocketServerUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
                 continue;
             }
 
+            if (isResetTerminalContent(msg)) {
+                HttpObject ignored = rcvUp.takeMessage();
+                if (ignored != null) {
+                    ignored.release();
+                }
+                continue;
+            }
+
             RouteState state = state(context, msg);
 
             if (state.currentRequestHandshake != null) {
@@ -421,5 +429,9 @@ public class WebSocketServerUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
 
     private static boolean isAggregateLikeResponse(HttpObject msg) {
         return msg instanceof HttpResponse && msg instanceof HttpContent;
+    }
+
+    private static boolean isResetTerminalContent(HttpObject msg) {
+        return msg instanceof LastHttpContent && msg.isBad() && msg.badReason() != null && msg.badReason().startsWith("HTTP/2 stream reset:");
     }
 }

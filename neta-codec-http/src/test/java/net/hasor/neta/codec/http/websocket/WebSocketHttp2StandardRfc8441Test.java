@@ -60,6 +60,9 @@ public class WebSocketHttp2StandardRfc8441Test extends AbstractHttpTest {
             openWebSocketStream(pipe, 3, "/ws-alpha");
             openWebSocketStream(pipe, 5, "/ws-beta");
 
+            sendWebSocketTextAndExpectEcho(pipe, 3, "alpha");
+            sendWebSocketTextAndExpectEcho(pipe, 5, "beta");
+
             pipe.client().fireEvent(Http2ResetEvent.class, new Http2ResetEvent(3, Http2ResetEvent.CANCEL));
             assertTrue(pipeState(pipe), waitUntil(() -> hasResetEvent(pipe, 3), 1000L));
 
@@ -68,6 +71,20 @@ public class WebSocketHttp2StandardRfc8441Test extends AbstractHttpTest {
             assertNull(findResetEvent(pipe.clientEvents(), 5));
             assertNull(findResetEvent(pipe.serverEvents(), 5));
             assertFalse(pipe.server().isClose());
+
+            sendWebSocketTextAndExpectEcho(pipe, 5, "beta-after-reset");
+        });
+    }
+
+    @Test
+    public void testStandardHttp2WebSocketCanCommunicateAfterHandshake() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openStandardRfc8441Pipe(neta);
+
+            openWebSocketStream(pipe, 3, "/ws-chat");
+            sendWebSocketTextAndExpectEcho(pipe, 3, "hello-h2");
+            assertTrue(hasHandshakeEvent(pipe.clientEvents(), 3));
+            assertTrue(hasHandshakeEvent(pipe.serverEvents(), 3));
         });
     }
 
@@ -78,6 +95,7 @@ public class WebSocketHttp2StandardRfc8441Test extends AbstractHttpTest {
 
             openWebSocketStream(pipe, 3, "/ws-alpha");
             openWebSocketStream(pipe, 5, "/ws-beta");
+            sendWebSocketTextAndExpectEcho(pipe, 3, "alpha-before-http");
 
             FullHttpRequest httpRequest = postRequest("/http-echo", "body");
             httpRequest.streamId(7);
@@ -97,6 +115,8 @@ public class WebSocketHttp2StandardRfc8441Test extends AbstractHttpTest {
             } finally {
                 free(inbound);
             }
+
+            sendWebSocketTextAndExpectEcho(pipe, 5, "beta-after-http");
         });
     }
 
@@ -128,9 +148,28 @@ public class WebSocketHttp2StandardRfc8441Test extends AbstractHttpTest {
             establishH2cUpgrade(pipe, "/h2c-bootstrap");
 
             openWebSocketStream(pipe, 3, "/ws-h2c-standard");
+            sendWebSocketTextAndExpectEcho(pipe, 3, "hello-h2c");
             assertTrue(hasHandshakeEvent(pipe.serverTransport.channelEvents(), 3));
+            assertTrue(hasHandshakeEvent(pipe.clientProtocol.channelEvents(), 3));
             assertNull(findResetEvent(pipe.clientProtocol.channelEvents(), 3));
             assertNoPipeErrors(pipe);
+        });
+    }
+
+    @Test
+    public void testHttp1ThenH2cUpgradeThenStandardWebSocketAndHttp2Traffic() throws Throwable {
+        autoCloseNeta(neta -> {
+            H2cPipePair pipe = openStandardRfc8441OverH2cPipe(neta);
+
+            sendHttp1RequestAndExpectResponse(pipe, "/before-upgrade", "h1-body");
+            establishH2cUpgrade(pipe, "/h2c-bootstrap");
+
+            openWebSocketStream(pipe, 3, "/ws-after-upgrade");
+            sendWebSocketTextAndExpectEcho(pipe, 3, "after-upgrade");
+            sendHttp2RequestAndExpectResponse(pipe, 5, "/http2-after-ws", "h2-body");
+
+            assertTrue(hasHandshakeEvent(pipe.serverTransport.channelEvents(), 3));
+            assertTrue(hasHandshakeEvent(pipe.clientProtocol.channelEvents(), 3));
         });
     }
 
@@ -184,6 +223,7 @@ public class WebSocketHttp2StandardRfc8441Test extends AbstractHttpTest {
 
                 routing.branch(HttpRouteKey.BRANCH_H1, b -> b//
                                 .nextDuplex("http-codec", new HttpServerDuplexe())//
+                                .nextDuplex("h1-upgrade", new H2CUpgradeServerDuplexe(routingControl))//
                                 .nextDecoder("http-request", new HttpRequestAggregator(MAX_CONTENT_LENGTH))//
                                 .nextDecoder("http-handler", httpEchoHandler()))//
                         .branch(HttpRouteKey.BRANCH_H2C, b -> b//
@@ -250,7 +290,12 @@ public class WebSocketHttp2StandardRfc8441Test extends AbstractHttpTest {
 
                     FullHttpRequest request = (FullHttpRequest) item;
                     try {
-                        context.sendData(textResponse(request.streamId(), HTTP_PREFIX + request.uri() + ":" + utf8(request.content().retain()))).get();
+                        byte[] data = (HTTP_PREFIX + request.uri() + ":" + utf8(request.content().retain())).getBytes(StandardCharsets.UTF_8);
+                        DefaultFullHttpResponse response = new DefaultFullHttpResponse(request.protocolVersion(), HttpStatus.OK, ByteBuf.wrap(data));
+                        response.streamId(request.streamId());
+                        response.setHeader(HttpHeaderNames.CONTENT_LENGTH, String.valueOf(data.length));
+                        response.setHeader(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=utf-8");
+                        context.sendData(response).get();
                     } finally {
                         request.release();
                     }
@@ -272,7 +317,7 @@ public class WebSocketHttp2StandardRfc8441Test extends AbstractHttpTest {
 
                     try {
                         if (item instanceof TextWebSocketMessage) {
-                            context.sendData(WebSocketUtils.textMessage(ascii(WS_PREFIX + text(((TextWebSocketMessage) item).content().copy()))).streamId(item.streamId())).get();
+                            context.sendData(WebSocketUtils.textMessage(ascii(WS_PREFIX + text(item.content().copy()))).streamId(item.streamId())).get();
                         }
                     } finally {
                         item.release();
@@ -287,7 +332,7 @@ public class WebSocketHttp2StandardRfc8441Test extends AbstractHttpTest {
         FullHttpRequest request = WebSocketUtils.createHttp2Handshake(WebSocketVersion.V13, "ws://example.com" + path);
         request.streamId(streamId);
         pipe.client().sendData(request).get();
-        assertTrue(pipeState(pipe), waitUntil(() -> hasHandshakeEvent(pipe.serverEvents(), streamId), 1000L));
+        assertTrue(pipeState(pipe), waitUntil(() -> hasHandshakeEvent(pipe.serverEvents(), streamId) && hasHandshakeEvent(pipe.clientEvents(), streamId), 1000L));
         assertNoPipeErrors(pipe);
     }
 
@@ -296,7 +341,65 @@ public class WebSocketHttp2StandardRfc8441Test extends AbstractHttpTest {
         request.streamId(streamId);
         pipe.clientProtocol.channel().sendData(request).get();
         pumpExchange(pipe);
-        assertTrue(pipeState(pipe), waitUntilEx(pipe, () -> hasHandshakeEvent(pipe.serverTransport.channelEvents(), streamId), 1000L));
+        assertTrue(pipeState(pipe), waitUntilEx(pipe, () -> hasHandshakeEvent(pipe.serverTransport.channelEvents(), streamId) && hasHandshakeEvent(pipe.clientProtocol.channelEvents(), streamId), 1000L));
+        assertNoPipeErrors(pipe);
+    }
+
+    private void sendWebSocketTextAndExpectEcho(VirtualPipe pipe, int streamId, String payload) throws Throwable {
+        pipe.client().sendData(WebSocketUtils.textMessage(ascii(payload)).streamId(streamId)).get();
+        assertTrue(pipeState(pipe), waitUntil(() -> findTextWebSocketMessage(pipe.clientInbound(), streamId) != null, 1000L));
+
+        List<HttpObject> inbound = castHttpObjects(drainQueue(pipe.clientInbound()));
+        try {
+            assertEquals(WS_PREFIX + payload, findTextWebSocketMessage(inbound, streamId));
+        } finally {
+            free(inbound);
+        }
+        assertNoPipeErrors(pipe);
+    }
+
+    private void sendWebSocketTextAndExpectEcho(H2cPipePair pipe, int streamId, String payload) throws Throwable {
+        pipe.clientProtocol.channel().sendData(WebSocketUtils.textMessage(ascii(payload)).streamId(streamId)).get();
+        pumpExchange(pipe);
+        assertTrue(pipeState(pipe), waitUntilEx(pipe, () -> findTextWebSocketMessage(pipe.clientProtocol.channelInbound(), streamId) != null, 1000L));
+
+        List<HttpObject> inbound = castHttpObjects(drainQueue(pipe.clientProtocol.channelInbound()));
+        try {
+            assertEquals(WS_PREFIX + payload, findTextWebSocketMessage(inbound, streamId));
+        } finally {
+            free(inbound);
+        }
+        assertNoPipeErrors(pipe);
+    }
+
+    private void sendHttp1RequestAndExpectResponse(H2cPipePair pipe, String path, String body) throws Throwable {
+        byte[] requestBytes = ("POST " + path + " HTTP/1.1\r\n" + "Host: example.com\r\n" + "Content-Length: " + body.getBytes(StandardCharsets.US_ASCII).length + "\r\n" + "\r\n" + body).getBytes(StandardCharsets.US_ASCII);
+        pipe.serverTransport.channel().receiveData(ByteBuf.wrap(requestBytes));
+        assertTrue(pipeState(pipe), waitUntil(() -> !pipe.serverTransport.channelOutbound().isEmpty(), 1000L));
+
+        String responseText = new String(drainRawBytes(pipe.serverTransport.channelOutbound()), StandardCharsets.US_ASCII);
+        assertTrue("responseText=" + responseText + ", " + pipeState(pipe), responseText.startsWith("HTTP/1.1 200"));
+        assertTrue("responseText=" + responseText + ", " + pipeState(pipe), responseText.contains(HTTP_PREFIX + path + ":" + body));
+        assertTrue("serverTransportInboundErrors=" + pipe.serverTransport.channelInboundErrors(), pipe.serverTransport.channelInboundErrors().isEmpty());
+        assertTrue("serverTransportOutboundErrors=" + pipe.serverTransport.channelOutboundErrors(), pipe.serverTransport.channelOutboundErrors().isEmpty());
+    }
+
+    private void sendHttp2RequestAndExpectResponse(H2cPipePair pipe, int streamId, String path, String body) throws Throwable {
+        FullHttpRequest request = postRequest(path, body);
+        request.streamId(streamId);
+        pipe.clientProtocol.channel().sendData(request).get();
+        pumpExchange(pipe);
+        assertTrue(pipeState(pipe), waitUntilEx(pipe, () -> findHttpResponse(pipe.clientProtocol.channelInbound(), streamId) != null, 1000L));
+
+        List<HttpObject> inbound = castHttpObjects(drainQueue(pipe.clientProtocol.channelInbound()));
+        try {
+            HttpResponse response = findHttpResponse(inbound, streamId);
+            assertNotNull(response);
+            assertEquals(HttpStatus.OK, response.status());
+            assertEquals(HTTP_PREFIX + path + ":" + body, decodeHttpBody(inbound, streamId));
+        } finally {
+            free(inbound);
+        }
         assertNoPipeErrors(pipe);
     }
 
@@ -411,6 +514,15 @@ public class WebSocketHttp2StandardRfc8441Test extends AbstractHttpTest {
         return null;
     }
 
+    private static String findTextWebSocketMessage(Iterable<?> items, int streamId) {
+        for (Object item : items) {
+            if (item instanceof TextWebSocketMessage && ((TextWebSocketMessage) item).streamId() == streamId) {
+                return text(((TextWebSocketMessage) item).content().copy());
+            }
+        }
+        return null;
+    }
+
     private static String decodeHttpBody(List<HttpObject> inbound, int streamId) {
         StringBuilder builder = new StringBuilder();
         for (HttpObject item : inbound) {
@@ -422,17 +534,17 @@ public class WebSocketHttp2StandardRfc8441Test extends AbstractHttpTest {
     }
 
     private void assertNoPipeErrors(VirtualPipe pipe) {
-        assertTrue(pipe.clientInboundErrors().isEmpty());
-        assertTrue(pipe.clientOutboundErrors().isEmpty());
-        assertTrue(pipe.serverInboundErrors().isEmpty());
-        assertTrue(pipe.serverOutboundErrors().isEmpty());
+        assertTrue("clientInboundErrors=" + pipe.clientInboundErrors(), pipe.clientInboundErrors().isEmpty());
+        assertTrue("clientOutboundErrors=" + pipe.clientOutboundErrors(), pipe.clientOutboundErrors().isEmpty());
+        assertTrue("serverInboundErrors=" + pipe.serverInboundErrors(), pipe.serverInboundErrors().isEmpty());
+        assertTrue("serverOutboundErrors=" + pipe.serverOutboundErrors(), pipe.serverOutboundErrors().isEmpty());
     }
 
     private void assertNoPipeErrors(H2cPipePair pipe) {
-        assertTrue(pipe.serverTransport.channelInboundErrors().isEmpty());
-        assertTrue(pipe.serverTransport.channelOutboundErrors().isEmpty());
-        assertTrue(pipe.clientProtocol.channelInboundErrors().isEmpty());
-        assertTrue(pipe.clientProtocol.channelOutboundErrors().isEmpty());
+        assertTrue("serverTransportInboundErrors=" + pipe.serverTransport.channelInboundErrors(), pipe.serverTransport.channelInboundErrors().isEmpty());
+        assertTrue("serverTransportOutboundErrors=" + pipe.serverTransport.channelOutboundErrors(), pipe.serverTransport.channelOutboundErrors().isEmpty());
+        assertTrue("protocolInboundErrors=" + pipe.clientProtocol.channelInboundErrors(), pipe.clientProtocol.channelInboundErrors().isEmpty());
+        assertTrue("protocolOutboundErrors=" + pipe.clientProtocol.channelOutboundErrors(), pipe.clientProtocol.channelOutboundErrors().isEmpty());
     }
 
     private String pipeState(VirtualPipe pipe) {

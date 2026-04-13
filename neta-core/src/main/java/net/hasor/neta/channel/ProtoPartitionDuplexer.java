@@ -53,6 +53,8 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
     private              ProtoPartitionPolicy              partitionPolicy;
     private              PartitionKey                      pendingPartitionKey;
     private              boolean                           pendingPartition;
+    private              PartitionKey                      pendingSndPartitionKey;
+    private              boolean                           pendingSndPartition;
     private              boolean                           closeAllRequested;
     private              int                               partitionRcvSize;
     private              int                               partitionSndSize;
@@ -282,16 +284,84 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
             return;
         }
 
+        if (!this.flushPendingSndOutput(sndDown)) {
+            return;
+        }
+
         while (sndUp.hasMore() && sndDown.slotSize() > 0) {
-            ProtoRcvQueueView<OUT> stagedMessages = this.collectLeadingMessages(sndUp, Math.min(sndUp.queueSize(), Math.max(1, sndDown.slotSize())), STAGE_QUEUE_KEY);
-            if (stagedMessages == null) {
-                return;
+            OUT message = sndUp.peekMessage();
+            if (message == null) {
+                sndUp.skipMessage(1);
+                continue;
             }
 
-            if (!sndDown.offerMessage(stagedMessages.takeMessage(-1))) {
-                throw new IllegalStateException("ProtoPartitionDuplexer failed to pass through send messages.");
+            PartitionKey routeKey = this.selector.route(context, PartitionDataKind.Message, message);
+            if (routeKey == null) {
+                if (!sndDown.offerMessage(sndUp.takeMessage())) {
+                    throw new IllegalStateException("ProtoPartitionDuplexer failed to pass through send messages.");
+                }
+                continue;
+            }
+
+            if (this.isDefaultPartitionKey(routeKey)) {
+                PartitionState defaultState = this.ensureDefaultPartitionState(context, PartitionDataKind.Message, message);
+                if (defaultState == null) {
+                    if (!sndDown.offerMessage(sndUp.takeMessage())) {
+                        throw new IllegalStateException("ProtoPartitionDuplexer failed to pass through default send messages.");
+                    }
+                    continue;
+                }
+
+                OUT outbound = sndUp.takeMessage();
+                defaultState.processSend(outbound);
+                if (!defaultState.flushSndTo(sndDown)) {
+                    this.pendingSndPartition = true;
+                    this.pendingSndPartitionKey = routeKey;
+                    return;
+                }
+                continue;
+            }
+
+            if (this.shouldDropForLockedPartition(routeKey)) {
+                sndUp.skipMessage(1);
+                continue;
+            }
+
+            PartitionState state = this.ensurePartitionState(context, routeKey, PartitionDataKind.Message, message);
+            if (state == null) {
+                sndUp.skipMessage(1);
+                continue;
+            }
+
+            OUT outbound = sndUp.takeMessage();
+            state.processSend(outbound);
+            if (!state.flushSndTo(sndDown)) {
+                this.pendingSndPartition = true;
+                this.pendingSndPartitionKey = routeKey;
+                return;
             }
         }
+    }
+
+    private boolean flushPendingSndOutput(ProtoSndQueue<OUT> sndDown) {
+        if (!this.pendingSndPartition) {
+            return true;
+        }
+
+        PartitionState state = this.partitions.get(this.pendingSndPartitionKey);
+        if (state == null) {
+            this.pendingSndPartitionKey = null;
+            this.pendingSndPartition = false;
+            return true;
+        }
+
+        if (!state.flushSndTo(sndDown)) {
+            return false;
+        }
+
+        this.pendingSndPartitionKey = null;
+        this.pendingSndPartition = false;
+        return true;
     }
 
     private <M> ProtoRcvQueueView<M> collectLeadingMessages(ProtoRcvQueue<M> sourceQueue, int batchLimit, String stagingKey) {
@@ -548,6 +618,10 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
             this.pendingPartitionKey = null;
             this.pendingPartition = false;
         }
+        if (Objects.equals(key, this.pendingSndPartitionKey)) {
+            this.pendingSndPartitionKey = null;
+            this.pendingSndPartition = false;
+        }
 
         removed.close();
         return true;
@@ -560,6 +634,8 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
         this.partitions.clear();
         this.pendingPartitionKey = null;
         this.pendingPartition = false;
+        this.pendingSndPartitionKey = null;
+        this.pendingSndPartition = false;
         this.closeAllRequested = false;
     }
 
@@ -603,11 +679,13 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
     private final class PartitionState {
         private final ProtoContextService context;
         private final ProtoStackChain     chainRoot;
+        private final Deque<Object>       pendingSnd;
         private       boolean             closeRequested;
 
         private PartitionState(ProtoContextService context, ProtoStackChain chainRoot) {
             this.context = context;
             this.chainRoot = chainRoot;
+            this.pendingSnd = new ArrayDeque<>();
         }
 
         private ProtoStatus process(ProtoRcvQueueView<?> messages) throws Throwable {
@@ -651,6 +729,45 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
             return branchTailRcvDown.queueSize() == 0;
         }
 
+        private ProtoStatus processSend(Object message) throws Throwable {
+            if (message == null) {
+                return ProtoStatus.Next;
+            }
+
+            ChainResult cr = this.chainRoot.onSnd(this.context, null, new Object[] { message }, null);
+            if (cr.data != null) {
+                this.addPendingSnd(cr.data);
+            }
+            if (cr.error != null) {
+                throw cr.error;
+            }
+            return cr.status;
+        }
+
+        private void addPendingSnd(Object[] data) {
+            if (data == null || data.length == 0) {
+                return;
+            }
+            for (Object item : data) {
+                this.pendingSnd.addLast(item);
+            }
+        }
+
+        private boolean flushSndTo(ProtoSndQueue<OUT> finalOutput) {
+            int flushCount = Math.min(this.pendingSnd.size(), finalOutput.slotSize());
+            if (flushCount <= 0) {
+                return this.pendingSnd.isEmpty();
+            }
+
+            for (int i = 0; i < flushCount; i++) {
+                Object item = this.pendingSnd.removeFirst();
+                if (!finalOutput.offerMessage((OUT) item)) {
+                    throw new IllegalStateException("ProtoPartitionDuplexer failed to flush partition send output.");
+                }
+            }
+            return this.pendingSnd.isEmpty();
+        }
+
         private boolean onEvent(SoEvent event, boolean isRcv) throws Throwable {
             if (isRcv) {
                 return this.chainRoot.onRcvEvent(this.context, null, event);
@@ -668,7 +785,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
         }
 
         private boolean hasPendingOutput() {
-            return this.chainRoot.getTailRcvDown().queueSize() > 0;
+            return this.chainRoot.getTailRcvDown().queueSize() > 0 || !this.pendingSnd.isEmpty();
         }
 
         private boolean canCommitClose() {

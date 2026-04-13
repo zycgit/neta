@@ -94,9 +94,7 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
      * Intercept the upgrade exchange and switch the route once websocket is ready.
      */
     @Override
-    public ProtoStatus onMessage(ProtoContext context, boolean isRcv,          //
-            ProtoRcvQueue<HttpObject> rcvUp, ProtoSndQueue<HttpObject> rcvDown,//
-            ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<HttpObject> sndDown) throws Throwable {
+    public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<HttpObject> rcvUp, ProtoSndQueue<HttpObject> rcvDown, ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<HttpObject> sndDown) throws Throwable {
         if (isRcv) {
             return this.handleReceive(context, rcvUp, rcvDown);
         } else {
@@ -126,8 +124,6 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
         removeState(context);
         this.delegate.onClose(context);
     }
-
-    //
 
     private ProtoStatus handleReceive(ProtoContext context, ProtoRcvQueue<HttpObject> rcvUp, ProtoSndQueue<HttpObject> rcvDown) throws Throwable {
         while (rcvUp.hasMore()) {
@@ -199,6 +195,7 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
 
             boolean handshakeRequest = isHandshakeRequest(state.requestParts);
             boolean requestComplete = isRequestComplete(msg);
+
             if (handshakeRequest) {
                 RouteState handshakeState = bindHandshakeState(context, state);
                 handshakeState.handshakePending = true;
@@ -286,13 +283,23 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
     }
 
     private RouteStateStore stateStore(ProtoContext context) {
+        RouteStateStore shared = context.rootContext(RouteStateStore.class);
+        if (shared != null) {
+            return shared;
+        }
+
+        RouteStateStore store = new RouteStateStore();
+        RouteStateStore rootStore = context.rootContext(RouteStateStore.class, store);
+        if (rootStore != null) {
+            return rootStore;
+        }
+
         SoChannel<?> channel = context.getChannel();
         Object attr = channel != null ? channel.getAttribute(ROUTE_STATE_STORE_KEY) : null;
         if (attr instanceof RouteStateStore) {
             return (RouteStateStore) attr;
         }
 
-        RouteStateStore store = new RouteStateStore();
         if (channel != null) {
             channel.setAttribute(ROUTE_STATE_STORE_KEY, store);
         }
@@ -369,5 +376,4 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
     private static boolean isHandshakeResponsePart(HttpObject msg) {
         return msg instanceof HttpResponse || msg instanceof HttpHeaders || msg instanceof HttpContent;
     }
-
 }

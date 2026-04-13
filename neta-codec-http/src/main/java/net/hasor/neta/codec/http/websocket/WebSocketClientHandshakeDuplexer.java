@@ -137,9 +137,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
      * Route inbound and outbound HTTP objects through the client handshake flow.
      */
     @Override
-    public ProtoStatus onMessage(ProtoContext context, boolean isRcv,           //
-            ProtoRcvQueue<HttpObject> rcvUp, ProtoSndQueue<HttpObject> rcvDown, //
-            ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<HttpObject> sndDown) throws Throwable {
+    public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<HttpObject> rcvUp, ProtoSndQueue<HttpObject> rcvDown, ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<HttpObject> sndDown) throws Throwable {
         if (isRcv) {
             return this.handleReceive(context, rcvUp, rcvDown);
         } else {
@@ -185,7 +183,6 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         return ProtoStatus.Next;
     }
 
-    // handleSend
     private ProtoStatus handleSend(ProtoContext context, ProtoRcvData<HttpObject> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
         while (src.hasMore()) {
             HttpObject msg = src.takeMessage();
@@ -229,6 +226,11 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
             }
             if (state.ready || state.requestPending) {
                 this.resetHandshakeSession(state);
+            }
+
+            HttpRequest request = (HttpRequest) msg;
+            if (request.streamId() > 0 && request.protocolVersion().majorVersion() == 2) {
+                state = this.bindStateToStream(context, state, request.streamId());
             }
         }
 
@@ -315,8 +317,6 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         return true;
     }
 
-    //
-    // handleReceive
     private ProtoStatus handleReceive(ProtoContext context, ProtoRcvData<HttpObject> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
         while (src.hasMore()) {
             HttpObject msg = src.takeMessage();
@@ -339,7 +339,6 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
             return ProtoStatus.Next;
         }
 
-        // ERROR1: before handshake finish, only allow HTTP response fragments.
         if (!isHttpResponsePart(msg)) {
             this.warnAndDrop(context, "client-rcv", msg);
             msg.release();
@@ -349,7 +348,6 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
 
         boolean complete = false;
         try {
-            // valid handshake
             if (msg instanceof HttpResponse) {
                 if (state.responseParts.isActive()) {
                     state.responseParts.reset();
@@ -359,7 +357,6 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
                 }
             }
 
-            // collect data.
             state.responseParts.appendResponse(msg);
             complete = state.responseParts.isComplete();
             if (!complete && this.isHttp2HeaderOnlyHandshakeBoundary(msg, state.responseParts)) {
@@ -369,12 +366,10 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
                 return ProtoStatus.Next;
             }
 
-            // test and waiting for handshake data
             if (!state.requestPending) {
                 return ProtoStatus.Next;
             }
 
-            // verify handshake
             String subProtocol;
             try {
                 this.verifyUpgrade(state.standardHttp2, state.version, state.protocols, state.extensions, state.responseParts, state.key, state.key1, state.key2, state.key3);
@@ -389,7 +384,6 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
             WebSocketVersion acceptedVersion = state.version;
             String acceptedPath = state.path;
 
-            // finsh handshake
             try {
                 int versionCode = acceptedVersion != null ? acceptedVersion.code() : 13;
                 List<WebSocketExtensionResult> extResults = InternalUtils.parseExtensions(extStr);
@@ -418,8 +412,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         return ProtoStatus.Next;
     }
 
-    private void verifyUpgrade(boolean standardHttp2, WebSocketVersion version, String reqProtocols, String reqExtensions, HttpMessageParts response,//
-            String key, String key1, String key2, byte[] key3) {
+    private void verifyUpgrade(boolean standardHttp2, WebSocketVersion version, String reqProtocols, String reqExtensions, HttpMessageParts response, String key, String key1, String key2, byte[] key3) {
         if (standardHttp2) {
             if (!InternalUtils.isSuccessfulHttp2WebSocketResponse(response)) {
                 throw new WebSocketHandshakeException(HttpStatus.BAD_REQUEST, "websocket upgrade failed: expected HTTP/2 2xx CONNECT response.");
@@ -543,7 +536,6 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         }
     }
 
-    // tools
     private ClientHandshakeState state(ProtoContext context) {
         ClientHandshakeState state = context.context(ClientHandshakeState.class);
         return state != null ? state : state(context, null);
@@ -593,13 +585,23 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
     }
 
     private ClientHandshakeStateStore stateStore(ProtoContext context) {
+        ClientHandshakeStateStore shared = context.rootContext(ClientHandshakeStateStore.class);
+        if (shared != null) {
+            return shared;
+        }
+
+        ClientHandshakeStateStore store = new ClientHandshakeStateStore();
+        ClientHandshakeStateStore rootStore = context.rootContext(ClientHandshakeStateStore.class, store);
+        if (rootStore != null) {
+            return rootStore;
+        }
+
         SoChannel<?> channel = context.getChannel();
         Object attr = channel != null ? channel.getAttribute(STATE_STORE_KEY) : null;
         if (attr instanceof ClientHandshakeStateStore) {
             return (ClientHandshakeStateStore) attr;
         }
 
-        ClientHandshakeStateStore store = new ClientHandshakeStateStore();
         if (channel != null) {
             channel.setAttribute(STATE_STORE_KEY, store);
         }
@@ -662,6 +664,36 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         return streamState;
     }
 
+    private ClientHandshakeState bindStateToStream(ProtoContext context, ClientHandshakeState state, long streamId) {
+        if (streamId <= 0) {
+            return state;
+        }
+
+        ClientHandshakeState streamState = state(context, streamId);
+        if (streamState == state) {
+            state.requestStreamId = streamId;
+            return state;
+        }
+
+        streamState.requestPending = state.requestPending;
+        streamState.ready = state.ready;
+        streamState.requestStreamId = streamId;
+        streamState.standardHttp2 = state.standardHttp2;
+        streamState.version = state.version;
+        streamState.path = state.path;
+        streamState.host = state.host;
+        streamState.origin = state.origin;
+        streamState.protocols = state.protocols;
+        streamState.extensions = state.extensions;
+        streamState.key = state.key;
+        streamState.key1 = state.key1;
+        streamState.key2 = state.key2;
+        streamState.key3 = state.key3;
+        streamState.bufferedRequestViewRef = state.bufferedRequestViewRef;
+        state.bufferedRequestViewRef = null;
+        return streamState;
+    }
+
     private static ClientHandshakeState findPendingState(ClientHandshakeStateStore store, long streamId) {
         if (store == null || streamId <= 0) {
             return null;
@@ -674,9 +706,6 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         return null;
     }
 
-    // Discard only the remembered request snapshot that is needed to validate the
-    // upgrade response. Buffered messages and aggregators belong to the wider
-    // handshake session and are reset separately.
     private void discardHandshakeRequestSnapshot(ClientHandshakeState state) {
         state.requestPending = false;
         state.requestStreamId = 0;
@@ -693,8 +722,6 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         state.key3 = null;
     }
 
-    // Reset the whole client opening-handshake session, including buffered request
-    // parts and response aggregation state, so a new handshake can start cleanly.
     private void resetHandshakeSession(ClientHandshakeState state) {
         releaseBuffers(state);
         state.requestParts.reset();
@@ -715,8 +742,8 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
             return state.bufferedRequestViewRef;
         }
 
-        String key = BUFFER_QUEUE_PREFIX + partitionKey(context, msg).getKey();
-        ProtoSndQueueView<HttpObject> subQueue = dst.subQueue(key);
+        String queueKey = BUFFER_QUEUE_PREFIX + partitionKey(context, msg).getKey();
+        ProtoSndQueueView<HttpObject> subQueue = dst.subQueue(queueKey);
         state.bufferedRequestViewRef = subQueue;
         return subQueue;
     }
