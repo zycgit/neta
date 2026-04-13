@@ -139,7 +139,7 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
 
             RouteState state = state(context, msg);
 
-            if ((state.handshakePending || this.delegate.isHandshakePending(context, msg) || isSwitchingProtocolsResponse(msg)) && isHandshakeResponsePart(msg)) {
+            if ((state.handshakePending || this.delegate.isHandshakePending(context, msg)) && isHandshakeResponsePart(msg)) {
                 state.handshakePending = true;
                 this.delegate.onReceiveData(context, rcvUp, rcvDown);
                 if (this.delegate.isHandshakeReady(context)) {
@@ -346,6 +346,9 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
     }
 
     private static boolean isHandshakeRequest(HttpMessageParts request) {
+        if (InternalUtils.isStandardHttp2WebSocketRequest(request)) {
+            return true;
+        }
         String upgrade = request.header(HttpHeaderNames.UPGRADE);
         String connection = request.header(HttpHeaderNames.CONNECTION);
         return HttpHeaderValues.WEBSOCKET.equalsIgnoreCase(upgrade) && connection != null && connection.toLowerCase().contains(HttpHeaderValues.UPGRADE);
@@ -367,7 +370,4 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
         return msg instanceof HttpResponse || msg instanceof HttpHeaders || msg instanceof HttpContent;
     }
 
-    private static boolean isSwitchingProtocolsResponse(HttpObject msg) {
-        return msg instanceof HttpResponse && HttpStatus.SWITCHING_PROTOCOLS.equals(((HttpResponse) msg).status());
-    }
 }

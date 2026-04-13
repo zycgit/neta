@@ -395,6 +395,9 @@ public class WebSocketServerUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
     }
 
     private static boolean isHandshakeRequest(HttpMessageParts request) {
+        if (InternalUtils.isStandardHttp2WebSocketRequest(request)) {
+            return true;
+        }
         String upgrade = request.header(HttpHeaderNames.UPGRADE);
         String connection = request.header(HttpHeaderNames.CONNECTION);
         return HttpHeaderValues.WEBSOCKET.equalsIgnoreCase(upgrade) && connection != null && connection.toLowerCase().contains(HttpHeaderValues.UPGRADE);

@@ -375,6 +375,14 @@ public abstract class AbstractWebSocketHandshake implements ProtoDuplexer<HttpOb
             return null;
         }
 
+        if (InternalUtils.isStandardHttp2WebSocketRequest(request)) {
+            String wsVersion = request.header(HttpHeaderNames.SEC_WEBSOCKET_VERSION);
+            if (StringUtils.isBlank(wsVersion)) {
+                return null;
+            }
+            return WebSocketVersion.of(wsVersion.trim());
+        }
+
         String upgrade = request.header(HttpHeaderNames.UPGRADE);
         String connection = request.header(HttpHeaderNames.CONNECTION);
         if (!StringUtils.containsIgnoreCase(connection, HttpHeaderValues.UPGRADE)) {

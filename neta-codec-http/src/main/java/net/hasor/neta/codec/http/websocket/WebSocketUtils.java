@@ -45,11 +45,13 @@ public final class WebSocketUtils {
         private final String requestUri;
         private final String hostHeader;
         private final String originHeader;
+        private final String schemeHeader;
 
-        private HandshakeTarget(String requestUri, String hostHeader, String originHeader) {
+        private HandshakeTarget(String requestUri, String hostHeader, String originHeader, String schemeHeader) {
             this.requestUri = requestUri;
             this.hostHeader = hostHeader;
             this.originHeader = originHeader;
+            this.schemeHeader = schemeHeader;
         }
     }
 
@@ -173,6 +175,35 @@ public final class WebSocketUtils {
      */
     public static FullHttpRequest createHandshake(WebSocketVersion version, String uri, HttpHeaders headers, Cookie... cookies) {
         FullHttpRequest request = createHandshake(version, uri, headers);
+        applyAdditionalHeadersAndCookies(request, headers, cookies);
+        return request;
+    }
+
+    /**
+     * Create a standard RFC 8441 HTTP/2 websocket CONNECT request and merge extra headers and cookies.
+     * @param version websocket version to request
+     * @param uri websocket URI
+     * @param headers extra request headers to merge into the handshake
+     * @param cookies extra cookies to merge into the handshake
+     * @return complete HTTP/2 websocket CONNECT request
+     */
+    public static FullHttpRequest createHttp2Handshake(WebSocketVersion version, String uri, HttpHeaders headers, Cookie... cookies) {
+        FullHttpRequest request = createHttp2Handshake(version, uri, headers);
+        applyAdditionalHeadersAndCookies(request, headers, cookies);
+        return request;
+    }
+
+    /**
+     * Create a bare standard RFC 8441 HTTP/2 websocket CONNECT request.
+     * @param version websocket version to request
+     * @param uri websocket URI
+     * @return complete HTTP/2 websocket CONNECT request
+     */
+    public static FullHttpRequest createHttp2Handshake(WebSocketVersion version, String uri) {
+        return createHttp2Handshake(version, uri, null);
+    }
+
+    private static void applyAdditionalHeadersAndCookies(FullHttpRequest request, HttpHeaders headers, Cookie... cookies) {
         List<Cookie> mergedCookies = new ArrayList<>();
 
         if (headers != null && headers.headerSize() > 0) {
@@ -203,7 +234,6 @@ public final class WebSocketUtils {
         if (!mergedCookies.isEmpty()) {
             request.setHeader(HttpHeaderNames.COOKIE, CookieEncoder.encode(mergedCookies));
         }
-        return request;
     }
 
     /**
@@ -253,6 +283,24 @@ public final class WebSocketUtils {
         }
     }
 
+    private static FullHttpRequest createHttp2Handshake(WebSocketVersion version, String uri, HttpHeaders headers) {
+        if (version == null) {
+            throw new IllegalArgumentException("version must not be null");
+        }
+        if (!version.isRfc6455Framing()) {
+            throw new IllegalArgumentException("standard HTTP/2 websocket only supports RFC6455 framing versions");
+        }
+
+        HandshakeTarget target = resolveHandshakeTarget(uri, headers);
+        DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.CONNECT, target.requestUri);
+        request.setHeader(HttpHeaderNames.HOST, target.hostHeader);
+        request.setHeader(HttpHeaderNames.ORIGIN, target.originHeader);
+        request.setHeader(HttpHeaderNames.X_FORWARDED_PROTO, target.schemeHeader);
+        request.setHeader(HttpHeaderNames.PSEUDO_PROTOCOL, HttpHeaderValues.WEBSOCKET);
+        request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_VERSION, String.valueOf(version.code()));
+        return request;
+    }
+
     private static HandshakeTarget resolveHandshakeTarget(String uri, HttpHeaders headers) {
         if (StringUtils.isBlank(uri)) {
             throw new IllegalArgumentException("handshake uri must not be blank");
@@ -269,15 +317,25 @@ public final class WebSocketUtils {
             String requestUri = normalizeRequestUri(parsedUri);
             String hostHeader = toHostHeader(parsedUri);
             String originHeader = toOriginHeader(parsedUri, hostHeader);
-            return new HandshakeTarget(requestUri, hostHeader, originHeader);
+            String schemeHeader = normalizeHandshakeScheme(parsedUri.getScheme());
+            return new HandshakeTarget(requestUri, hostHeader, originHeader, schemeHeader);
         }
 
         String hostHeader = headers != null ? headers.getString(HttpHeaderNames.HOST) : null;
         String originHeader = headers != null ? headers.getString(HttpHeaderNames.ORIGIN) : null;
-        if (StringUtils.isBlank(hostHeader) || StringUtils.isBlank(originHeader)) {
+        String schemeHeader = headers != null ? headers.getString(HttpHeaderNames.X_FORWARDED_PROTO) : null;
+        if (StringUtils.isBlank(schemeHeader) && StringUtils.isNotBlank(originHeader)) {
+            try {
+                schemeHeader = normalizeHandshakeScheme(URI.create(originHeader).getScheme());
+            } catch (IllegalArgumentException e) {
+                schemeHeader = null;
+            }
+        }
+
+        if (StringUtils.isBlank(hostHeader) || StringUtils.isBlank(originHeader) || StringUtils.isBlank(schemeHeader)) {
             throw new IllegalArgumentException("relative websocket handshake URI requires explicit Host and Origin headers or an absolute URI");
         }
-        return new HandshakeTarget(uri, hostHeader, originHeader);
+        return new HandshakeTarget(uri, hostHeader, originHeader, schemeHeader);
     }
 
     private static String normalizeRequestUri(URI parsedUri) {
@@ -300,13 +358,17 @@ public final class WebSocketUtils {
     }
 
     private static String toOriginHeader(URI parsedUri, String hostHeader) {
-        String scheme = parsedUri.getScheme();
+        String scheme = normalizeHandshakeScheme(parsedUri.getScheme());
+        return scheme + "://" + hostHeader;
+    }
+
+    private static String normalizeHandshakeScheme(String scheme) {
         if (StringUtils.equalsIgnoreCase("ws", scheme)) {
-            scheme = "http";
+            return "http";
         } else if (StringUtils.equalsIgnoreCase("wss", scheme)) {
-            scheme = "https";
+            return "https";
         }
-        return scheme.toLowerCase() + "://" + hostHeader;
+        return scheme != null ? scheme.toLowerCase() : null;
     }
 
     private static String formatAuthorityHost(String host) {

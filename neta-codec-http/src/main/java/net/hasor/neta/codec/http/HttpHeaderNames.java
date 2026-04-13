@@ -228,6 +228,8 @@ public abstract class HttpHeaderNames {
     public static final String PSEUDO_METHOD    = ":method";
     /** {@code ":path"} */
     public static final String PSEUDO_PATH      = ":path";
+    /** {@code ":protocol"} */
+    public static final String PSEUDO_PROTOCOL  = ":protocol";
     /** {@code ":scheme"} */
     public static final String PSEUDO_SCHEME    = ":scheme";
     /** {@code ":status"} */

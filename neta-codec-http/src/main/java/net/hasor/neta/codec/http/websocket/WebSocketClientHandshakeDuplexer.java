@@ -53,6 +53,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         private       boolean                       requestPending;
         private       boolean                       ready;
         private       long                          requestStreamId;
+        private       boolean                       standardHttp2;
         private       WebSocketVersion              version;
         private       String                        path;
         private       String                        host;
@@ -270,16 +271,20 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
             return false;
         }
 
+        boolean standardHttp2 = InternalUtils.isStandardHttp2WebSocketRequest(request);
+
         String requestKey = null;
         String requestKey1 = null;
         String requestKey2 = null;
         byte[] requestKey3 = null;
         if (version.isRfc6455Framing()) {
-            requestKey = request.header(HttpHeaderNames.SEC_WEBSOCKET_KEY);
-            if (requestKey == null || requestKey.trim().isEmpty()) {
-                return false;
+            if (!standardHttp2) {
+                requestKey = request.header(HttpHeaderNames.SEC_WEBSOCKET_KEY);
+                if (requestKey == null || requestKey.trim().isEmpty()) {
+                    return false;
+                }
+                requestKey = requestKey.trim();
             }
-            requestKey = requestKey.trim();
         } else {
             requestKey1 = request.header(HttpHeaderNames.SEC_WEBSOCKET_KEY1);
             requestKey2 = request.header(HttpHeaderNames.SEC_WEBSOCKET_KEY2);
@@ -296,6 +301,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
 
         state.requestPending = true;
         state.requestStreamId = request.streamId();
+        state.standardHttp2 = standardHttp2;
         state.version = version;
         state.path = request.uri();
         state.host = request.header(HttpHeaderNames.HOST);
@@ -371,7 +377,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
             // verify handshake
             String subProtocol;
             try {
-                this.verifyUpgrade(state.version, state.protocols, state.extensions, state.responseParts, state.key, state.key1, state.key2, state.key3);
+                this.verifyUpgrade(state.standardHttp2, state.version, state.protocols, state.extensions, state.responseParts, state.key, state.key1, state.key2, state.key3);
                 subProtocol = state.responseParts.header(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL);
             } catch (WebSocketHandshakeException e) {
                 logger.warn("Websocket client handshake protocol violation: " + e.getMessage());
@@ -412,8 +418,16 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         return ProtoStatus.Next;
     }
 
-    private void verifyUpgrade(WebSocketVersion version, String reqProtocols, String reqExtensions, HttpMessageParts response,//
+    private void verifyUpgrade(boolean standardHttp2, WebSocketVersion version, String reqProtocols, String reqExtensions, HttpMessageParts response,//
             String key, String key1, String key2, byte[] key3) {
+        if (standardHttp2) {
+            if (!InternalUtils.isSuccessfulHttp2WebSocketResponse(response)) {
+                throw new WebSocketHandshakeException(HttpStatus.BAD_REQUEST, "websocket upgrade failed: expected HTTP/2 2xx CONNECT response.");
+            }
+            validateNegotiatedHeaders(reqProtocols, reqExtensions, response);
+            return;
+        }
+
         if (response.status() == null || response.status().code() != HttpStatus.SWITCHING_PROTOCOLS.code()) {
             throw new WebSocketHandshakeException(HttpStatus.BAD_REQUEST, "websocket upgrade failed: expected HTTP 101 Switching Protocols response.");
         }
@@ -460,7 +474,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         if (responseParts.protocolVersion().majorVersion() != 2) {
             return false;
         }
-        if (responseParts.status() == null || responseParts.status().code() != HttpStatus.SWITCHING_PROTOCOLS.code()) {
+        if (!InternalUtils.isSuccessfulHttp2WebSocketResponse(responseParts) && (responseParts.status() == null || responseParts.status().code() != HttpStatus.SWITCHING_PROTOCOLS.code())) {
             return false;
         }
         ByteBuf body = responseParts.body();
@@ -631,6 +645,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         streamState.requestPending = state.requestPending;
         streamState.ready = state.ready;
         streamState.requestStreamId = state.requestStreamId;
+        streamState.standardHttp2 = state.standardHttp2;
         streamState.version = state.version;
         streamState.path = state.path;
         streamState.host = state.host;
@@ -665,6 +680,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
     private void discardHandshakeRequestSnapshot(ClientHandshakeState state) {
         state.requestPending = false;
         state.requestStreamId = 0;
+        state.standardHttp2 = false;
         state.version = null;
         state.path = null;
         state.host = null;

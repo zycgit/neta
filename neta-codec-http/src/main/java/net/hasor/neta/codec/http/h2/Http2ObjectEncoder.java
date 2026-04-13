@@ -308,7 +308,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
         request.streamId(streamId);
         ByteBuf body = request.content();
         boolean hasBody = body != null && body.readableBytes() > 0;
-        boolean webSocketUpgrade = isWebSocketUpgradeHandshake(request);
+        boolean webSocketUpgrade = isWebSocketUpgradeHandshake(request) || isStandardWebSocketConnect(request, request);
         this.encodeHeaders(state, this.buildRequestHeaders(request, request), streamId, !hasBody && !webSocketUpgrade, dst);
         if (hasBody) {
             this.encodeData(context, streamId, body, true, dst);
@@ -401,7 +401,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
             throw new HttpProtocolConnectionException(Http2ErrorCode.PROTOCOL_ERROR, msg);
         }
 
-        if (isWebSocketUpgradeHandshake(regularHeaders)) {
+        if (isWebSocketUpgradeHandshake(regularHeaders) || (state.pendingStartLineIsRequest() && isStandardWebSocketConnect(state.pendingRequest(), regularHeaders))) {
             state.markPendingUpgradeStream(streamId);
         }
 
@@ -470,11 +470,16 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
         HttpHeaders target = new DefaultHttpHeaders();
         target.addHeader(HttpHeaderNames.PSEUDO_METHOD, request.method().name());
         target.addHeader(HttpHeaderNames.PSEUDO_PATH, request.uri());
+        String protocol = regularHeaders != null ? regularHeaders.getString(HttpHeaderNames.PSEUDO_PROTOCOL) : null;
+        if (StringUtils.isNotBlank(protocol)) {
+            target.addHeader(HttpHeaderNames.PSEUDO_PROTOCOL, protocol);
+        }
         String host = regularHeaders != null ? regularHeaders.getString(HttpHeaderNames.HOST) : null;
         if (StringUtils.isNotBlank(host)) {
             target.addHeader(HttpHeaderNames.PSEUDO_AUTHORITY, host);
         }
-        target.addHeader(HttpHeaderNames.PSEUDO_SCHEME, this.scheme.name());
+        String schemeName = regularHeaders != null ? regularHeaders.getString(HttpHeaderNames.X_FORWARDED_PROTO) : null;
+        target.addHeader(HttpHeaderNames.PSEUDO_SCHEME, StringUtils.isNotBlank(schemeName) ? schemeName : this.scheme.name());
         this.copyRegularHeaders(regularHeaders, target, shouldPreserveWebSocketUpgradeHeaders(regularHeaders));
         return target;
     }
@@ -519,6 +524,13 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
 
     private boolean isWebSocketUpgradeHandshake(HttpHeaders headers) {
         return shouldPreserveWebSocketUpgradeHeaders(headers);
+    }
+
+    private boolean isStandardWebSocketConnect(HttpRequest request, HttpHeaders headers) {
+        if (request == null || !HttpMethod.CONNECT.equals(request.method())) {
+            return false;
+        }
+        return headers != null && StringUtils.equalsIgnoreCase(HttpHeaderValues.WEBSOCKET, headers.getString(HttpHeaderNames.PSEUDO_PROTOCOL));
     }
 
     private void encodeHeaders(Http2EncoderContent state, HttpHeaders headers, long streamId, boolean endStream, ProtoSndQueue<Http2Frame> dst) {
@@ -770,6 +782,9 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
         }
         if (settings.maxHeaderListSize() != Long.MAX_VALUE) {
             result.put(Http2Settings.SETTINGS_MAX_HEADER_LIST_SIZE, settings.maxHeaderListSize());
+        }
+        if (settings.enableConnectProtocol()) {
+            result.put(Http2Settings.SETTINGS_ENABLE_CONNECT_PROTOCOL, 1L);
         }
 
         return result;

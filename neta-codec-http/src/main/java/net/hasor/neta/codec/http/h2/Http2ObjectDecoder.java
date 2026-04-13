@@ -628,10 +628,14 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
         } else {
             HttpRequest request = (HttpRequest) startLine;
             String authority = headers.getString(HttpHeaderNames.PSEUDO_AUTHORITY);
+            String protocol = headers.getString(HttpHeaderNames.PSEUDO_PROTOCOL);
             String scheme = headers.getString(HttpHeaderNames.PSEUDO_SCHEME);
 
             if (StringUtils.isNotBlank(authority) && StringUtils.isBlank(regularHeaders.getString(HttpHeaderNames.HOST))) {
                 regularHeaders.addHeader(HttpHeaderNames.HOST, authority);
+            }
+            if (StringUtils.isNotBlank(protocol)) {
+                regularHeaders.addHeader(HttpHeaderNames.PSEUDO_PROTOCOL, protocol);
             }
             if (StringUtils.isNotBlank(scheme)) {
                 regularHeaders.addHeader(HttpHeaderNames.X_FORWARDED_PROTO, scheme);

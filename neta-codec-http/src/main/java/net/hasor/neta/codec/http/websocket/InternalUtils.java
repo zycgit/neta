@@ -28,8 +28,7 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.routing.PartitionKey;
-import net.hasor.neta.codec.http.HttpScope;
-import net.hasor.neta.codec.http.HttpVersion;
+import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.h2.Http2ResetEvent;
 
 /**
@@ -212,6 +211,24 @@ final class InternalUtils {
     static HttpScope resolveHttpScope(ProtoContext context) {
         HttpScope scope = context != null ? context.context(HttpScope.class) : null;
         return scope != null ? scope : HttpScope.CONNECTION;
+    }
+
+    static boolean isStandardHttp2WebSocketRequest(HttpMessageParts request) {
+        if (request == null || request.protocolVersion() == null || request.protocolVersion().majorVersion() != 2) {
+            return false;
+        }
+        if (!HttpMethod.CONNECT.equals(request.method())) {
+            return false;
+        }
+        return StringUtils.equalsIgnoreCase(HttpHeaderValues.WEBSOCKET, request.header(HttpHeaderNames.PSEUDO_PROTOCOL));
+    }
+
+    static boolean isSuccessfulHttp2WebSocketResponse(HttpMessageParts response) {
+        if (response == null || response.protocolVersion() == null || response.protocolVersion().majorVersion() != 2 || response.status() == null) {
+            return false;
+        }
+        int code = response.status().code();
+        return code >= 200 && code < 300;
     }
 
     private static void executeHttp1ConnectionAction(ProtoContext context, WebSocketCloseType actionType, Future<?> future) {

@@ -24,17 +24,19 @@ package net.hasor.neta.codec.http.h2;
  */
 public class Http2Settings {
     /** SETTINGS_HEADER_TABLE_SIZE (0x01), the HPACK header table size, defaulting to 4096. */
-    public static final int SETTINGS_HEADER_TABLE_SIZE      = 0x01;
+    public static final int SETTINGS_HEADER_TABLE_SIZE       = 0x01;
     /** SETTINGS_ENABLE_PUSH (0x02), the server push switch, defaulting to 1 (enabled). */
-    public static final int SETTINGS_ENABLE_PUSH            = 0x02;
+    public static final int SETTINGS_ENABLE_PUSH             = 0x02;
     /** SETTINGS_MAX_CONCURRENT_STREAMS (0x03), the maximum concurrent stream count, unlimited by default. */
-    public static final int SETTINGS_MAX_CONCURRENT_STREAMS = 0x03;
+    public static final int SETTINGS_MAX_CONCURRENT_STREAMS  = 0x03;
     /** SETTINGS_INITIAL_WINDOW_SIZE (0x04), the initial flow-control window size, defaulting to 65535. */
-    public static final int SETTINGS_INITIAL_WINDOW_SIZE    = 0x04;
+    public static final int SETTINGS_INITIAL_WINDOW_SIZE     = 0x04;
     /** SETTINGS_MAX_FRAME_SIZE (0x05), the maximum frame payload size, defaulting to 16384. */
-    public static final int SETTINGS_MAX_FRAME_SIZE         = 0x05;
+    public static final int SETTINGS_MAX_FRAME_SIZE          = 0x05;
     /** SETTINGS_MAX_HEADER_LIST_SIZE (0x06), the maximum header list size, unlimited by default. */
-    public static final int SETTINGS_MAX_HEADER_LIST_SIZE   = 0x06;
+    public static final int SETTINGS_MAX_HEADER_LIST_SIZE    = 0x06;
+    /** SETTINGS_ENABLE_CONNECT_PROTOCOL (0x08), the RFC 8441 extended CONNECT capability flag, disabled by default. */
+    public static final int SETTINGS_ENABLE_CONNECT_PROTOCOL = 0x08;
 
     /** Default values defined by RFC 9113. */
     private long    headerTableSize      = 4096;
@@ -43,6 +45,7 @@ public class Http2Settings {
     private int     initialWindowSize    = 65535;
     private int     maxFrameSize         = 16384;
     private long    maxHeaderListSize    = Long.MAX_VALUE;
+    private boolean enableConnectProtocol;
 
     public Http2Settings() {
     }
@@ -58,6 +61,7 @@ public class Http2Settings {
         this.initialWindowSize = other.initialWindowSize;
         this.maxFrameSize = other.maxFrameSize;
         this.maxHeaderListSize = other.maxHeaderListSize;
+        this.enableConnectProtocol = other.enableConnectProtocol;
     }
 
     /**
@@ -96,6 +100,7 @@ public class Http2Settings {
         if (serverMode) {
             settings.enablePush(false);
             settings.maxConcurrentStreams(100L);
+            settings.enableConnectProtocol(true);
         }
         return settings;
     }
@@ -205,6 +210,23 @@ public class Http2Settings {
     }
 
     /**
+     * Returns whether RFC 8441 extended CONNECT is enabled.
+     */
+    public boolean enableConnectProtocol() {
+        return enableConnectProtocol;
+    }
+
+    /**
+     * Sets whether RFC 8441 extended CONNECT is enabled.
+     * @param value whether extended CONNECT should be advertised
+     * @return the current settings instance
+     */
+    public Http2Settings enableConnectProtocol(boolean value) {
+        this.enableConnectProtocol = value;
+        return this;
+    }
+
+    /**
      * Sets the maximum header list size.
      * @param value the new value
      * @return the current settings instance
@@ -243,6 +265,9 @@ public class Http2Settings {
             case SETTINGS_MAX_HEADER_LIST_SIZE:
                 maxHeaderListSize(value);
                 break;
+            case SETTINGS_ENABLE_CONNECT_PROTOCOL:
+                enableConnectProtocol(value != 0);
+                break;
             default:
                 // Unknown settings MUST be ignored (RFC 9113, Section 6.5.2)
                 break;
@@ -251,6 +276,6 @@ public class Http2Settings {
 
     @Override
     public String toString() {
-        return "Http2Settings{" + "headerTableSize=" + headerTableSize + ", enablePush=" + enablePush + ", maxConcurrentStreams=" + maxConcurrentStreams + ", initialWindowSize=" + initialWindowSize + ", maxFrameSize=" + maxFrameSize + ", maxHeaderListSize=" + maxHeaderListSize + '}';
+        return "Http2Settings{" + "headerTableSize=" + headerTableSize + ", enablePush=" + enablePush + ", maxConcurrentStreams=" + maxConcurrentStreams + ", initialWindowSize=" + initialWindowSize + ", maxFrameSize=" + maxFrameSize + ", maxHeaderListSize=" + maxHeaderListSize + ", enableConnectProtocol=" + enableConnectProtocol + '}';
     }
 }
