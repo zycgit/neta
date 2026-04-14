@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -42,25 +42,25 @@ import net.hasor.neta.channel.routing.ProtoPartitionPolicy.ReceivePolicy;
  * @version : 2026-03-29
  */
 public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OUT, OUT> {
-    private static final Logger                            logger          = Logger.getLogger(ProtoPartitionDuplexer.class);
-    private static final String                            STAGE_QUEUE_KEY = ProtoPartitionDuplexer.class.getName();
-    private final        ProtoPartitionSelector            selector;
-    private final        Map<PartitionKey, PartitionState> partitions;
-    private final        ProtoPartitionControl             partitionControl;
-    private final        String                            recoveryOwnerId;
-    private              ProtoInitializer                  partitionInitializer;
-    private              ProtoInitializer                  defaultInitializer;
-    private              ProtoPartitionPolicy              partitionPolicy;
-    private              PartitionKey                      pendingPartitionKey;
-    private              boolean                           pendingPartition;
-    private              PartitionKey                      pendingSndPartitionKey;
-    private              boolean                           pendingSndPartition;
-    private              boolean                           closeAllRequested;
-    private              int                               partitionRcvSize;
-    private              int                               partitionSndSize;
-    private              String                            parentPrevStackName;
-    private              String                            parentNextStackName;
-    private              boolean                           creationLock;
+    private static final Logger                     logger          = Logger.getLogger(ProtoPartitionDuplexer.class);
+    private static final String                     STAGE_QUEUE_KEY = ProtoPartitionDuplexer.class.getName();
+    private final ProtoPartitionSelector            selector;
+    private final Map<PartitionKey, PartitionState> partitions;
+    private final ProtoPartitionControl             partitionControl;
+    private final String                            recoveryOwnerId;
+    private ProtoInitializer                        partitionInitializer;
+    private ProtoInitializer                        defaultInitializer;
+    private ProtoPartitionPolicy                    partitionPolicy;
+    private PartitionKey                            pendingPartitionKey;
+    private boolean                                 pendingPartition;
+    private PartitionKey                            pendingSndPartitionKey;
+    private boolean                                 pendingSndPartition;
+    private boolean                                 closeAllRequested;
+    private int                                     partitionRcvSize;
+    private int                                     partitionSndSize;
+    private String                                  parentPrevStackName;
+    private String                                  parentNextStackName;
+    private boolean                                 creationLock;
 
     public ProtoPartitionDuplexer(ProtoPartitionSelector selector) {
         String ownerSuffix = Integer.toHexString(System.identityHashCode(this));
@@ -680,7 +680,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
         private final ProtoContextService context;
         private final ProtoStackChain     chainRoot;
         private final Deque<Object>       pendingSnd;
-        private       boolean             closeRequested;
+        private boolean                   closeRequested;
 
         private PartitionState(ProtoContextService context, ProtoStackChain chainRoot) {
             this.context = context;
@@ -745,7 +745,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
         }
 
         private void addPendingSnd(Object[] data) {
-            if (data == null || data.length == 0) {
+            if (data == null) {
                 return;
             }
             for (Object item : data) {

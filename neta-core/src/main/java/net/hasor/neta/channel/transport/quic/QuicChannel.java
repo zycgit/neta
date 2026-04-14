@@ -119,6 +119,13 @@ public class QuicChannel extends UdpChannel {
     }
 
     /**
+     * Returns the configured stream exposure mode for the current QUIC connection.
+     */
+    public QuicChannelMode getStreamMode() {
+        return this.quicSoConfig.getStreamMode();
+    }
+
+    /**
      * Returns the current connection-level data limit; this value can only be increased through {@link #sendMaxDataSize(long)}.
      */
     public long getMaxDataSize() {
@@ -224,6 +231,55 @@ public class QuicChannel extends UdpChannel {
     }
 
     /**
+     * Sends a RESET_STREAM frame for the specified stream ID.
+     */
+    public Future<QuicChannel> sendReset(long streamId, long errorCode, long finalSize) {
+        BasicFuture<QuicChannel> future = new BasicFuture<>();
+        try {
+            byte[] typeBytes = QuicVarInt.encode(QuicFrameType.RESET_STREAM);
+            byte[] sidBytes = QuicVarInt.encode(streamId);
+            byte[] errBytes = QuicVarInt.encode(errorCode);
+            byte[] sizeBytes = QuicVarInt.encode(finalSize);
+            byte[] frame = new byte[typeBytes.length + sidBytes.length + errBytes.length + sizeBytes.length];
+            int pos = 0;
+            System.arraycopy(typeBytes, 0, frame, pos, typeBytes.length);
+            pos += typeBytes.length;
+            System.arraycopy(sidBytes, 0, frame, pos, sidBytes.length);
+            pos += sidBytes.length;
+            System.arraycopy(errBytes, 0, frame, pos, errBytes.length);
+            pos += errBytes.length;
+            System.arraycopy(sizeBytes, 0, frame, pos, sizeBytes.length);
+            this.asyncChannel().sendDataFrame(ByteBuf.wrap(frame), future);
+        } catch (Throwable e) {
+            future.failed(e);
+        }
+        return future;
+    }
+
+    /**
+     * Sends a STOP_SENDING frame for the specified stream ID.
+     */
+    public Future<QuicChannel> sendStop(long streamId, long errorCode) {
+        BasicFuture<QuicChannel> future = new BasicFuture<>();
+        try {
+            byte[] typeBytes = QuicVarInt.encode(QuicFrameType.STOP_SENDING);
+            byte[] sidBytes = QuicVarInt.encode(streamId);
+            byte[] errBytes = QuicVarInt.encode(errorCode);
+            byte[] frame = new byte[typeBytes.length + sidBytes.length + errBytes.length];
+            int pos = 0;
+            System.arraycopy(typeBytes, 0, frame, pos, typeBytes.length);
+            pos += typeBytes.length;
+            System.arraycopy(sidBytes, 0, frame, pos, sidBytes.length);
+            pos += sidBytes.length;
+            System.arraycopy(errBytes, 0, frame, pos, errBytes.length);
+            this.asyncChannel().sendDataFrame(ByteBuf.wrap(frame), future);
+        } catch (Throwable e) {
+            future.failed(e);
+        }
+        return future;
+    }
+
+    /**
      * Returns the open {@link QuicStreamChannel} corresponding to the given stream ID (RFC 9000 §2.1); returns null
      * if none exists.
      */
@@ -244,13 +300,16 @@ public class QuicChannel extends UdpChannel {
      * Asynchronously creates a new bidirectional stream, with the stream ID assigned automatically by the framework.
      */
     public Future<QuicStreamChannel> newBidiStream() {
-        return this.asyncChannel().newStreamChannel(nextBidiStreamId());
+        if (this.quicSoConfig.isMessageMuxMode()) {
+            return net.hasor.cobble.concurrent.future.Futures.buildFailed(new IllegalStateException("Stream channels are disabled in QUIC message mux mode."));
+        }
+        return this.asyncChannel().newStreamChannel(allocateBidiStreamId());
     }
 
     /**
      * Computes the next bidirectional stream ID.
      */
-    private long nextBidiStreamId() {
+    public long allocateBidiStreamId() {
         long id = this.nextBidiStreamId.getAndAdd(4);
         long streamIndex = id / 4;
         long peerMax = this.asyncChannel().getPeerMaxStreamsBidi();
@@ -299,13 +358,16 @@ public class QuicChannel extends UdpChannel {
      * Asynchronously creates a new unidirectional stream, with the stream ID assigned automatically by the framework.
      */
     public Future<QuicStreamChannel> newUniStream() {
-        return this.asyncChannel().newStreamChannel(nextUniStreamId());
+        if (this.quicSoConfig.isMessageMuxMode()) {
+            return net.hasor.cobble.concurrent.future.Futures.buildFailed(new IllegalStateException("Stream channels are disabled in QUIC message mux mode."));
+        }
+        return this.asyncChannel().newStreamChannel(allocateUniStreamId());
     }
 
     /**
      * Computes the next unidirectional stream ID.
      */
-    private long nextUniStreamId() {
+    public long allocateUniStreamId() {
         long id = this.nextUniStreamId.getAndAdd(4);
         long streamIndex = id / 4;
         long peerMax = this.asyncChannel().getPeerMaxStreamsUni();

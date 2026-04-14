@@ -46,6 +46,7 @@ public class QuicSoConfig extends UdpSoConfig {
     private long                   tpInitialMaxStreamsUni           = 100;      // Maximum number of unidirectional streams the peer may open concurrently
     private long                   tpInitialDatagramFrameMaxData    = 0;        // Maximum DATAGRAM frame payload length; 0 means disabled (RFC 9221)
     private boolean                disableDatagram                  = false;
+    private QuicChannelMode        streamMode                       = QuicChannelMode.STREAM;
     private QuicVersion            quicVersion                      = QuicVersion.V1;
     private QuicConnectionListener connectionListener               = null;
 
@@ -244,6 +245,38 @@ public class QuicSoConfig extends UdpSoConfig {
     public QuicSoConfig setDisableDatagram(boolean disableDatagram) {
         this.disableDatagram = disableDatagram;
         return this;
+    }
+
+    /**
+     * Returns how QUIC stream payload is exposed to the upper pipeline.
+     */
+    public QuicChannelMode getStreamMode() {
+        return this.streamMode;
+    }
+
+    /**
+     * Sets how QUIC stream payload is exposed to the upper pipeline.
+     */
+    public QuicSoConfig setStreamMode(QuicChannelMode streamMode) {
+        if (streamMode == null) {
+            throw new IllegalArgumentException("streamMode must not be null");
+        }
+        this.streamMode = streamMode;
+        return this;
+    }
+
+    /**
+     * Returns whether the transport uses per-stream child channels.
+     */
+    public boolean isStreamChannelMode() {
+        return this.streamMode == QuicChannelMode.STREAM;
+    }
+
+    /**
+     * Returns whether the transport delivers reassembled stream payload as {@link QuicMessage} on the connection pipeline.
+     */
+    public boolean isMessageMuxMode() {
+        return this.streamMode == QuicChannelMode.CHANNEL;
     }
 
     // ── QUIC version ──────────────────────────────────────────────────

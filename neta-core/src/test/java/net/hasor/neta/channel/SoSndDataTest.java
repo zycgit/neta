@@ -15,9 +15,13 @@
  */
 package net.hasor.neta.channel;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.channel.transport.quic.QuicMessage;
 import org.junit.Test;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -106,6 +110,24 @@ public class SoSndDataTest {
 
         assert soData.getDataSize() == 8;
         assert !soData.hasReadable();
+    }
+
+    @Test
+    public void test_quic_message_failed_should_recycle() {
+        ByteBuf failedBody = ByteBuf.wrap("failed".getBytes(StandardCharsets.UTF_8));
+        QuicMessage failedMessage = QuicMessage.of(0, failedBody, false);
+
+        SoSndData soData = new SoSndData(failedBody.readableBytes(), new Object[] { failedMessage }, new BasicFuture<NetChannel>(), null);
+        soData.failed(new SoSndException("send failed"));
+
+        assertTrue(failedBody.isFree());
+
+        ByteBuf reusedBody = ByteBuf.wrap("reused".getBytes(StandardCharsets.UTF_8));
+        QuicMessage reusedMessage = QuicMessage.of(2, reusedBody, true);
+        assertSame(failedMessage, reusedMessage);
+
+        reusedMessage.release();
+        assertTrue(reusedBody.isFree());
     }
 
 }

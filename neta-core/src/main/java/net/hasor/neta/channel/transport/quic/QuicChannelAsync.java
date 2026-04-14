@@ -24,6 +24,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.concurrent.future.Futures;
@@ -71,6 +72,7 @@ class QuicChannelAsync implements AsyncChannel {
     //
     private final        Set<Long>                        streamIds;
     private final        Map<Long, QuicStreamChannel>     streamMap;
+    private final        Map<Long, QuicStreamState>       streamStates;
     //
     // ── ACK, Loss Detection, Congestion Control, Flow Control
     private final        QuicAckTracker                   ackTracker;
@@ -90,6 +92,7 @@ class QuicChannelAsync implements AsyncChannel {
     // ── Path Validation
     private final        QuicPathValidator                pathValidator;
     private final        Map<Long, PendingPing>           pendingPings;
+    private final        AtomicBoolean                    messageWriting;
     private final        long                             connectionDatagramMaxData; // Last time (in milliseconds) any packet was sent or received on this connection.
     private volatile     long                             lastActivityTime;
     private volatile     long                             connectionMaxData;
@@ -134,6 +137,7 @@ class QuicChannelAsync implements AsyncChannel {
         //
         this.streamIds = ConcurrentHashMap.newKeySet();
         this.streamMap = new ConcurrentHashMap<>();
+        this.streamStates = new ConcurrentHashMap<>();
         //
         // Initialize ACK tracking, loss detection, congestion control, and flow control components.
         this.ackTracker = new QuicAckTracker();
@@ -145,6 +149,7 @@ class QuicChannelAsync implements AsyncChannel {
         this.cidManager = new QuicConnectionIdManager(handshake.getLocalCid(), handshake.getRemoteCid(), soConfig.getConnectionIdLength());
         this.pathValidator = new QuicPathValidator();
         this.pendingPings = new ConcurrentHashMap<>();
+        this.messageWriting = new AtomicBoolean(false);
     }
 
     /**
@@ -383,8 +388,107 @@ class QuicChannelAsync implements AsyncChannel {
         return Collections.unmodifiableSet(this.streamIds);
     }
 
+    boolean isStreamChannelMode() {
+        return this.quicSoConfig.isStreamChannelMode();
+    }
+
+    boolean isMessageMuxMode() {
+        return this.quicSoConfig.isMessageMuxMode();
+    }
+
     public QuicStreamChannel findStream(long streamId) {
         return this.streamMap.getOrDefault(streamId, null);
+    }
+
+    PreparedQuicMessage prepareMessageWrite(QuicMessage message) throws Throwable {
+        if (message == null) {
+            throw new IllegalArgumentException("message is null.");
+        }
+        if (!this.isMessageMuxMode()) {
+            throw new IllegalStateException("QUIC message mux mode is disabled.");
+        }
+
+        QuicStreamState state = this.ensureOutboundMessageStreamState(message.streamId());
+        ByteBuf byteBuf = message.content();
+        int length = byteBuf != null ? byteBuf.readableBytes() : 0;
+        byte[] data = length > 0 ? byteBuf.asByteArray() : new byte[0];
+        long offset = state.getSendOffset();
+        byte[] frame = buildStreamData(message.streamId(), offset, data, message.isFin());
+        return new PreparedQuicMessage(state, frame, length);
+    }
+
+    private QuicStreamState ensureOutboundMessageStreamState(long streamId) throws Throwable {
+        synchronized (this.streamMap) {
+            QuicStreamState state = this.streamStates.get(streamId);
+            if (state != null) {
+                return state;
+            }
+
+            boolean clientInitiated = (streamId & 0x01) == 0;
+            boolean locallyInitiated = (this.clientMode == clientInitiated);
+            if (!locallyInitiated) {
+                throw new IllegalStateException("Peer-initiated stream " + streamId + " has not been opened yet.");
+            }
+            return this.registerStreamState(streamId, false);
+        }
+    }
+
+    private QuicStreamState ensureInboundStreamState(long streamId) throws Throwable {
+        synchronized (this.streamMap) {
+            QuicStreamState state = this.streamStates.get(streamId);
+            if (state != null) {
+                return state;
+            }
+            return this.registerStreamState(streamId, false);
+        }
+    }
+
+    private QuicStreamState registerStreamState(long streamId, boolean failIfExists) throws Throwable {
+        if (this.closed.get()) {
+            throw new SoCloseException("Channel is closed");
+        }
+
+        QuicStreamState existing = this.streamStates.get(streamId);
+        if (existing != null) {
+            if (failIfExists) {
+                throw new IllegalStateException("Stream " + streamId + " already exists");
+            }
+            return existing;
+        }
+
+        boolean clientInitiated = (streamId & 0x01) == 0;
+        boolean locallyInitiated = (this.clientMode == clientInitiated);
+        boolean bidi = (streamId & 0x02) == 0;
+        if (!locallyInitiated) {
+            long ourLimit = bidi ? this.quicSoConfig.getTpInitialMaxStreamsBidi() : this.quicSoConfig.getTpInitialMaxStreamsUni();
+            long streamIndex = streamId / 4;
+            if (streamIndex >= ourLimit) {
+                String streamLimitViolation = "STREAM_LIMIT_ERROR: remote stream index " + streamIndex + " exceeds local max_streams=" + ourLimit + " (streamId=" + streamId + ')';
+                this.closeWithError(QuicErrorCode.STREAM_LIMIT_ERROR, streamLimitViolation, null);
+                throw new IllegalStateException(streamLimitViolation);
+            }
+            if (bidi) {
+                this.nextRemoteBidiStreamId = Math.max(this.nextRemoteBidiStreamId, streamId + 4);
+            } else {
+                this.nextRemoteUniStreamId = Math.max(this.nextRemoteUniStreamId, streamId + 4);
+            }
+        }
+
+        long streamMaxData;
+        if (bidi) {
+            streamMaxData = locallyInitiated ? this.peerStreamMaxDataBidiRemote : this.quicSoConfig.getTpInitialMaxStreamDataBidiRemote();
+        } else {
+            streamMaxData = locallyInitiated ? this.peerStreamMaxDataUni : this.quicSoConfig.getTpInitialMaxStreamDataUni();
+        }
+
+        QuicStreamState streamState = new QuicStreamState(streamId, streamMaxData);
+        this.streamStates.put(streamId, streamState);
+        this.streamIds.add(streamId);
+        return streamState;
+    }
+
+    void onMessageWriteTaskFinished() {
+        this.messageWriting.set(false);
     }
 
     public QuicDatagramChannel onlyGetDatagramChannel() {
@@ -397,6 +501,9 @@ class QuicChannelAsync implements AsyncChannel {
     public Future<QuicStreamChannel> newStreamChannel(long streamId) {
         if (this.closed.get()) {
             return Futures.buildFailed(new SoCloseException("Channel is closed"));
+        }
+        if (this.isMessageMuxMode()) {
+            return Futures.buildFailed(new IllegalStateException("Stream channels are disabled in QUIC message mux mode."));
         }
 
         BasicFuture<QuicStreamChannel> future = new BasicFuture<>();
@@ -413,39 +520,11 @@ class QuicChannelAsync implements AsyncChannel {
                     future.failed(new IllegalStateException("QuicChannel not yet created; handshake may not be complete"));
                     return future;
                 }
-                if (this.streamMap.containsKey(streamId)) {
+                if (this.streamMap.containsKey(streamId) || this.streamStates.containsKey(streamId)) {
                     future.failed(new IllegalStateException("Stream " + streamId + " already exists"));
                     return future;
                 }
-
-                // 2. Decode the stream type, see RFC 9000 §2.1.
-                boolean clientInitiated = (streamId & 0x01) == 0;
-                boolean locallyInitiated = (this.clientMode == clientInitiated);
-                boolean bidi = (streamId & 0x02) == 0;
-
-                // 3. Validate stream count limits, see RFC 9000 §4.6.
-                if (!locallyInitiated) {
-                    long ourLimit = bidi ? this.quicSoConfig.getTpInitialMaxStreamsBidi() : this.quicSoConfig.getTpInitialMaxStreamsUni();
-                    long streamIndex = streamId / 4;  // Stream sequence number within the current type.
-                    if (streamIndex >= ourLimit) {
-                        // RFC 9000 §4.6: receiving a stream ID beyond the advertised MAX_STREAMS is a connection-level error, not a stream-level error.
-                        streamLimitViolation = "STREAM_LIMIT_ERROR: remote stream index " + streamIndex//
-                                + " exceeds local max_streams=" + ourLimit + " (streamId=" + streamId + ")";
-                        future.failed(new IllegalStateException(streamLimitViolation));
-                    } else {
-                        // RFC 9000 §2.1: skipped stream IDs also consume the peer's MAX_STREAMS quota, but will never carry data.
-                        if (bidi) {
-                            this.nextRemoteBidiStreamId = Math.max(this.nextRemoteBidiStreamId, streamId + 4);
-                        } else {
-                            this.nextRemoteUniStreamId = Math.max(this.nextRemoteUniStreamId, streamId + 4);
-                        }
-                        // 4. Create and register the stream channel.
-                        future.completed(doCreateStream(streamId));
-                    }
-                } else {
-                    // 4. Create and register the locally initiated stream channel.
-                    future.completed(doCreateStream(streamId));
-                }
+                future.completed(doCreateStream(streamId));
             } catch (Throwable e) {
                 future.failed(e);
             }
@@ -465,24 +544,11 @@ class QuicChannelAsync implements AsyncChannel {
      * registers it in the tracking maps.
      */
     private QuicStreamChannel doCreateStream(long streamId) throws Throwable {
-        if (this.closed.get()) {
-            throw new SoCloseException("Channel is closed");
-        }
+        QuicStreamState streamState = this.registerStreamState(streamId, true);
 
         boolean clientInitiated = (streamId & 0x01) == 0;
         boolean localInitiated = (this.clientMode == clientInitiated);
         boolean bidi = (streamId & 0x02) == 0;
-
-        long streamMaxData;
-        if (bidi) {
-            // Bidirectional streams allow both endpoints to send data.
-            streamMaxData = localInitiated ? this.peerStreamMaxDataBidiRemote  // Peer-imposed send quota for locally initiated bidirectional streams.
-                    : this.quicSoConfig.getTpInitialMaxStreamDataBidiRemote(); // Local receive quota for peer-initiated bidirectional streams.
-        } else {
-            // On unidirectional streams only the initiator can send data.
-            streamMaxData = localInitiated ? this.peerStreamMaxDataUni         // Peer-imposed send quota for locally initiated unidirectional streams.
-                    : this.quicSoConfig.getTpInitialMaxStreamDataUni();        // Local receive quota for peer-initiated unidirectional streams.
-        }
 
         // Create the async channel and the public stream channel.
         long channelId = this.context.nextID();
@@ -491,17 +557,16 @@ class QuicChannelAsync implements AsyncChannel {
                 channelId, streamId, this.quicChannel, this.context);
         QuicStreamChannel streamCh = new QuicStreamChannel(                    //
                 channelId, streamId, monitor, this.forListen, this.initializer,//
-                streamAsync, this.context, this.quicChannel, streamMaxData);
+                streamAsync, this.context, this.quicChannel, streamState.getMaxDataSize());
 
         // ── Initialize pipeline (ProtoInitializer → onInit → onActive) ──
         this.context.initChannel(streamCh, true);
 
         // ── Register in tracking maps ────────────────────────────────────
         this.streamMap.put(streamId, streamCh);
-        this.streamIds.add(streamId);
 
         if (this.context.getConfig().isPrintLog()) {
-            logger.info("[QUIC] stream=" + streamId + (bidi ? " bidi" : " uni") + (localInitiated ? " local" : " remote") + " maxData=" + streamMaxData);
+            logger.info("[QUIC] stream=" + streamId + (bidi ? " bidi" : " uni") + (localInitiated ? " local" : " remote") + " maxData=" + streamState.getMaxDataSize() + " channelMode");
         }
         return streamCh;
     }
@@ -585,6 +650,7 @@ class QuicChannelAsync implements AsyncChannel {
             localStreams = this.streamMap.values().toArray(new QuicStreamChannel[0]);
 
             this.streamMap.clear();
+            this.streamStates.clear();
             this.streamIds.clear();
             this.datagramChannel = null;
         }
@@ -642,7 +708,112 @@ class QuicChannelAsync implements AsyncChannel {
 
     @Override
     public void write(NetChannel channel, SoSndContext wContext) {
-        throw new UnsupportedOperationException("use QuicDatagramChannel or QuicStreamChannelAsync to write.");
+        if (!this.isMessageMuxMode()) {
+            throw new UnsupportedOperationException("use QuicDatagramChannel or QuicStreamChannelAsync to write.");
+        }
+        if (wContext.isEmpty()) {
+            return;
+        }
+        if (this.messageWriting.compareAndSet(false, true)) {
+            this.context.submitSoTask(new QuicMessageWriteTask(channel, this, wContext, this.context), this).onFinal(f -> this.onMessageWriteTaskFinished());
+        }
+    }
+
+    private static byte[] buildStreamData(long streamId, long offset, byte[] data, boolean fin) {
+        int type = QuicFrameType.STREAM_BASE | QuicFrameType.STREAM_LEN_BIT;
+        if (fin) {
+            type |= QuicFrameType.STREAM_FIN_BIT;
+        }
+        if (offset > 0) {
+            type |= QuicFrameType.STREAM_OFF_BIT;
+        }
+
+        byte[] typeBytes = QuicVarInt.encode(type);
+        byte[] streamIdBytes = QuicVarInt.encode(streamId);
+        byte[] offsetBytes = offset > 0 ? QuicVarInt.encode(offset) : new byte[0];
+        byte[] lengthBytes = QuicVarInt.encode(data.length);
+        int totalLen = typeBytes.length + streamIdBytes.length + offsetBytes.length + lengthBytes.length + data.length;
+        byte[] frame = new byte[totalLen];
+        int pos = 0;
+        System.arraycopy(typeBytes, 0, frame, pos, typeBytes.length);
+        pos += typeBytes.length;
+        System.arraycopy(streamIdBytes, 0, frame, pos, streamIdBytes.length);
+        pos += streamIdBytes.length;
+        if (offset > 0) {
+            System.arraycopy(offsetBytes, 0, frame, pos, offsetBytes.length);
+            pos += offsetBytes.length;
+        }
+        System.arraycopy(lengthBytes, 0, frame, pos, lengthBytes.length);
+        pos += lengthBytes.length;
+        if (data.length > 0) {
+            System.arraycopy(data, 0, frame, pos, data.length);
+        }
+        return frame;
+    }
+
+    static class PreparedQuicMessage {
+        private final QuicStreamState state;
+        private final byte[]          frame;
+        private final int             readableBytes;
+
+        PreparedQuicMessage(QuicStreamState state, byte[] frame, int readableBytes) {
+            this.state = state;
+            this.frame = frame;
+            this.readableBytes = readableBytes;
+        }
+
+        byte[] getFrame() {
+            return this.frame;
+        }
+
+        void onSent() {
+            if (this.readableBytes > 0) {
+                this.state.addSendOffset(this.readableBytes);
+            }
+            this.state.touchActivity();
+        }
+    }
+
+    static class QuicStreamState {
+        private final    long       streamId;
+        private final    AtomicLong sendOffset;
+        private volatile long       maxDataSize;
+        private volatile long       lastActivityTime;
+
+        QuicStreamState(long streamId, long maxDataSize) {
+            this.streamId = streamId;
+            this.maxDataSize = maxDataSize;
+            this.sendOffset = new AtomicLong(0);
+            this.lastActivityTime = System.currentTimeMillis();
+        }
+
+        long getStreamId() {
+            return this.streamId;
+        }
+
+        long getSendOffset() {
+            return this.sendOffset.get();
+        }
+
+        void addSendOffset(long delta) {
+            this.sendOffset.addAndGet(delta);
+        }
+
+        long getMaxDataSize() {
+            return this.maxDataSize;
+        }
+
+        void updateMaxDataSize(long newMaxDataSize) {
+            this.maxDataSize = Math.max(this.maxDataSize, newMaxDataSize);
+        }
+
+        long getLastActivityTime() {
+            return this.lastActivityTime;
+        }
+
+        void touchActivity() {
+            this.lastActivityTime = System.currentTimeMillis();
+        }
     }
 
     /**
@@ -887,6 +1058,10 @@ class QuicChannelAsync implements AsyncChannel {
                 if (stream != null) {
                     stream.updateMaxDataSize(maxStreamData);
                 }
+                QuicStreamState state = this.streamStates.get(streamId);
+                if (state != null) {
+                    state.updateMaxDataSize(maxStreamData);
+                }
                 continue;
             }
 
@@ -919,12 +1094,14 @@ class QuicChannelAsync implements AsyncChannel {
                 long finalSize = sizeResult[0];
                 pos += (int) sizeResult[1];
                 QuicStreamChannel stream = this.streamMap.get(streamId);
+                if (this.context.getConfig().isPrintLog()) {
+                    logger.info("[QUIC] RESET_STREAM stream=" + streamId + " errorCode=" + errorCode);
+                }
+                QuicStreamResetException ex = new QuicStreamResetException(errorCode, streamId, finalSize);
                 if (stream != null) {
-                    if (this.context.getConfig().isPrintLog()) {
-                        logger.info("[QUIC] RESET_STREAM stream=" + streamId + " errorCode=" + errorCode);
-                    }
-                    QuicStreamResetException ex = new QuicStreamResetException(errorCode, streamId, finalSize);
                     this.context.notifyRcvChannelException(stream.getChannelId(), true, ex);
+                } else if (this.isMessageMuxMode() && this.quicChannel != null) {
+                    this.context.notifyRcvChannelException(this.quicChannel.getChannelId(), false, ex);
                 }
                 continue;
             }
@@ -939,12 +1116,14 @@ class QuicChannelAsync implements AsyncChannel {
                 long errorCode = errResult[0];
                 pos += (int) errResult[1];
                 QuicStreamChannel stream = this.streamMap.get(streamId);
+                if (this.context.getConfig().isPrintLog()) {
+                    logger.info("[QUIC] STOP_SENDING stream=" + streamId + " errorCode=" + errorCode);
+                }
+                QuicStopSendingException ex = new QuicStopSendingException(errorCode, streamId);
                 if (stream != null) {
-                    if (this.context.getConfig().isPrintLog()) {
-                        logger.info("[QUIC] STOP_SENDING stream=" + streamId + " errorCode=" + errorCode);
-                    }
-                    QuicStopSendingException ex = new QuicStopSendingException(errorCode, streamId);
                     this.context.notifySndChannelException(stream.getChannelId(), false, ex);
+                } else if (this.isMessageMuxMode() && this.quicChannel != null) {
+                    this.context.notifySndChannelException(this.quicChannel.getChannelId(), false, ex);
                 }
                 continue;
             }
@@ -1099,6 +1278,14 @@ class QuicChannelAsync implements AsyncChannel {
                     byte[] maxStreamDataFrame = QuicFlowControl.buildMaxStreamDataFrame(streamId, newMax);
                     this.sendDataFrame(ByteBuf.wrap(maxStreamDataFrame), null);
                     stream.updateMaxDataSize(newMax);
+                } else {
+                    QuicStreamState state = this.streamStates.get(streamId);
+                    if (state != null) {
+                        long newMax = Math.max(maximumStreamData * 2, state.getMaxDataSize() * 2);
+                        byte[] maxStreamDataFrame = QuicFlowControl.buildMaxStreamDataFrame(streamId, newMax);
+                        this.sendDataFrame(ByteBuf.wrap(maxStreamDataFrame), null);
+                        state.updateMaxDataSize(newMax);
+                    }
                 }
                 continue;
             }
@@ -1300,16 +1487,26 @@ class QuicChannelAsync implements AsyncChannel {
 
         // ── Find or auto-create stream ──────────────────────────────────
         QuicStreamChannel stream = this.streamMap.get(streamId);
-        if (stream == null) {
+        QuicStreamState streamState = this.streamStates.get(streamId);
+        if (stream == null && streamState == null) {
             boolean clientInitiated = (streamId & 0x01) == 0;
             boolean locallyInitiated = (this.clientMode == clientInitiated);
             if (!locallyInitiated) {
-                // Auto-create peer-initiated stream
-                Future<QuicStreamChannel> f = newStreamChannel(streamId);
-                stream = f.getResult();
-                if (stream == null) {
-                    logger.error("Failed to auto-create stream " + streamId + ": " + (f.getCause() != null ? f.getCause().getMessage() : "unknown"));
-                    return pos + dataLength; // skip data
+                try {
+                    if (this.isStreamChannelMode()) {
+                        Future<QuicStreamChannel> f = newStreamChannel(streamId);
+                        stream = f.getResult();
+                        if (stream == null) {
+                            logger.error("Failed to auto-create stream " + streamId + ": " + (f.getCause() != null ? f.getCause().getMessage() : "unknown"));
+                            return pos + dataLength;
+                        }
+                        streamState = this.streamStates.get(streamId);
+                    } else {
+                        streamState = this.ensureInboundStreamState(streamId);
+                    }
+                } catch (Throwable e) {
+                    logger.error("Failed to register stream state " + streamId + ": " + e.getMessage(), e);
+                    return pos + dataLength;
                 }
             } else {
                 // Locally-initiated stream not in map — RFC 9000 §19.8: an endpoint MUST
@@ -1353,7 +1550,8 @@ class QuicChannelAsync implements AsyncChannel {
                 return -1;
             }
             // Stream-level flow control
-            if (!this.flowControl.validateStreamData(offset, dataLength, stream.getMaxDataSize())) {
+            long streamMaxData = stream != null ? stream.getMaxDataSize() : streamState.getMaxDataSize();
+            if (!this.flowControl.validateStreamData(offset, dataLength, streamMaxData)) {
                 String fcMsg = "Stream-level flow control exceeded on stream " + streamId;
                 logger.error(fcMsg);
                 QuicException fcEx = new QuicException(QuicErrorCode.FLOW_CONTROL_ERROR, fcMsg);
@@ -1365,7 +1563,12 @@ class QuicChannelAsync implements AsyncChannel {
 
         // ── Reassembly and delivery (always via reassembler for correct multi-message support) ───
         if (dataLength > 0 || fin) {
-            stream.touchActivity();
+            if (stream != null) {
+                stream.touchActivity();
+            }
+            if (streamState != null) {
+                streamState.touchActivity();
+            }
             // Always use reassembler so that subsequent messages (offset > 0) are correctly
             // sequenced with the first message (offset == 0). Direct delivery for offset==0
             // would bypass the reassembler and cause subsequent messages to be dropped because
@@ -1385,14 +1588,22 @@ class QuicChannelAsync implements AsyncChannel {
             // Deliver all contiguous data available
             byte[] contiguous = reassembler.readContiguous();
             if (contiguous != null) {
-                if (this.context.getConfig().isPrintLog()) {
-                    logger.info("[QUIC-RCV] stream=" + streamId + " delivering " + contiguous.length + " bytes, ch=" + stream.getChannelId());
-                }
                 ByteBuf byteBuf = ByteBufUtils.DEFAULT_ALLOCATOR.buffer(contiguous.length);
                 byteBuf.writeBytes(contiguous);
                 byteBuf.markWriter();
                 try {
-                    this.context.notifyRcvChannelData(stream.getChannelId(), byteBuf);
+                    if (this.isMessageMuxMode()) {
+                        boolean streamComplete = reassembler.isComplete();
+                        if (this.context.getConfig().isPrintLog()) {
+                            logger.info("[QUIC-RCV] stream=" + streamId + " delivering " + contiguous.length + " bytes to connection mode, fin=" + streamComplete);
+                        }
+                        this.context.notifyRcvChannelData(this.quicChannel.getChannelId(), QuicMessage.of(streamId, byteBuf, streamComplete));
+                    } else {
+                        if (this.context.getConfig().isPrintLog()) {
+                            logger.info("[QUIC-RCV] stream=" + streamId + " delivering " + contiguous.length + " bytes, ch=" + stream.getChannelId());
+                        }
+                        this.context.notifyRcvChannelData(stream.getChannelId(), byteBuf);
+                    }
                 } catch (Throwable t) {
                     logger.error("stream " + streamId + " pipeline delivery failed: " + t.getClass().getName() + ": " + t.getMessage(), t);
                 }
@@ -1400,20 +1611,30 @@ class QuicChannelAsync implements AsyncChannel {
             // Check if stream is fully received (FIN delivered)
             if (reassembler.isComplete()) {
                 if (this.context.getConfig().isPrintLog()) {
-                    logger.info("[QUIC-RCV] stream=" + streamId + " FIN (stream complete), ch=" + stream.getChannelId());
+                    logger.info("[QUIC-RCV] stream=" + streamId + " FIN (stream complete)" + (this.isMessageMuxMode() ? " in message mode" : ", ch=" + stream.getChannelId()));
                 }
-                this.context.notifyRcvChannelData(stream.getChannelId(), ByteBuf.EMPTY);
+                if (!this.isMessageMuxMode()) {
+                    this.context.notifyRcvChannelData(stream.getChannelId(), ByteBuf.EMPTY);
+                } else if (contiguous == null) {
+                    this.context.notifyRcvChannelData(this.quicChannel.getChannelId(), QuicMessage.of(streamId, ByteBuf.EMPTY, true));
+                }
                 this.streamReassemblers.remove(streamId);
             }
         }
         pos += dataLength;
 
         // ── Auto-expand stream flow control window if needed ────────────
-        long newStreamMax = this.flowControl.shouldExpandStreamWindow(offset + dataLength, stream.getMaxDataSize());
+        long currentStreamMax = stream != null ? stream.getMaxDataSize() : streamState.getMaxDataSize();
+        long newStreamMax = this.flowControl.shouldExpandStreamWindow(offset + dataLength, currentStreamMax);
         if (newStreamMax > 0) {
             byte[] maxStreamDataFrame = QuicFlowControl.buildMaxStreamDataFrame(streamId, newStreamMax);
             this.sendDataFrame(ByteBuf.wrap(maxStreamDataFrame), null);
-            stream.updateMaxDataSize(newStreamMax);
+            if (stream != null) {
+                stream.updateMaxDataSize(newStreamMax);
+            }
+            if (streamState != null) {
+                streamState.updateMaxDataSize(newStreamMax);
+            }
         }
 
         return pos;
