@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -23,11 +23,11 @@ package net.hasor.neta.codec.http.h3;
  * @see Http3StreamState
  */
 public class Http3Stream {
-    private final    long             streamId;
+    private final long                streamId;
     private volatile Http3StreamState state;
-    private          byte[]           accumulatedHeaderBlock;
-    private          boolean          headersReceived;
-    private          boolean          trailersReceived;
+    private byte[]                    accumulatedHeaderBlock;
+    private boolean                   headersReceived;
+    private boolean                   trailersReceived;
 
     /**
      * 创建一个新的 HTTP/3 stream。

@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,8 +22,8 @@ import net.hasor.neta.codec.http.AbstractHttpEvent;
  * <p>
  * 该事件可同时用于 HTTP/2 和 HTTP/3。{@link #lastAcceptedId()} 的含义取决于底层协议：
  * <ul>
- *   <li>HTTP/2：最后一个仍被接受的 stream ID</li>
- *   <li>HTTP/3：GOAWAY 中编码的最后一个仍被接受的请求或 push 标识</li>
+ * <li>HTTP/2：最后一个仍被接受的 stream ID</li>
+ * <li>HTTP/3：GOAWAY 中编码的最后一个仍被接受的请求或 push 标识</li>
  * </ul>
  */
 public class HttpConnectionGoAwayEvent extends AbstractHttpEvent {

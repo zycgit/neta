@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -40,17 +40,15 @@ import net.hasor.neta.codec.http.*;
  */
 public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObject> {
     private static final Logger logger = Logger.getLogger(Http3FrameToHttpDecoder.class);
-
-    private final boolean serverMode;
-    private final int     maxTableSize;
-    private final int     maxHeaderListSize;
+    private final boolean       serverMode;
+    private final Http3Settings localSettings;
 
     /**
      * 使用默认 QPACK settings 创建一个新的 HTTP/3 语义解码器。
      * @param serverMode 为 {@code true} 表示服务端模式，期望接收请求；否则为客户端模式，期望接收响应
      */
     public Http3FrameToHttpDecoder(boolean serverMode) {
-        this(serverMode, 4096, 65536);
+        this(serverMode, Http3Settings.defaultLocalSettings(serverMode));
     }
 
     /**
@@ -60,22 +58,26 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
      * @param maxHeaderListSize 已解码头字段允许的最大总大小
      */
     public Http3FrameToHttpDecoder(boolean serverMode, int maxTableSize, int maxHeaderListSize) {
+        this(serverMode, Http3Settings.defaultLocalSettings(serverMode, maxTableSize, maxHeaderListSize, Http3Settings.DEFAULT_LOCAL_QPACK_BLOCKED_STREAMS));
+    }
+
+    /**
+     * 使用统一的 HTTP/3 settings 创建一个新的 HTTP/3 语义解码器。
+     * @param serverMode 为 {@code true} 表示服务端模式，期望接收请求；否则为客户端模式，期望接收响应
+     * @param localSettings 当前端点用于初始化解码器/QPACK 的本地参数
+     */
+    public Http3FrameToHttpDecoder(boolean serverMode, Http3Settings localSettings) {
         this.serverMode = serverMode;
-        this.maxTableSize = maxTableSize;
-        this.maxHeaderListSize = maxHeaderListSize;
+        this.localSettings = localSettings != null ? new Http3Settings(localSettings) : Http3Settings.defaultLocalSettings(serverMode);
     }
 
     @Override
-    /**
-     * 初始化解码所需的连接级状态。
-     */ public void onInit(String name, int poolSize, ProtoContext context) throws Throwable {
-        context.context(Http3DecoderContent.class, new Http3DecoderContent(maxTableSize, maxHeaderListSize));
+    public void onInit(String name, int poolSize, ProtoContext context) throws Throwable {
+        context.context(Http3DecoderContent.class, new Http3DecoderContent(this.localSettings));
     }
 
     @Override
-    /**
-     * 将入站 Http3Frame 解码为 HttpObject。
-     */ public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Http3Frame> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
+    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Http3Frame> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
         Http3DecoderContent state = context.context(Http3DecoderContent.class);
         boolean isPrintLog = context.getConfig().isPrintLog();
 
@@ -364,7 +366,8 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
     @Override
     /**
      * 在连接关闭时释放解码状态中的资源。
-     */ public void onClose(ProtoContext context) {
+     */
+    public void onClose(ProtoContext context) {
         Http3DecoderContent state = context.context(Http3DecoderContent.class);
         if (state != null) {
             state.releaseAll();

@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,6 +22,7 @@ import net.hasor.neta.channel.ProtoHandler;
 import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
+import net.hasor.neta.channel.transport.quic.QuicVarInt;
 import net.hasor.neta.codec.http.*;
 
 /**
@@ -35,17 +36,17 @@ import net.hasor.neta.codec.http.*;
  * @see Http3Frame
  */
 public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Frame> {
-    private static final Logger     logger = Logger.getLogger(Http3HttpToFrameEncoder.class);
-    private final        HttpScheme scheme = HttpScheme.HTTPS;
-    private final        boolean    serverMode;
-    private final        int        maxTableSize;
+    private static final Logger logger = Logger.getLogger(Http3HttpToFrameEncoder.class);
+    private final HttpScheme    scheme = HttpScheme.HTTPS;
+    private final boolean       serverMode;
+    private final Http3Settings localSettings;
 
     /**
      * 使用默认 QPACK settings 创建一个新的 HTTP/3 语义编码器。
      * @param serverMode 为 {@code true} 表示服务端模式，否则为客户端模式
      */
     public Http3HttpToFrameEncoder(boolean serverMode) {
-        this(serverMode, 4096);
+        this(serverMode, Http3Settings.defaultLocalSettings(serverMode));
     }
 
     /**
@@ -54,23 +55,32 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
      * @param maxTableSize QPACK 动态表最大容量，单位为字节
      */
     public Http3HttpToFrameEncoder(boolean serverMode, int maxTableSize) {
+        this(serverMode, Http3Settings.defaultLocalSettings(serverMode).qpackMaxTableCapacity(maxTableSize));
+    }
+
+    /**
+     * 使用统一的 HTTP/3 settings 创建一个新的 HTTP/3 语义编码器。
+     * @param serverMode 为 {@code true} 表示服务端模式，否则为客户端模式
+     * @param localSettings 当前端点用于初始化编码器/QPACK 的本地参数
+     */
+    public Http3HttpToFrameEncoder(boolean serverMode, Http3Settings localSettings) {
         this.serverMode = serverMode;
-        this.maxTableSize = maxTableSize;
+        this.localSettings = localSettings != null ? new Http3Settings(localSettings) : Http3Settings.defaultLocalSettings(serverMode);
     }
 
     @Override
-    /**
-     * 初始化编码器所需的连接级状态。
-     */ public void onInit(String name, int poolSize, ProtoContext context) throws Throwable {
-        context.context(Http3EncoderContent.class, new Http3EncoderContent(serverMode, maxTableSize));
+    public void onInit(String name, int poolSize, ProtoContext context) throws Throwable {
+        context.context(Http3EncoderContent.class, new Http3EncoderContent(serverMode, this.localSettings));
     }
 
     @Override
-    /**
-     * 将出站 HttpObject 编码为 Http3Frame。
-     */ public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<Http3Frame> dst) throws Throwable {
+    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<Http3Frame> dst) throws Throwable {
         Http3EncoderContent state = context.context(Http3EncoderContent.class);
         boolean isPrintLog = context.getConfig().isPrintLog();
+
+        if (src.hasMore()) {
+            offerSettingsFrameIfNeeded(context, state, dst, isPrintLog);
+        }
 
         while (src.hasMore()) {
             HttpObject msg = src.takeMessage();
@@ -98,6 +108,58 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
         return ProtoStatus.Next;
     }
 
+    private void offerSettingsFrameIfNeeded(ProtoContext context, Http3EncoderContent state, ProtoSndQueue<Http3Frame> dst, boolean isPrintLog) {
+        if (state == null || state.isSettingsSent()) {
+            return;
+        }
+
+        state.markSettingsSent();
+        byte[] settingsPayload = encodeSettingsPayload(state.localSettings());
+        dst.offerMessage(Http3Frame.settings(settingsPayload));
+
+        if (isPrintLog) {
+            long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+            logger.info("[H3-SND] ch=" + channelID + " SETTINGS len=" + settingsPayload.length + "B");
+        }
+    }
+
+    private byte[] encodeSettingsPayload(Http3Settings settings) {
+        long maxFieldSectionSize = settings.maxFieldSectionSize();
+        boolean encodeMaxFieldSectionSize = maxFieldSectionSize < Long.MAX_VALUE;
+        boolean encodeConnectProtocol = settings.enableConnectProtocol();
+
+        int totalLen = encodedSettingLength(Http3Settings.SETTINGS_QPACK_MAX_TABLE_CAPACITY, settings.qpackMaxTableCapacity())
+                + encodedSettingLength(Http3Settings.SETTINGS_QPACK_BLOCKED_STREAMS, settings.qpackBlockedStreams());
+        if (encodeMaxFieldSectionSize) {
+            totalLen += encodedSettingLength(Http3Settings.SETTINGS_MAX_FIELD_SECTION_SIZE, maxFieldSectionSize);
+        }
+        if (encodeConnectProtocol) {
+            totalLen += encodedSettingLength(Http3Settings.SETTINGS_ENABLE_CONNECT_PROTOCOL, 1);
+        }
+
+        byte[] payload = new byte[totalLen];
+        int pos = 0;
+        pos = encodeSettingTo(payload, pos, Http3Settings.SETTINGS_QPACK_MAX_TABLE_CAPACITY, settings.qpackMaxTableCapacity());
+        if (encodeMaxFieldSectionSize) {
+            pos = encodeSettingTo(payload, pos, Http3Settings.SETTINGS_MAX_FIELD_SECTION_SIZE, maxFieldSectionSize);
+        }
+        pos = encodeSettingTo(payload, pos, Http3Settings.SETTINGS_QPACK_BLOCKED_STREAMS, settings.qpackBlockedStreams());
+        if (encodeConnectProtocol) {
+            encodeSettingTo(payload, pos, Http3Settings.SETTINGS_ENABLE_CONNECT_PROTOCOL, 1);
+        }
+        return payload;
+    }
+
+    private int encodedSettingLength(long settingId, long value) {
+        return QuicVarInt.encodedLength(settingId) + QuicVarInt.encodedLength(value);
+    }
+
+    private int encodeSettingTo(byte[] payload, int pos, long settingId, long value) {
+        pos += QuicVarInt.encodeTo(payload, pos, settingId);
+        pos += QuicVarInt.encodeTo(payload, pos, value);
+        return pos;
+    }
+
     /**
      * 将完整 HTTP 请求（头 + 体）编码为 HEADERS + DATA frame。
      */
@@ -106,7 +168,7 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
             throw new IllegalArgumentException("FullHttpRequest must be DefaultFullHttpRequest");
         }
         DefaultFullHttpRequest fullRequest = (DefaultFullHttpRequest) request;
-        long streamId = state.allocateNextStreamId();
+        long streamId = this.resolveRequestStreamId(state, request);
 
         // 使用 QPACK 编码请求头。
         state.beginHeaderEncode();
@@ -147,8 +209,8 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
             throw new IllegalArgumentException("FullHttpResponse must be DefaultFullHttpResponse");
         }
         DefaultFullHttpResponse fullResponse = (DefaultFullHttpResponse) response;
-        state.consumeResponseStreamId();
-        long streamId = state.currentStreamId();
+        long streamId = this.resolveResponseStreamId(state, context, response);
+        response.streamId(streamId);
 
         state.beginHeaderEncode();
         state.encodeHeader(":status", String.valueOf(response.status().code()));
@@ -178,7 +240,8 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
      * 记录仅包含头部的 HTTP 请求起始信息，等待后续 {@link HttpHeaders} 输出 HEADERS frame。
      */
     private void encodeRequest(ProtoContext context, Http3EncoderContent state, HttpRequest request, ProtoSndQueue<Http3Frame> dst, boolean isPrintLog) {
-        long streamId = state.allocateNextStreamId();
+        long streamId = this.resolveRequestStreamId(state, request);
+        request.streamId(streamId);
         state.beginRequest(streamId, request.method().name(), request.uri(), scheme.name());
 
         if (isPrintLog) {
@@ -191,8 +254,8 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
      * 记录仅包含头部的 HTTP 响应起始信息，等待后续 {@link HttpHeaders} 输出 HEADERS frame。
      */
     private void encodeResponse(ProtoContext context, Http3EncoderContent state, HttpResponse response, ProtoSndQueue<Http3Frame> dst, boolean isPrintLog) {
-        state.consumeResponseStreamId();
-        long streamId = state.currentStreamId();
+        long streamId = this.resolveResponseStreamId(state, context, response);
+        response.streamId(streamId);
         state.beginResponse(streamId, response.status().code());
 
         if (isPrintLog) {
@@ -208,6 +271,8 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
         if (!state.hasPendingRequest() && !state.hasPendingResponse()) {
             return;
         }
+
+        long streamId = this.resolveActiveStreamId(state, headers);
 
         state.beginHeaderEncode();
         if (state.hasPendingRequest()) {
@@ -225,12 +290,12 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
         encodeNonPseudoHeaders(state, headers);
 
         int headerBlockLen = state.headerEncodedLength();
-        dst.offerMessage(Http3Frame.headers(state.currentStreamId(), false, state.headerEncodedBuffer(), 0, headerBlockLen));
+        dst.offerMessage(Http3Frame.headers(streamId, false, state.headerEncodedBuffer(), 0, headerBlockLen));
         state.clearPendingHeaders();
 
         if (isPrintLog) {
             long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
-            logger.info("[H3-SND] ch=" + channelID + " HEADERS stream=" + state.currentStreamId() + " count=" + headers.headerSize());
+            logger.info("[H3-SND] ch=" + channelID + " HEADERS stream=" + streamId + " count=" + headers.headerSize());
         }
     }
 
@@ -242,7 +307,7 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
         if (body == null || body.readableBytes() == 0) {
             return;
         }
-        long streamId = state.currentStreamId();
+        long streamId = this.resolveActiveStreamId(state, content);
         int bodyLen = body.readableBytes();
         byte[] bodyBytes = new byte[bodyLen];
         body.getBytes(0, bodyBytes, 0, bodyLen);
@@ -259,7 +324,7 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
      * 将最后一段内容编码为带 FIN 的 DATA frame。
      */
     private void encodeLastContent(ProtoContext context, Http3EncoderContent state, LastHttpContent content, ProtoSndQueue<Http3Frame> dst, boolean isPrintLog) {
-        long streamId = state.currentStreamId();
+        long streamId = this.resolveActiveStreamId(state, content);
         ByteBuf body = content.content();
         int bodyLen = (body != null) ? body.readableBytes() : 0;
 
@@ -291,5 +356,61 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
                 }
             }
         }
+    }
+
+    private long resolveRequestStreamId(Http3EncoderContent state, HttpObject requestObject) {
+        long streamId = requestObject.streamId();
+        if (streamId > 0) {
+            state.setCurrentStreamId(streamId);
+            return streamId;
+        }
+
+        streamId = state.allocateNextStreamId();
+        requestObject.streamId(streamId);
+        return streamId;
+    }
+
+    private long resolveResponseStreamId(Http3EncoderContent state, ProtoContext context, HttpObject responseObject) {
+        long streamId = responseObject.streamId();
+        Http3DecoderContent decoderState = context.context(Http3DecoderContent.class);
+        if (streamId > 0 || (streamId == 0 && decoderState == null)) {
+            state.setCurrentStreamId(streamId);
+            if (decoderState != null) {
+                decoderState.removeFromResponseQueue(streamId);
+            }
+            return streamId;
+        }
+        if (decoderState != null) {
+            long queuedStreamId = decoderState.pollResponseStreamId();
+            if (queuedStreamId >= 0) {
+                state.setCurrentStreamId(queuedStreamId);
+                responseObject.streamId(queuedStreamId);
+                return queuedStreamId;
+            }
+        }
+
+        long currentStreamId = state.currentStreamId();
+        if (currentStreamId >= 0) {
+            responseObject.streamId(currentStreamId);
+            return currentStreamId;
+        }
+
+        throw new HttpProtocolConnectionException(Http3ErrorCode.H3_INTERNAL_ERROR, "HTTP/3: missing response streamId");
+    }
+
+    private long resolveActiveStreamId(Http3EncoderContent state, HttpObject httpObject) {
+        long streamId = httpObject.streamId();
+        if (streamId > 0) {
+            state.setCurrentStreamId(streamId);
+            return streamId;
+        }
+
+        long currentStreamId = state.currentStreamId();
+        if (currentStreamId >= 0) {
+            httpObject.streamId(currentStreamId);
+            return currentStreamId;
+        }
+
+        throw new HttpProtocolConnectionException(Http3ErrorCode.H3_INTERNAL_ERROR, "HTTP/3: missing active streamId");
     }
 }

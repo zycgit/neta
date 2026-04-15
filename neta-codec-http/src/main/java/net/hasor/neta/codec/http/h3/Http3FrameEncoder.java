@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -40,25 +40,33 @@ import net.hasor.neta.channel.transport.quic.QuicVarInt;
  * <p>
  * frame 格式（RFC 9114 第 7.1 节）：
  * <pre>
- *   HTTP/3 Frame {
- *     Type (i),       — QUIC variable-length integer
- *     Length (i),     — QUIC variable-length integer
- *     Frame Payload (..),
- *   }
+ * HTTP/3 Frame {
+ * Type (i), — QUIC variable-length integer
+ * Length (i), — QUIC variable-length integer
+ * Frame Payload (..),
+ * }
  * </pre>
  * @see Http3Frame
  * @see Http3HttpToFrameEncoder
  */
 public class Http3FrameEncoder implements ProtoHandler<Http3Frame, ByteBuf> {
     private static final Logger logger    = Logger.getLogger(Http3FrameEncoder.class);
-    /** 可复用的 varint 编码缓冲区，避免为每个 frame 单独分配。 */
-    private final        byte[] varintBuf = new byte[16];
+    /** 可复用的 varIntBuf 编码缓冲区，避免为每个 frame 单独分配。 */
+    private final byte[]        varIntBuf = new byte[16];
+
+    public Http3FrameEncoder() {
+    }
+
+    /**
+     * 统一的 HTTP/3 settings 初始化入口。
+     * <p>
+     * 当前 frame 线层本身不直接消费 settings 参数，但保留该构造方法以保证整条 H3 codec 链使用统一封装完成初始化。
+     */
+    public Http3FrameEncoder(Http3Settings localSettings) {
+    }
 
     @Override
-    /**
-     * 将待发送的 HTTP/3 frame 编码为 ByteBuf。
-     * QUIC 通道按 frame 逐条输出，非 QUIC 通道按批次打包输出。
-     */ public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Http3Frame> src, ProtoSndQueue<ByteBuf> dst) throws Throwable {
+    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Http3Frame> src, ProtoSndQueue<ByteBuf> dst) throws Throwable {
         if (!src.hasMore()) {
             return ProtoStatus.Next;
         }
@@ -101,12 +109,12 @@ public class Http3FrameEncoder implements ProtoHandler<Http3Frame, ByteBuf> {
      * 序列化格式为：varint type + varint length + payload。
      */
     private void writeFrame(ProtoContext context, ProtoSndQueue<ByteBuf> dst, Http3Frame frame, boolean isPrintLog) {
-        int typeLen = QuicVarInt.encodeTo(varintBuf, 0, frame.type());
-        int lenLen = QuicVarInt.encodeTo(varintBuf, typeLen, frame.payloadLength());
+        int typeLen = QuicVarInt.encodeTo(varIntBuf, 0, frame.type());
+        int lenLen = QuicVarInt.encodeTo(varIntBuf, typeLen, frame.payloadLength());
         int frameHeaderLen = typeLen + lenLen;
 
         ByteBuf output = context.byteBufAllocator().buffer(frameHeaderLen + frame.payloadLength());
-        output.writeBytes(varintBuf, 0, frameHeaderLen);
+        output.writeBytes(varIntBuf, 0, frameHeaderLen);
         if (frame.payloadLength() > 0) {
             output.writeBytes(frame.payload(), frame.payloadOffset(), frame.payloadLength());
         }
@@ -132,9 +140,9 @@ public class Http3FrameEncoder implements ProtoHandler<Http3Frame, ByteBuf> {
 
         ByteBuf output = context.byteBufAllocator().buffer(totalSize);
         for (Http3Frame frame : frames) {
-            int typeLen = QuicVarInt.encodeTo(varintBuf, 0, frame.type());
-            int lenLen = QuicVarInt.encodeTo(varintBuf, typeLen, frame.payloadLength());
-            output.writeBytes(varintBuf, 0, typeLen + lenLen);
+            int typeLen = QuicVarInt.encodeTo(varIntBuf, 0, frame.type());
+            int lenLen = QuicVarInt.encodeTo(varIntBuf, typeLen, frame.payloadLength());
+            output.writeBytes(varIntBuf, 0, typeLen + lenLen);
             if (frame.payloadLength() > 0) {
                 output.writeBytes(frame.payload(), frame.payloadOffset(), frame.payloadLength());
             }

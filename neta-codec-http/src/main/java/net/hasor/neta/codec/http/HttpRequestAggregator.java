@@ -87,9 +87,9 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
                         }
                     }
                 }
-                if (part instanceof HttpContent) {
-                    ByteBuf content = ((HttpContent) part).content();
-                    int readable = content == null ? 0 : content.readableBytes();
+                ByteBuf content = this.contentOf(part);
+                if (content != null) {
+                    int readable = content.readableBytes();
                     int newLength = contentLength + readable;
                     if (newLength > this.maxContentLength()) {
                         if (this.onContentTooLarge(context, request, fullReq, newLength) && this.isDiscardMode()) {
@@ -99,8 +99,8 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
                         throw new HttpContentTooLargeException("content length exceeds maximum: " + newLength + " > " + this.maxContentLength(), this.maxContentLength(), newLength);
                     }
                     contentLength = newLength;
-                    if (content != null && readable > 0) {
-                        fullReq.appendContent((HttpContent) part);
+                    if (readable > 0) {
+                        this.appendContent(fullReq, part, content);
                     }
                 }
             }
@@ -144,6 +144,24 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
         if (request.isBad()) {
             fullReq.markBad(request.badReason());
         }
+    }
+
+    private ByteBuf contentOf(HttpObject part) {
+        if (part instanceof HttpContent) {
+            return ((HttpContent) part).content();
+        }
+        if (part instanceof HttpByteBuf) {
+            return ((HttpByteBuf) part).content();
+        }
+        return null;
+    }
+
+    private void appendContent(DefaultFullHttpRequest fullReq, HttpObject part, ByteBuf content) {
+        if (part instanceof HttpContent) {
+            fullReq.appendContent((HttpContent) part);
+            return;
+        }
+        fullReq.appendContent(new DefaultHttpContent(content));
     }
 
     /**

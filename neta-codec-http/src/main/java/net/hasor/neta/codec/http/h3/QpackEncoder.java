@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,10 +24,10 @@ import net.hasor.neta.codec.http.HttpHeaders;
  * <p>
  * 当前实现支持：
  * <ul>
- *   <li>静态表引用，包括索引引用和名称引用</li>
- *   <li>动态表插入与引用</li>
- *   <li>带或不带名称引用的字面量编码</li>
- *   <li>可选的 Huffman 编码</li>
+ * <li>静态表引用，包括索引引用和名称引用</li>
+ * <li>动态表插入与引用</li>
+ * <li>带或不带名称引用的字面量编码</li>
+ * <li>可选的 Huffman 编码</li>
  * </ul>
  * <p>
  * 这里使用可复用的内部字节缓冲区替代 {@code ByteArrayOutputStream}，以消除同步写入开销并降低 GC 压力。
@@ -90,11 +90,11 @@ public class QpackEncoder {
      * <p>
      * 编码格式见 RFC 9204 第 4.5 节：
      * <pre>
-     *   Encoded Field Section {
-     *     Required Insert Count (8+),
-     *     S (1) + Delta Base (7+),
-     *     Encoded Field Line* (..)
-     *   }
+     * Encoded Field Section {
+     * Required Insert Count (8+),
+     * S (1) + Delta Base (7+),
+     * Encoded Field Line* (..)
+     * }
      * </pre>
      * @param headers 待编码的 HTTP 头
      * @return QPACK 编码后的字节数组

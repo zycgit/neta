@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,14 +24,20 @@ package net.hasor.neta.codec.http.h3;
  * 满足公式 0x1f * N + 0x21 的 settings ID 属于保留值，必须按未知值处理（greasing）。
  */
 public class Http3Settings {
+    /** 默认本地 QPACK 动态表容量。 */
+    public static final long DEFAULT_LOCAL_QPACK_MAX_TABLE_CAPACITY = 4096;
+    /** 默认本地 field section 大小限制。 */
+    public static final long DEFAULT_LOCAL_MAX_FIELD_SECTION_SIZE   = 65536;
+    /** 默认本地 QPACK blocked streams 数。 */
+    public static final long DEFAULT_LOCAL_QPACK_BLOCKED_STREAMS    = 0;
     /** QPACK 最大动态表容量（0x01），默认值为 0。 */
-    public static final long SETTINGS_QPACK_MAX_TABLE_CAPACITY = 0x01;
+    public static final long SETTINGS_QPACK_MAX_TABLE_CAPACITY      = 0x01;
     /** header field section 最大大小（0x06），默认不限。 */
-    public static final long SETTINGS_MAX_FIELD_SECTION_SIZE   = 0x06;
+    public static final long SETTINGS_MAX_FIELD_SECTION_SIZE        = 0x06;
     /** QPACK 最大 blocked streams 数（0x07），默认值为 0。 */
-    public static final long SETTINGS_QPACK_BLOCKED_STREAMS    = 0x07;
+    public static final long SETTINGS_QPACK_BLOCKED_STREAMS         = 0x07;
     /** 启用 connect protocol（0x08，见 RFC 8441），默认值为 0（禁用）。 */
-    public static final long SETTINGS_ENABLE_CONNECT_PROTOCOL  = 0x08;
+    public static final long SETTINGS_ENABLE_CONNECT_PROTOCOL       = 0x08;
 
     private long    qpackMaxTableCapacity = 0;
     private long    maxFieldSectionSize   = Long.MAX_VALUE;
@@ -50,6 +56,37 @@ public class Http3Settings {
         this.maxFieldSectionSize = other.maxFieldSectionSize;
         this.qpackBlockedStreams = other.qpackBlockedStreams;
         this.enableConnectProtocol = other.enableConnectProtocol;
+    }
+
+    /**
+     * 构造当前端点用于初始化 HTTP/3 编解码栈的本地参数。
+     * <p>
+     * 这里保留现有实现默认值：QPACK 表容量为 4096，field section 上限为 65536。
+     * 服务端默认额外打开 extended CONNECT 能力，便于后续统一用于 SETTINGS 广播。
+     * @param serverMode 是否为服务端模式
+     * @return 本地初始化 settings
+     */
+    public static Http3Settings defaultLocalSettings(boolean serverMode) {
+        return defaultLocalSettings(serverMode, DEFAULT_LOCAL_QPACK_MAX_TABLE_CAPACITY, DEFAULT_LOCAL_MAX_FIELD_SECTION_SIZE, DEFAULT_LOCAL_QPACK_BLOCKED_STREAMS);
+    }
+
+    /**
+     * 构造当前端点用于初始化 HTTP/3 编解码栈的本地参数。
+     * @param serverMode 是否为服务端模式
+     * @param qpackMaxTableCapacity 本地 QPACK 动态表容量
+     * @param maxFieldSectionSize 本地最大 field section 大小
+     * @param qpackBlockedStreams 本地允许的 QPACK blocked streams 数
+     * @return 本地初始化 settings
+     */
+    public static Http3Settings defaultLocalSettings(boolean serverMode, long qpackMaxTableCapacity, long maxFieldSectionSize, long qpackBlockedStreams) {
+        Http3Settings settings = new Http3Settings();
+        settings.qpackMaxTableCapacity(qpackMaxTableCapacity);
+        settings.maxFieldSectionSize(maxFieldSectionSize);
+        settings.qpackBlockedStreams(qpackBlockedStreams);
+        if (serverMode) {
+            settings.enableConnectProtocol(true);
+        }
+        return settings;
     }
 
     /**
@@ -75,6 +112,9 @@ public class Http3Settings {
      * @return 当前 settings
      */
     public Http3Settings qpackMaxTableCapacity(long value) {
+        if (value < 0) {
+            throw new IllegalArgumentException("invalid QPACK_MAX_TABLE_CAPACITY: " + value);
+        }
         this.qpackMaxTableCapacity = value;
         return this;
     }
@@ -92,6 +132,9 @@ public class Http3Settings {
      * @return 当前 settings
      */
     public Http3Settings maxFieldSectionSize(long value) {
+        if (value < 0) {
+            throw new IllegalArgumentException("invalid MAX_FIELD_SECTION_SIZE: " + value);
+        }
         this.maxFieldSectionSize = value;
         return this;
     }
@@ -109,8 +152,31 @@ public class Http3Settings {
      * @return 当前 settings
      */
     public Http3Settings qpackBlockedStreams(long value) {
+        if (value < 0) {
+            throw new IllegalArgumentException("invalid QPACK_BLOCKED_STREAMS: " + value);
+        }
         this.qpackBlockedStreams = value;
         return this;
+    }
+
+    /**
+     * 返回适用于本地 QPACK 编码器/解码器的动态表容量。
+     */
+    public int localQpackMaxTableCapacity() {
+        if (this.qpackMaxTableCapacity > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("local QPACK_MAX_TABLE_CAPACITY exceeds implementation limit: " + this.qpackMaxTableCapacity);
+        }
+        return (int) this.qpackMaxTableCapacity;
+    }
+
+    /**
+     * 返回适用于本地 QPACK 解码器的 field section 大小上限。
+     */
+    public int localMaxFieldSectionSize() {
+        if (this.maxFieldSectionSize >= Integer.MAX_VALUE) {
+            return Integer.MAX_VALUE;
+        }
+        return (int) this.maxFieldSectionSize;
     }
 
     /**

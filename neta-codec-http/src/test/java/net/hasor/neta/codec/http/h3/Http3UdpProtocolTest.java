@@ -34,14 +34,16 @@ import static org.junit.Assert.*;
 /**
  * HTTP/3 protocol verification tests using real UDP sockets (neta-to-neta).
  * <p>
- * Starts a real Neta UDP server with {@link Http3ServerDuplexe} and connects
- * a Neta UDP client with {@link Http3ClientDuplexe}. Verifies end-to-end HTTP/3
+ * Starts a real Neta UDP server with explicit frame and object codecs and connects
+ * a Neta UDP client with the same split pipeline. Verifies end-to-end HTTP/3
  * binary framing and QPACK header compression over actual UDP network I/O.
  * <p>
  * Unlike VrtChannel-based tests, this uses real OS-level UDP datagram sockets,
  * proving the HTTP/3 codec works over genuine network transport.
  */
 public class Http3UdpProtocolTest {
+    private static final Http3Settings SERVER_H3_SETTINGS = Http3Settings.defaultLocalSettings(true);
+    private static final Http3Settings CLIENT_H3_SETTINGS = Http3Settings.defaultLocalSettings(false);
 
     private NetManager neta;
     private int        port;
@@ -80,11 +82,12 @@ public class Http3UdpProtocolTest {
     }
 
     /**
-     * Starts a UDP server with Http3ServerDuplexe codec.
+     * Starts a UDP server with explicit HTTP/3 frame and object codecs.
      */
     private void startH3Server() throws Exception {
         ProtoInitializer serverProto = ctx -> {
-            ctx.addLast("h3-codec", new Http3ServerDuplexe());
+            ctx.addLast("h3-frame", new Http3FrameDuplexe(true, SERVER_H3_SETTINGS));
+            ctx.addLast("h3-object", new Http3ObjectDuplexe(true, SERVER_H3_SETTINGS));
             ctx.addLast("h3-aggregator", new HttpServerDuplexeAggregator(1048576));
         };
         UdpSoConfig udpConfig = SoConfig.UDP();
@@ -93,11 +96,12 @@ public class Http3UdpProtocolTest {
     }
 
     /**
-     * Creates a UDP client with Http3ClientDuplexe codec.
+     * Creates a UDP client with explicit HTTP/3 frame and object codecs.
      */
     private NetChannel connectH3Client() throws Exception {
         ProtoInitializer clientProto = ctx -> {
-            ctx.addLast("h3-codec", new Http3ClientDuplexe());
+            ctx.addLast("h3-frame", new Http3FrameDuplexe(false, CLIENT_H3_SETTINGS));
+            ctx.addLast("h3-object", new Http3ObjectDuplexe(false, CLIENT_H3_SETTINGS));
             ctx.addLast("h3-aggregator", new HttpClientDuplexeAggregator(1048576));
         };
         UdpSoConfig udpConfig = SoConfig.UDP();

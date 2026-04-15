@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -28,8 +28,8 @@ package net.hasor.neta.codec.http.h3;
  *     Http3Context h3 = context.context(Http3Context.class);
  *     if (h3 != null && h3.isReady()) {
  *         return "http3-stream";
- *     }
- *     return null;
+ * }
+ * return null;
  * }
  * }</pre>
  * @author 赵永春 (zyc@hasor.net)

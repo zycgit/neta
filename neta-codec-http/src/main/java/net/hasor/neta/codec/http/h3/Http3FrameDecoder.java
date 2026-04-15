@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -42,31 +42,41 @@ import net.hasor.neta.channel.transport.quic.QuicVarInt;
  * <p>
  * frame 格式（RFC 9114 第 7.1 节）：
  * <pre>
- *   HTTP/3 Frame {
- *     Type (i),       — QUIC variable-length integer
- *     Length (i),     — QUIC variable-length integer
- *     Frame Payload (..),
- *   }
+ * HTTP/3 Frame {
+ * Type (i), — QUIC variable-length integer
+ * Length (i), — QUIC variable-length integer
+ * Frame Payload (..),
+ * }
  * </pre>
  * @see Http3Frame
  * @see Http3FrameToHttpDecoder
  */
 public class Http3FrameDecoder implements ProtoHandler<ByteBuf, Http3Frame> {
-    private static final Logger logger = Logger.getLogger(Http3FrameDecoder.class);
-
+    private static final Logger   logger                 = Logger.getLogger(Http3FrameDecoder.class);
     private final boolean         serverMode;
+    private final Http3Settings   localSettings;
     /** 非 QUIC 测试场景下使用的回退元数据队列，内容为 streamId + fin。 */
     private final Queue<long[]>   fallbackMeta           = new LinkedList<>();
     /** 记录单向 stream 的类型，避免后续数据块重复读取。 */
     private final Map<Long, Long> uniStreamTypes         = new HashMap<>();
-    private       long            nonQuicStreamIdCounter = 0;
+    private long                  nonQuicStreamIdCounter = 0;
 
     /**
      * 创建一个新的 HTTP/3 二进制 frame 解码器。
      * @param serverMode 当前端点角色标记，供外层组件查询
      */
     public Http3FrameDecoder(boolean serverMode) {
+        this(serverMode, Http3Settings.defaultLocalSettings(serverMode));
+    }
+
+    /**
+     * 统一的 HTTP/3 settings 初始化入口。
+     * <p>
+     * 当前 frame 解码层不直接消费 settings 参数，但保留该构造方法以保证整条 H3 codec 链使用统一封装完成初始化。
+     */
+    public Http3FrameDecoder(boolean serverMode, Http3Settings localSettings) {
         this.serverMode = serverMode;
+        this.localSettings = localSettings != null ? new Http3Settings(localSettings) : Http3Settings.defaultLocalSettings(serverMode);
     }
 
     /**

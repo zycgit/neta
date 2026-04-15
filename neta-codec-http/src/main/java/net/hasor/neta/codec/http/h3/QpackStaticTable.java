@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h3;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -26,12 +27,18 @@ import java.util.Map;
  * 这里使用基于 HashMap 的查找，将名称和名称+值匹配从 O(99) 线性扫描优化为 O(1)。
  */
 public final class QpackStaticTable {
-    /** 从 header 名称映射到首个匹配索引的表，使用 0 基索引。 */
+    /**
+     * 从 header 名称映射到首个匹配索引的表，使用 0 基索引。
+     */
     private static final Map<String, Integer> NAME_INDEX_MAP;
-    /** 从名称+值组合键映射到精确匹配索引的表，使用 0 基索引。 */
+    /**
+     * 从名称+值组合键映射到精确匹配索引的表，使用 0 基索引。
+     */
     private static final Map<Long, Integer>   NAME_VALUE_INDEX_MAP;
 
-    /** 静态表条目，按 RFC 9204 附录 A 使用 0 基索引。 */
+    /**
+     * 静态表条目，按 RFC 9204 附录 A 使用 0 基索引。
+     */
     private static final QpackHeaderField[] STATIC_TABLE = { new QpackHeaderField(":authority", ""),                                  // 0
             new QpackHeaderField(":path", "/"),                                      // 1
             new QpackHeaderField("age", "0"),                                        // 2

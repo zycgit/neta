@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,14 +21,14 @@ import java.util.Queue;
 import net.hasor.neta.codec.http.HttpHeaders;
 
 /**
- * 由 {@link Http3FrameToHttpDecoder} 与 {@link Http3ServerDuplexe} 共享的连接级状态容器。
+ * 由 {@link Http3FrameToHttpDecoder} 与 {@link Http3HttpToFrameEncoder} 共享的连接级状态容器。
  * <p>
  * 相关操作被划分为四类：
  * <ul>
- *   <li><b>init</b>：构造方法以及由 Duplexe 一次性注入的配置。</li>
- *   <li><b>append</b>：仅由 {@link Http3FrameToHttpDecoder} 调用，用于在 frame 到达时补充状态。</li>
- *   <li><b>poll</b>：仅由 Duplexe 在 SND 周期调用，用于提取排队的控制数据。</li>
- *   <li><b>release</b>：在连接关闭时调用，用于释放资源。</li>
+ * <li><b>init</b>：构造方法以及初始化配置。</li>
+ * <li><b>append</b>：仅由 {@link Http3FrameToHttpDecoder} 调用，用于在 frame 到达时补充状态。</li>
+ * <li><b>poll</b>：由语义编码路径调用，用于提取排队的响应 stream 关联数据。</li>
+ * <li><b>release</b>：在连接关闭时调用，用于释放资源。</li>
  * </ul>
  * 所有字段均为私有，调用方不得直接访问内部集合或子对象。
  */
@@ -37,10 +37,11 @@ class Http3DecoderContent {
     private final Map<Long, Http3Stream> streams               = new HashMap<>();
     private final Http3Settings          remoteSettings        = new Http3Settings();
     private final Queue<Long>            responseStreamIdQueue = new LinkedList<>();
-    private       boolean                settingsReceived;
+    private boolean                      settingsReceived;
 
-    Http3DecoderContent(int maxTableSize, int maxHeaderListSize) {
-        this.qpackDecoder = new QpackDecoder(maxTableSize, maxHeaderListSize);
+    Http3DecoderContent(Http3Settings localSettings) {
+        Http3Settings settings = localSettings != null ? new Http3Settings(localSettings) : Http3Settings.defaultLocalSettings(false);
+        this.qpackDecoder = new QpackDecoder(settings.localQpackMaxTableCapacity(), settings.localMaxFieldSectionSize());
         this.settingsReceived = false;
     }
 
@@ -57,7 +58,7 @@ class Http3DecoderContent {
      * 返回指定 stream ID 对应的 stream；如不存在则创建。
      */
     Http3Stream getOrCreateStream(long streamId) {
-        return streams.computeIfAbsent(streamId, id -> new Http3Stream(id));
+        return streams.computeIfAbsent(streamId, Http3Stream::new);
     }
 
     /**
@@ -109,7 +110,7 @@ class Http3DecoderContent {
         }
     }
 
-    // ─── poll（由 Duplexe 在 SND 周期调用） ────────────────────────────────────
+    // ─── poll（由语义编码路径调用） ─────────────────────────────────────────────
 
     /**
      * 提取下一个响应 stream ID；队列为空时返回 -1。

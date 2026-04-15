@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,31 +21,30 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>
  * 相关操作被划分为四类：
  * <ul>
- *   <li><b>init</b>：构造方法，所有状态会在构造时完成初始化。</li>
- *   <li><b>append</b>：由编码器调用，用于构建出站 frame，包括 QPACK 编码、请求 stream ID 分配和当前 stream 绑定。</li>
- *   <li><b>inject</b>：由 Duplexe 调用，在服务端模式下于执行编码前设置当前响应的 stream ID。</li>
- *   <li><b>release</b>：无额外资源需要释放，QPACK 编码器可由 GC 回收。</li>
+ * <li><b>init</b>：构造方法，所有状态会在构造时完成初始化。</li>
+ * <li><b>append</b>：由编码器调用，用于构建出站 frame，包括 QPACK 编码、stream ID 分配和当前 stream 绑定。</li>
+ * <li><b>release</b>：无额外资源需要释放，QPACK 编码器可由 GC 回收。</li>
  * </ul>
  * 所有字段均为私有，调用方不得直接访问内部子对象。
  */
 class Http3EncoderContent {
+    private final Http3Settings localSettings;
     private final QpackEncoder qpackEncoder;
     private final AtomicLong   nextStreamId;
-    private       long         currentStreamId;
-    private       long         responseStreamId;
-    private       boolean      settingsSent;
-    private       boolean      pendingRequest;
-    private       String       pendingMethod;
-    private       String       pendingPath;
-    private       String       pendingScheme;
-    private       boolean      pendingResponse;
-    private       int          pendingStatus;
+    private long               currentStreamId;
+    private boolean            settingsSent;
+    private boolean            pendingRequest;
+    private String             pendingMethod;
+    private String             pendingPath;
+    private String             pendingScheme;
+    private boolean            pendingResponse;
+    private int                pendingStatus;
 
-    Http3EncoderContent(boolean serverMode, int maxTableSize) {
-        this.qpackEncoder = new QpackEncoder(maxTableSize, false);
+    Http3EncoderContent(boolean serverMode, Http3Settings localSettings) {
+        this.localSettings = localSettings != null ? new Http3Settings(localSettings) : Http3Settings.defaultLocalSettings(serverMode);
+        this.qpackEncoder = new QpackEncoder(this.localSettings.localQpackMaxTableCapacity(), false);
         this.nextStreamId = new AtomicLong(serverMode ? 1 : 0);
-        this.currentStreamId = 0;
-        this.responseStreamId = -1;
+        this.currentStreamId = -1;
         this.settingsSent = false;
         this.pendingRequest = false;
         this.pendingMethod = null;
@@ -71,6 +70,10 @@ class Http3EncoderContent {
         this.settingsSent = true;
     }
 
+    Http3Settings localSettings() {
+        return new Http3Settings(this.localSettings);
+    }
+
     // ─── stream ID management ─────────────────────────────────────────────────
 
     /**
@@ -81,8 +84,7 @@ class Http3EncoderContent {
     }
 
     /**
-     * 设置下一个出站响应要使用的 stream ID，主要用于服务端模式下由 Duplexe 注入。
-     * 必须在 Duplexe 于 SND 路径调用编码器之前完成设置。
+     * 设置当前出站消息应使用的 stream ID。
      */
     void setCurrentStreamId(long streamId) {
         this.currentStreamId = streamId;
@@ -95,34 +97,6 @@ class Http3EncoderContent {
     long allocateNextStreamId() {
         long id = nextStreamId.getAndAdd(4);
         this.currentStreamId = id;
-        return id;
-    }
-
-    /**
-     * 返回待处理的响应 stream ID；如果不存在则返回 -1。
-     */
-    long responseStreamId() {
-        return responseStreamId;
-    }
-
-    /**
-     * 设置响应 stream ID，由 Duplexe 在发送服务端响应前注入。
-     */
-    void setResponseStreamId(long streamId) {
-        this.responseStreamId = streamId;
-    }
-
-    /**
-     * 消费并返回待处理的响应 stream ID。
-     * 消费后内部值会重置为 -1。
-     * @return 响应 stream ID；如果没有则返回 -1
-     */
-    long consumeResponseStreamId() {
-        long id = this.responseStreamId;
-        if (id >= 0) {
-            this.responseStreamId = -1;
-            this.currentStreamId = id;
-        }
         return id;
     }
 

@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,11 +24,11 @@ package net.hasor.neta.codec.http.h3;
  * <p>
  * frame 格式（RFC 9114 第 7.1 节）：
  * <pre>
- *   HTTP/3 Frame {
- *     Type (i),       — QUIC variable-length integer
- *     Length (i),     — QUIC variable-length integer
- *     Frame Payload (..),
- *   }
+ * HTTP/3 Frame {
+ * Type (i), — QUIC variable-length integer
+ * Length (i), — QUIC variable-length integer
+ * Frame Payload (..),
+ * }
  * </pre>
  * <p>
  * 解码路径：{@code ByteBuf → Http3Frame → HttpObject}<br>

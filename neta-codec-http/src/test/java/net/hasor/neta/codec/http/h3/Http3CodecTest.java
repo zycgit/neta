@@ -12,6 +12,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.NetConfig;
 import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.channel.data.ProtoQueue;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoRcvQueueView;
 import net.hasor.neta.channel.data.ProtoSndQueue;
@@ -29,6 +30,8 @@ import static org.junit.Assert.*;
 public class Http3CodecTest {
     private static final String name     = "test";
     private static final int    poolSize = 8;
+    private static final Http3Settings CLIENT_H3_SETTINGS = Http3Settings.defaultLocalSettings(false);
+    private static final Http3Settings SERVER_H3_SETTINGS = Http3Settings.defaultLocalSettings(true);
 
     // ========================= Mock & Helpers =========================
 
@@ -99,6 +102,19 @@ public class Http3CodecTest {
         return result;
     }
 
+    private static Map<Long, Long> decodeSettingsPayload(byte[] payload) {
+        Map<Long, Long> settings = new ConcurrentHashMap<>();
+        int pos = 0;
+        while (pos < payload.length) {
+            long[] id = QuicVarInt.decode(payload, pos);
+            pos += (int) id[1];
+            long[] value = QuicVarInt.decode(payload, pos);
+            pos += (int) value[1];
+            settings.put(id[0], value[0]);
+        }
+        return settings;
+    }
+
     // ========================= Round-Trip Helpers =========================
 
     private static void assertArrayEquals(byte[] expected, byte[] actual) {
@@ -111,9 +127,9 @@ public class Http3CodecTest {
     /** Encodes HttpObject via client encoder pipeline, then decodes via server decoder pipeline. Returns decoded objects. */
     private List<HttpObject> clientToServer(HttpObject... messages) throws Throwable {
         // Encode: HttpObject → Http3Frame → ByteBuf (client side)
-        Http3HttpToFrameEncoder httpToFrame = new Http3HttpToFrameEncoder(false);
-        Http3FrameEncoder frameEncoder = new Http3FrameEncoder();
-        Http3FrameBridgeQueue encBridge = new Http3FrameBridgeQueue();
+        Http3HttpToFrameEncoder httpToFrame = new Http3HttpToFrameEncoder(false, CLIENT_H3_SETTINGS);
+        Http3FrameEncoder frameEncoder = new Http3FrameEncoder(CLIENT_H3_SETTINGS);
+        ProtoQueue<Http3Frame> encBridge = new ProtoQueue<>(-1);
 
         ProtoContext encCtx = mockContext();
         httpToFrame.onInit(name, poolSize, encCtx);
@@ -130,9 +146,9 @@ public class Http3CodecTest {
         ByteBuf combined = combineAll(encOut);
 
         // Decode: ByteBuf → Http3Frame → HttpObject (server side)
-        Http3FrameDecoder frameDecoder = new Http3FrameDecoder(true);
-        Http3FrameToHttpDecoder frameToHttp = new Http3FrameToHttpDecoder(true);
-        Http3FrameBridgeQueue decBridge = new Http3FrameBridgeQueue();
+        Http3FrameDecoder frameDecoder = new Http3FrameDecoder(true, SERVER_H3_SETTINGS);
+        Http3FrameToHttpDecoder frameToHttp = new Http3FrameToHttpDecoder(true, SERVER_H3_SETTINGS);
+        ProtoQueue<Http3Frame> decBridge = new ProtoQueue<>(-1);
 
         ProtoContext decCtx = mockContext();
         frameDecoder.onInit(name, poolSize, decCtx);
@@ -154,9 +170,9 @@ public class Http3CodecTest {
     /** Encodes HttpObject via server encoder pipeline, then decodes via client decoder pipeline. Returns decoded objects. */
     private List<HttpObject> serverToClient(HttpObject... messages) throws Throwable {
         // Encode: HttpObject → Http3Frame → ByteBuf (server side)
-        Http3HttpToFrameEncoder httpToFrame = new Http3HttpToFrameEncoder(true);
-        Http3FrameEncoder frameEncoder = new Http3FrameEncoder();
-        Http3FrameBridgeQueue encBridge = new Http3FrameBridgeQueue();
+        Http3HttpToFrameEncoder httpToFrame = new Http3HttpToFrameEncoder(true, SERVER_H3_SETTINGS);
+        Http3FrameEncoder frameEncoder = new Http3FrameEncoder(SERVER_H3_SETTINGS);
+        ProtoQueue<Http3Frame> encBridge = new ProtoQueue<>(-1);
 
         ProtoContext encCtx = mockContext();
         httpToFrame.onInit(name, poolSize, encCtx);
@@ -173,9 +189,9 @@ public class Http3CodecTest {
         ByteBuf combined = combineAll(encOut);
 
         // Decode: ByteBuf → Http3Frame → HttpObject (client side)
-        Http3FrameDecoder frameDecoder = new Http3FrameDecoder(false);
-        Http3FrameToHttpDecoder frameToHttp = new Http3FrameToHttpDecoder(false);
-        Http3FrameBridgeQueue decBridge = new Http3FrameBridgeQueue();
+        Http3FrameDecoder frameDecoder = new Http3FrameDecoder(false, CLIENT_H3_SETTINGS);
+        Http3FrameToHttpDecoder frameToHttp = new Http3FrameToHttpDecoder(false, CLIENT_H3_SETTINGS);
+        ProtoQueue<Http3Frame> decBridge = new ProtoQueue<>(-1);
 
         ProtoContext decCtx = mockContext();
         frameDecoder.onInit(name, poolSize, decCtx);
@@ -285,6 +301,68 @@ public class Http3CodecTest {
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.OK);
         List<HttpObject> clientSide = serverToClient(resp);
         assertTrue(clientSide.size() >= 1);
+    }
+
+    @Test
+    public void testEncoderPrependsSettingsFrameFromLocalSettings() throws Throwable {
+        Http3Settings localSettings = new Http3Settings()
+                .qpackMaxTableCapacity(32)
+                .maxFieldSectionSize(2048)
+                .qpackBlockedStreams(5)
+                .enableConnectProtocol(true);
+        Http3HttpToFrameEncoder encoder = new Http3HttpToFrameEncoder(false, localSettings);
+        ProtoContext context = mockContext();
+        encoder.onInit(name, poolSize, context);
+
+        DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.GET, "/settings");
+        request.addHeader("host", "example.com");
+
+        SimpleProtoRcvQueue<HttpObject> input = new SimpleProtoRcvQueue<>();
+        SimpleProtoSndQueue<Http3Frame> output = new SimpleProtoSndQueue<>();
+        input.add(request);
+        encoder.onMessage(context, input, output);
+
+        assertTrue(output.size() >= 2);
+        Http3Frame settingsFrame = output.poll();
+        assertNotNull(settingsFrame);
+        assertEquals(Http3FrameType.SETTINGS, settingsFrame.type());
+
+        Map<Long, Long> settings = decodeSettingsPayload(settingsFrame.payload());
+        assertEquals(Long.valueOf(32), settings.get(Http3Settings.SETTINGS_QPACK_MAX_TABLE_CAPACITY));
+        assertEquals(Long.valueOf(2048), settings.get(Http3Settings.SETTINGS_MAX_FIELD_SECTION_SIZE));
+        assertEquals(Long.valueOf(5), settings.get(Http3Settings.SETTINGS_QPACK_BLOCKED_STREAMS));
+        assertEquals(Long.valueOf(1), settings.get(Http3Settings.SETTINGS_ENABLE_CONNECT_PROTOCOL));
+
+        Http3Frame requestFrame = output.poll();
+        assertNotNull(requestFrame);
+        assertEquals(Http3FrameType.HEADERS, requestFrame.type());
+    }
+
+    @Test
+    public void testEncoderSendsSettingsOnlyOnce() throws Throwable {
+        Http3HttpToFrameEncoder encoder = new Http3HttpToFrameEncoder(false, CLIENT_H3_SETTINGS);
+        ProtoContext context = mockContext();
+        encoder.onInit(name, poolSize, context);
+
+        DefaultFullHttpRequest first = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.GET, "/first");
+        first.addHeader("host", "example.com");
+        SimpleProtoRcvQueue<HttpObject> firstInput = new SimpleProtoRcvQueue<>();
+        SimpleProtoSndQueue<Http3Frame> firstOutput = new SimpleProtoSndQueue<>();
+        firstInput.add(first);
+        encoder.onMessage(context, firstInput, firstOutput);
+
+        assertTrue(firstOutput.size() >= 2);
+        assertEquals(Http3FrameType.SETTINGS, firstOutput.poll().type());
+
+        DefaultFullHttpRequest second = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.GET, "/second");
+        second.addHeader("host", "example.com");
+        SimpleProtoRcvQueue<HttpObject> secondInput = new SimpleProtoRcvQueue<>();
+        SimpleProtoSndQueue<Http3Frame> secondOutput = new SimpleProtoSndQueue<>();
+        secondInput.add(second);
+        encoder.onMessage(context, secondInput, secondOutput);
+
+        assertTrue(secondOutput.size() >= 1);
+        assertNotEquals(Http3FrameType.SETTINGS, secondOutput.poll().type());
     }
 
     // ========================= HTTP Method Tests =========================
@@ -623,22 +701,22 @@ public class Http3CodecTest {
     @Test
     public void testMultipleSequentialRequests() throws Throwable {
         // Encode pipeline (client)
-        Http3HttpToFrameEncoder httpToFrame = new Http3HttpToFrameEncoder(false);
-        Http3FrameEncoder frameEncoder = new Http3FrameEncoder();
+        Http3HttpToFrameEncoder httpToFrame = new Http3HttpToFrameEncoder(false, CLIENT_H3_SETTINGS);
+        Http3FrameEncoder frameEncoder = new Http3FrameEncoder(CLIENT_H3_SETTINGS);
         ProtoContext encCtx = mockContext();
         httpToFrame.onInit(name, poolSize, encCtx);
         frameEncoder.onInit(name, poolSize, encCtx);
 
         // Decode pipeline (server)
-        Http3FrameDecoder frameDecoder = new Http3FrameDecoder(true);
-        Http3FrameToHttpDecoder frameToHttp = new Http3FrameToHttpDecoder(true);
+        Http3FrameDecoder frameDecoder = new Http3FrameDecoder(true, SERVER_H3_SETTINGS);
+        Http3FrameToHttpDecoder frameToHttp = new Http3FrameToHttpDecoder(true, SERVER_H3_SETTINGS);
         ProtoContext decCtx = mockContext();
         frameDecoder.onInit(name, poolSize, decCtx);
         frameToHttp.onInit(name, poolSize, decCtx);
 
         int requestCount = 0;
         for (int i = 0; i < 10; i++) {
-            Http3FrameBridgeQueue encBridge = new Http3FrameBridgeQueue();
+            ProtoQueue<Http3Frame> encBridge = new ProtoQueue<>(-1);
             SimpleProtoRcvQueue<HttpObject> encIn = new SimpleProtoRcvQueue<>();
             SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
             DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.GET, "/page/" + i);
@@ -649,7 +727,7 @@ public class Http3CodecTest {
 
             ByteBuf combined = combineAll(encOut);
 
-            Http3FrameBridgeQueue decBridge = new Http3FrameBridgeQueue();
+            ProtoQueue<Http3Frame> decBridge = new ProtoQueue<>(-1);
             SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
             SimpleProtoSndQueue<HttpObject> decOut = new SimpleProtoSndQueue<>();
             decIn.add(combined);
@@ -668,15 +746,15 @@ public class Http3CodecTest {
     @Test
     public void testMultipleResponsesOnDifferentStreams() throws Throwable {
         // Encode pipeline (server)
-        Http3HttpToFrameEncoder httpToFrame = new Http3HttpToFrameEncoder(true);
-        Http3FrameEncoder frameEncoder = new Http3FrameEncoder();
+        Http3HttpToFrameEncoder httpToFrame = new Http3HttpToFrameEncoder(true, SERVER_H3_SETTINGS);
+        Http3FrameEncoder frameEncoder = new Http3FrameEncoder(SERVER_H3_SETTINGS);
         ProtoContext encCtx = mockContext();
         httpToFrame.onInit(name, poolSize, encCtx);
         frameEncoder.onInit(name, poolSize, encCtx);
 
         // Decode pipeline (client)
-        Http3FrameDecoder frameDecoder = new Http3FrameDecoder(false);
-        Http3FrameToHttpDecoder frameToHttp = new Http3FrameToHttpDecoder(false);
+        Http3FrameDecoder frameDecoder = new Http3FrameDecoder(false, CLIENT_H3_SETTINGS);
+        Http3FrameToHttpDecoder frameToHttp = new Http3FrameToHttpDecoder(false, CLIENT_H3_SETTINGS);
         ProtoContext decCtx = mockContext();
         frameDecoder.onInit(name, poolSize, decCtx);
         frameToHttp.onInit(name, poolSize, decCtx);
@@ -685,18 +763,18 @@ public class Http3CodecTest {
         int responseCount = 0;
         long streamId = 0;
         for (HttpStatus status : statuses) {
-            Http3FrameBridgeQueue encBridge = new Http3FrameBridgeQueue();
+            ProtoQueue<Http3Frame> encBridge = new ProtoQueue<>(-1);
             SimpleProtoRcvQueue<HttpObject> encIn = new SimpleProtoRcvQueue<>();
             SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
             DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, status);
+            resp.streamId(streamId);
             encIn.add(resp);
-            encCtx.context(Http3EncoderContent.class).setResponseStreamId(streamId);
             httpToFrame.onMessage(encCtx, encIn, encBridge);
             frameEncoder.onMessage(encCtx, encBridge, encOut);
 
             ByteBuf combined = combineAll(encOut);
 
-            Http3FrameBridgeQueue decBridge = new Http3FrameBridgeQueue();
+            ProtoQueue<Http3Frame> decBridge = new ProtoQueue<>(-1);
             SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
             SimpleProtoSndQueue<HttpObject> decOut = new SimpleProtoSndQueue<>();
             decIn.add(combined);
@@ -1035,10 +1113,10 @@ public class Http3CodecTest {
     @Test
     public void testSettingsFrameParsing() throws Throwable {
         // Binary decoder: ByteBuf → Http3Frame
-        Http3FrameDecoder frameDecoder = new Http3FrameDecoder(true);
+        Http3FrameDecoder frameDecoder = new Http3FrameDecoder(true, SERVER_H3_SETTINGS);
         // Semantic decoder: Http3Frame → HttpObject (handles SETTINGS internally)
-        Http3FrameToHttpDecoder frameToHttp = new Http3FrameToHttpDecoder(true);
-        Http3FrameBridgeQueue bridge = new Http3FrameBridgeQueue();
+        Http3FrameToHttpDecoder frameToHttp = new Http3FrameToHttpDecoder(true, SERVER_H3_SETTINGS);
+        ProtoQueue<Http3Frame> bridge = new ProtoQueue<>(-1);
 
         ProtoContext decCtx = mockContext();
         frameDecoder.onInit(name, poolSize, decCtx);
@@ -1077,7 +1155,7 @@ public class Http3CodecTest {
 
     @Test
     public void testDataTooSmallSkipped() throws Throwable {
-        Http3FrameDecoder decoder = new Http3FrameDecoder(true);
+        Http3FrameDecoder decoder = new Http3FrameDecoder(true, SERVER_H3_SETTINGS);
         ProtoContext decCtx = mockContext();
         decoder.onInit(name, poolSize, decCtx);
 
@@ -1173,9 +1251,9 @@ public class Http3CodecTest {
     @Test
     public void testDecoderCloseCleanup() throws Throwable {
         // Encode pipeline (client)
-        Http3HttpToFrameEncoder httpToFrame = new Http3HttpToFrameEncoder(false);
-        Http3FrameEncoder frameEncoder = new Http3FrameEncoder();
-        Http3FrameBridgeQueue encBridge = new Http3FrameBridgeQueue();
+        Http3HttpToFrameEncoder httpToFrame = new Http3HttpToFrameEncoder(false, CLIENT_H3_SETTINGS);
+        Http3FrameEncoder frameEncoder = new Http3FrameEncoder(CLIENT_H3_SETTINGS);
+        ProtoQueue<Http3Frame> encBridge = new ProtoQueue<>(-1);
 
         ProtoContext encCtx = mockContext();
         httpToFrame.onInit(name, poolSize, encCtx);
@@ -1192,9 +1270,9 @@ public class Http3CodecTest {
         frameEncoder.onMessage(encCtx, encBridge, encOut);
 
         // Decode pipeline (server)
-        Http3FrameDecoder frameDecoder = new Http3FrameDecoder(true);
-        Http3FrameToHttpDecoder frameToHttp = new Http3FrameToHttpDecoder(true);
-        Http3FrameBridgeQueue decBridge = new Http3FrameBridgeQueue();
+        Http3FrameDecoder frameDecoder = new Http3FrameDecoder(true, SERVER_H3_SETTINGS);
+        Http3FrameToHttpDecoder frameToHttp = new Http3FrameToHttpDecoder(true, SERVER_H3_SETTINGS);
+        ProtoQueue<Http3Frame> decBridge = new ProtoQueue<>(-1);
 
         ProtoContext decCtx = mockContext();
         frameDecoder.onInit(name, poolSize, decCtx);
@@ -1215,9 +1293,9 @@ public class Http3CodecTest {
 
     @Test
     public void testSemanticDecoderInstallsHttpVersionAndScope() throws Throwable {
-        Http3HttpToFrameEncoder httpToFrame = new Http3HttpToFrameEncoder(false);
-        Http3FrameEncoder frameEncoder = new Http3FrameEncoder();
-        Http3FrameBridgeQueue encBridge = new Http3FrameBridgeQueue();
+        Http3HttpToFrameEncoder httpToFrame = new Http3HttpToFrameEncoder(false, CLIENT_H3_SETTINGS);
+        Http3FrameEncoder frameEncoder = new Http3FrameEncoder(CLIENT_H3_SETTINGS);
+        ProtoQueue<Http3Frame> encBridge = new ProtoQueue<>(-1);
 
         ProtoContext encCtx = mockContext();
         httpToFrame.onInit(name, poolSize, encCtx);
@@ -1234,9 +1312,9 @@ public class Http3CodecTest {
 
         ByteBuf combined = combineAll(encOut);
 
-        Http3FrameDecoder frameDecoder = new Http3FrameDecoder(true);
-        Http3FrameToHttpDecoder decoder = new Http3FrameToHttpDecoder(true);
-        Http3FrameBridgeQueue decBridge = new Http3FrameBridgeQueue();
+        Http3FrameDecoder frameDecoder = new Http3FrameDecoder(true, SERVER_H3_SETTINGS);
+        Http3FrameToHttpDecoder decoder = new Http3FrameToHttpDecoder(true, SERVER_H3_SETTINGS);
+        ProtoQueue<Http3Frame> decBridge = new ProtoQueue<>(-1);
 
         ProtoContext context = mockContext();
         frameDecoder.onInit(name, poolSize, context);

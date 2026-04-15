@@ -85,9 +85,9 @@ public class HttpResponseAggregator extends AbstractHttpAggregator<HttpResponse>
                         }
                     }
                 }
-                if (part instanceof HttpContent) {
-                    ByteBuf content = ((HttpContent) part).content();
-                    int readable = content == null ? 0 : content.readableBytes();
+                ByteBuf content = this.contentOf(part);
+                if (content != null) {
+                    int readable = content.readableBytes();
                     int newLength = contentLength + readable;
                     if (newLength > this.maxContentLength()) {
                         if (this.onContentTooLarge(context, response, fullResp, newLength) && this.isDiscardMode()) {
@@ -97,8 +97,8 @@ public class HttpResponseAggregator extends AbstractHttpAggregator<HttpResponse>
                         throw new HttpContentTooLargeException("content length exceeds maximum: " + newLength + " > " + this.maxContentLength(), this.maxContentLength(), newLength);
                     }
                     contentLength = newLength;
-                    if (content != null && readable > 0) {
-                        fullResp.appendContent((HttpContent) part);
+                    if (readable > 0) {
+                        this.appendContent(fullResp, part, content);
                     }
                 }
             }
@@ -123,6 +123,24 @@ public class HttpResponseAggregator extends AbstractHttpAggregator<HttpResponse>
         if (response.isBad()) {
             fullResp.markBad(response.badReason());
         }
+    }
+
+    private ByteBuf contentOf(HttpObject part) {
+        if (part instanceof HttpContent) {
+            return ((HttpContent) part).content();
+        }
+        if (part instanceof HttpByteBuf) {
+            return ((HttpByteBuf) part).content();
+        }
+        return null;
+    }
+
+    private void appendContent(DefaultFullHttpResponse fullResp, HttpObject part, ByteBuf content) {
+        if (part instanceof HttpContent) {
+            fullResp.appendContent((HttpContent) part);
+            return;
+        }
+        fullResp.appendContent(new DefaultHttpContent(content));
     }
 
     /**

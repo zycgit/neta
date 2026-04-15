@@ -35,21 +35,24 @@ import static org.junit.Assert.assertTrue;
 /**
  * HTTP/3 bidirectional integration tests using Virtual Channel (neta-to-neta).
  * <p>
- * Simulates real client-server communication with HTTP/3 codec on both sides.
- * Uses {@link VrtChannel} + {@link VrtTransfer} to connect Http3ClientDuplexe and Http3ServerDuplexe.
+ * Simulates real client-server communication with explicit HTTP/3 frame and object layers on both sides.
  */
 public class Http3RealChannelTest extends AbstractHttpTest {
+    private static final Http3Settings SERVER_H3_SETTINGS = Http3Settings.defaultLocalSettings(true);
+    private static final Http3Settings CLIENT_H3_SETTINGS = Http3Settings.defaultLocalSettings(false);
 
     private static VrtChannel openServer(NetManager neta) throws Throwable {
         return (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
-            ctx.addLast("h3", new Http3ServerDuplexe());
+            ctx.addLast("h3-frame", new Http3FrameDuplexe(true, SERVER_H3_SETTINGS));
+            ctx.addLast("h3-object", new Http3ObjectDuplexe(true, SERVER_H3_SETTINGS));
             ctx.addLast("aggregator", new HttpServerDuplexeAggregator(1048576));
         }, VrtSoConfig.asServer());
     }
 
     private static VrtChannel openClient(NetManager neta) throws Throwable {
         return (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
-            ctx.addLast("h3", new Http3ClientDuplexe());
+            ctx.addLast("h3-frame", new Http3FrameDuplexe(false, CLIENT_H3_SETTINGS));
+            ctx.addLast("h3-object", new Http3ObjectDuplexe(false, CLIENT_H3_SETTINGS));
             ctx.addLast("aggregator", new HttpClientDuplexeAggregator(1048576));
         }, VrtSoConfig.asClient());
     }

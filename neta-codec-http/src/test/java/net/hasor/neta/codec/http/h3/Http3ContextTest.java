@@ -22,12 +22,14 @@ import static org.junit.Assert.*;
  * Tests for {@link Http3Context} implementation created via {@link Http3FrameDecoder#createContext()}.
  */
 public class Http3ContextTest {
+    private static final Http3Settings SERVER_H3_SETTINGS = Http3Settings.defaultLocalSettings(true);
+    private static final Http3Settings CLIENT_H3_SETTINGS = Http3Settings.defaultLocalSettings(false);
 
     // ==================== Http3Context via Decoder ====================
 
     @Test
     public void createContext_serverDecoder() {
-        Http3DecoderContent state = new Http3DecoderContent(4096, 65536);
+        Http3DecoderContent state = new Http3DecoderContent(SERVER_H3_SETTINGS);
         Http3Context h3ctx = new Http3ContextImpl(true, state);
 
         assertNotNull("createContext should return non-null", h3ctx);
@@ -37,7 +39,7 @@ public class Http3ContextTest {
 
     @Test
     public void createContext_clientDecoder() {
-        Http3DecoderContent state = new Http3DecoderContent(4096, 65536);
+        Http3DecoderContent state = new Http3DecoderContent(CLIENT_H3_SETTINGS);
         Http3Context h3ctx = new Http3ContextImpl(false, state);
 
         assertNotNull("createContext should return non-null", h3ctx);
@@ -47,7 +49,7 @@ public class Http3ContextTest {
 
     @Test
     public void createContext_initialState_notReady() {
-        Http3DecoderContent state = new Http3DecoderContent(4096, 65536);
+        Http3DecoderContent state = new Http3DecoderContent(SERVER_H3_SETTINGS);
         Http3Context h3ctx = new Http3ContextImpl(true, state);
 
         assertFalse("Should not be ready before SETTINGS received", h3ctx.isReady());
@@ -55,7 +57,7 @@ public class Http3ContextTest {
 
     @Test
     public void createContext_initialState_defaultSettings() {
-        Http3DecoderContent state = new Http3DecoderContent(4096, 65536);
+        Http3DecoderContent state = new Http3DecoderContent(SERVER_H3_SETTINGS);
         Http3Context h3ctx = new Http3ContextImpl(true, state);
 
         assertTrue("maxFieldSectionSize should be >= 0", h3ctx.maxFieldSectionSize() >= 0);
@@ -65,7 +67,7 @@ public class Http3ContextTest {
 
     @Test
     public void createContext_initialState_lastStreamIdZero() {
-        Http3DecoderContent state = new Http3DecoderContent(4096, 65536);
+        Http3DecoderContent state = new Http3DecoderContent(SERVER_H3_SETTINGS);
         Http3Context h3ctx = new Http3ContextImpl(true, state);
 
         assertEquals("No streams should exist initially", 0L, h3ctx.lastStreamId());
@@ -73,7 +75,7 @@ public class Http3ContextTest {
 
     @Test
     public void createContext_multipleCallsReturnIndependentInstances() {
-        Http3DecoderContent state = new Http3DecoderContent(4096, 65536);
+        Http3DecoderContent state = new Http3DecoderContent(SERVER_H3_SETTINGS);
         Http3Context ctx1 = new Http3ContextImpl(true, state);
         Http3Context ctx2 = new Http3ContextImpl(true, state);
 

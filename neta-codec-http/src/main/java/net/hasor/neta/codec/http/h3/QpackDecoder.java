@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -25,9 +25,9 @@ import net.hasor.neta.codec.http.HttpHeaders;
  * 它负责把 QPACK 编码后的字段区段解码为 {@link HttpHeaders}。
  * 当前解码器支持：
  * <ul>
- *   <li>索引字段行，包括静态表、动态表和 Post-Base 引用</li>
- *   <li>带名称引用的字面量字段行，包括静态表、动态表和 Post-Base 名称引用</li>
- *   <li>不带名称引用的字面量字段行</li>
+ * <li>索引字段行，包括静态表、动态表和 Post-Base 引用</li>
+ * <li>带名称引用的字面量字段行，包括静态表、动态表和 Post-Base 名称引用</li>
+ * <li>不带名称引用的字面量字段行</li>
  * </ul>
  * @see QpackStaticTable
  * @see QpackDynamicTable
@@ -35,7 +35,6 @@ import net.hasor.neta.codec.http.HttpHeaders;
 public class QpackDecoder {
     private final QpackDynamicTable dynamicTable;
     private final int               maxHeaderListSize;
-
     // 可复用的解码结果字段，避免热点路径上的数组分配。
     private int    decodedPos;
     private int    decodedInt;
