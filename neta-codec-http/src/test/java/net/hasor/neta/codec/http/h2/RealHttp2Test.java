@@ -1,5 +1,8 @@
 package net.hasor.neta.codec.http.h2;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -10,8 +13,17 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+
+import org.eclipse.jetty.http2.server.HTTP2CServerConnectionFactory;
+import org.eclipse.jetty.server.HttpConfiguration;
+import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.server.handler.AbstractHandler;
+import org.junit.Test;
+
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
@@ -22,14 +34,6 @@ import okhttp3.OkHttpClient;
 import okhttp3.Protocol;
 import okhttp3.Request;
 import okhttp3.Response;
-import org.eclipse.jetty.http2.server.HTTP2CServerConnectionFactory;
-import org.eclipse.jetty.server.HttpConfiguration;
-import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.server.ServerConnector;
-import org.eclipse.jetty.server.handler.AbstractHandler;
-import org.junit.Test;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 public class RealHttp2Test extends AbstractHttpTest {
     private static final int MAX_CONTENT_LENGTH = 1048576;
@@ -44,16 +48,19 @@ public class RealHttp2Test extends AbstractHttpTest {
         NetManager neta = new NetManager();
         OkHttpClient client = h2PriorKnowledgeClient();
         try {
-            neta.bind(new InetSocketAddress("127.0.0.1", port), ctx -> ProtoHelper.standard().nextDuplex("h2-frame", new Http2FrameDuplexe(true)).nextDuplex("h2-message", new Http2ObjectDuplexe(true)).nextPartition("h2-stream", new Http2ObjectPartitionSelector(), partition -> {
-                Http2ObjectPartitionPolicy policy = new Http2ObjectPartitionPolicy();
-                ProtoPartitionControl control = partition.control();
-                partition.policy(policy).byDefault(partitionCtx -> {
-                    partitionCtx.addLast("h2-control-lifecycle", new Http2ObjectStreamManager(control, policy));
-                }).byInitializer(partitionCtx -> {
-                    partitionCtx.addLast("h2-aggregator", new HttpServerDuplexeAggregator(MAX_CONTENT_LENGTH));
-                    partitionCtx.addLastDecoder("h2-handler", new InlineServerHandler("server"));
-                });
-            }).build().config(ctx), SoConfig.TCP());
+            neta.bind(new InetSocketAddress("127.0.0.1", port), ctx -> ProtoHelper.standard()//
+                    .nextDuplex("h2-frame", new Http2FrameDuplexe(true))//
+                    .nextDuplex("h2-message", new Http2ObjectDuplexe(true))//
+                    .nextPartition("h2-stream", new Http2ObjectPartitionSelector(), pp -> {
+                        Http2ObjectPartitionPolicy policy = new Http2ObjectPartitionPolicy();
+                        ProtoPartitionControl control = pp.control();
+                        pp.policy(policy).byDefault(p -> {
+                            p.addLast("h2-control-lifecycle", new Http2ObjectStreamManager(control, policy));
+                        }).byInitializer(p -> {
+                            p.addLast("h2-aggregator", new HttpServerDuplexeAggregator(MAX_CONTENT_LENGTH));
+                            p.addLastDecoder("h2-handler", new InlineServerHandler("server"));
+                        });
+                    }).config(ctx), SoConfig.TCP());
 
             Request request = new Request.Builder().url("http://127.0.0.1:" + port + "/hello").get().build();
             try (Response response = client.newCall(request).execute()) {
@@ -77,8 +84,8 @@ public class RealHttp2Test extends AbstractHttpTest {
         server.addConnector(connector);
 
         CountDownLatch requestSeen = new CountDownLatch(1);
-        AtomicReference<String> requestMethod = new AtomicReference<String>();
-        AtomicReference<String> requestPath = new AtomicReference<String>();
+        AtomicReference<String> requestMethod = new AtomicReference<>();
+        AtomicReference<String> requestPath = new AtomicReference<>();
         server.setHandler(new AbstractHandler() {
             @Override
             public void handle(String target, org.eclipse.jetty.server.Request baseRequest, HttpServletRequest request, HttpServletResponse response) throws IOException {

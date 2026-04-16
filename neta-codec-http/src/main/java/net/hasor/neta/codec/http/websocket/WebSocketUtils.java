@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -367,25 +367,27 @@ public final class WebSocketUtils {
             return "http";
         } else if (StringUtils.equalsIgnoreCase("wss", scheme)) {
             return "https";
+        } else {
+            return scheme != null ? scheme.toLowerCase() : null;
         }
-        return scheme != null ? scheme.toLowerCase() : null;
     }
 
     private static String formatAuthorityHost(String host) {
         if (host.indexOf(':') >= 0 && !(host.startsWith("[") && host.endsWith("]"))) {
             return '[' + host + ']';
+        } else {
+            return host;
         }
-        return host;
     }
 
     private static int defaultPort(String scheme) {
         if (StringUtils.equalsIgnoreCase("ws", scheme) || StringUtils.equalsIgnoreCase("http", scheme)) {
             return 80;
-        }
-        if (StringUtils.equalsIgnoreCase("wss", scheme) || StringUtils.equalsIgnoreCase("https", scheme)) {
+        } else if (StringUtils.equalsIgnoreCase("wss", scheme) || StringUtils.equalsIgnoreCase("https", scheme)) {
             return 443;
+        } else {
+            throw new IllegalArgumentException("schema '" + scheme + "' invalid.");
         }
-        return -1;
     }
 
     private static String randomRfc6455Key() {
@@ -406,6 +408,7 @@ public final class WebSocketUtils {
         for (int i = 0; i < spaces; i++) {
             builder.insert(randomInsertIndex(builder.length()), ' ');
         }
+
         return builder.toString();
     }
 
