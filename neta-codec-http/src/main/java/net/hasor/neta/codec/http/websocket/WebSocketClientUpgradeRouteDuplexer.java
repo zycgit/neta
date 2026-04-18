@@ -36,17 +36,19 @@ import net.hasor.neta.codec.http.*;
  * @version : 2026-03-24
  */
 public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> {
-    private static final String                           ROUTE_STATE_STORE_KEY = WebSocketClientUpgradeRouteDuplexer.class.getName() + ".routeStateStore";
-    private static final String                           SEND_STAGE_QUEUE_KEY  = WebSocketClientUpgradeRouteDuplexer.class.getName() + ".send";
-    private final        WebSocketClientHandshakeDuplexer delegate;
-    private final        ProtoRoutingControl              control;
-    private final        String                           targetRoute;
+    private static final String                    ROUTE_STATE_STORE_KEY = WebSocketClientUpgradeRouteDuplexer.class.getName() + ".routeStateStore";
+    private static final String                    SEND_STAGE_QUEUE_KEY  = WebSocketClientUpgradeRouteDuplexer.class.getName() + ".send";
+    private final WebSocketClientHandshakeDuplexer delegate;
+    private final ProtoRoutingControl              control;
+    private final String                           targetRoute;
 
     private static final class RouteState {
         private final HttpMessageParts requestParts         = new HttpMessageParts();
         private final List<HttpObject> bufferedRequestParts = new ArrayList<>();
-        private       boolean          handshakePending;
-        private       Boolean          currentRequestHandshake;
+        private boolean                handshakePending;
+        private Boolean                currentRequestHandshake;
+        /** Buffered request parts that must be retried before consuming new input. */
+        private boolean                pendingFlush;
     }
 
     private static final class RouteStateStore {
@@ -145,7 +147,15 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
                 continue;
             }
 
-            rcvDown.offerMessage(rcvUp.takeMessage());
+            // Do not take from rcvUp until rcvDown can accept one message.
+            if (!rcvDown.hasSlot()) {
+                return ProtoStatus.Stop;
+            }
+
+            HttpObject forward = rcvUp.takeMessage();
+            if (forward != null) {
+                rcvDown.offerMessage(forward);
+            }
         }
 
         return ProtoStatus.Next;
@@ -161,6 +171,17 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
 
             RouteState state = state(context, msg);
 
+            // Retry a deferred buffered flush before consuming new request parts.
+            if (state.pendingFlush) {
+                if (sndDown.slotSize() < state.bufferedRequestParts.size()) {
+                    return ProtoStatus.Stop;
+                }
+
+                sndDown.offerMessage(state.bufferedRequestParts);
+                state.pendingFlush = false;
+                this.resetRequestRoutingState(state, false);
+            }
+
             if (state.currentRequestHandshake != null) {
                 if (state.currentRequestHandshake) {
                     ProtoStatus status = this.forwardSingleToHandshake(context, sndUp, sndDown);
@@ -168,7 +189,14 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
                         return status;
                     }
                 } else {
-                    sndDown.offerMessage(sndUp.takeMessage());
+                    if (!sndDown.hasSlot()) {
+                        return ProtoStatus.Stop;
+                    }
+
+                    HttpObject forward = sndUp.takeMessage();
+                    if (forward != null) {
+                        sndDown.offerMessage(forward);
+                    }
                 }
                 if (isRequestComplete(msg)) {
                     this.resetRequestRoutingState(state, false);
@@ -177,7 +205,14 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
             }
 
             if (!state.requestParts.isActive() && !(msg instanceof HttpRequest)) {
-                sndDown.offerMessage(sndUp.takeMessage());
+                if (!sndDown.hasSlot()) {
+                    return ProtoStatus.Stop;
+                }
+
+                HttpObject forward = sndUp.takeMessage();
+                if (forward != null) {
+                    sndDown.offerMessage(forward);
+                }
                 continue;
             }
 
@@ -187,6 +222,12 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
 
             if (!isHeaderSectionClosed(msg)) {
                 if (isRequestComplete(msg)) {
+                    // Keep buffered parts in memory and retry the flush on the next tick.
+                    if (sndDown.slotSize() < state.bufferedRequestParts.size()) {
+                        state.pendingFlush = true;
+                        return ProtoStatus.Stop;
+                    }
+
                     sndDown.offerMessage(state.bufferedRequestParts);
                     this.resetRequestRoutingState(state, false);
                 }
@@ -206,6 +247,11 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
                     }
                 }
             } else {
+                // Keep buffered parts in memory and retry the flush on the next tick.
+                if (sndDown.slotSize() < state.bufferedRequestParts.size()) {
+                    state.pendingFlush = true;
+                    return ProtoStatus.Stop;
+                }
                 sndDown.offerMessage(state.bufferedRequestParts);
             }
 
@@ -231,6 +277,7 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
         }
 
         state.bufferedRequestParts.clear();
+        state.pendingFlush = false;
         state.requestParts.reset();
         state.currentRequestHandshake = null;
     }

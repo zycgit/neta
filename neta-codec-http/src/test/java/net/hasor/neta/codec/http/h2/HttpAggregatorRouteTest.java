@@ -11,7 +11,7 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.channel.routing.ProtoRoutingControl;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.codec.http.*;
-import net.hasor.neta.codec.http.routing.H2CUpgradeServerDuplexe;
+import net.hasor.neta.codec.http.routing.H2CUpgradeServerDuplexer;
 import net.hasor.neta.codec.http.routing.HttpAggregatorRoute;
 import net.hasor.neta.codec.http.routing.HttpRouteKey;
 import org.junit.Test;
@@ -48,7 +48,7 @@ public class HttpAggregatorRouteTest extends AbstractHttp2Test {
                                         }))//
                                 .branch(HttpRouteKey.BRANCH_H2C, b -> b //
                                         .nextDuplex("http-codec", new HttpServerDuplexe())  //
-                                        .nextDuplex("h2c-upgrade", new H2CUpgradeServerDuplexe(routingControl))//
+                                        .nextDuplex("h2c-upgrade", new H2CUpgradeServerDuplexer(routingControl))//
                                         .nextDecoder("h2c-handler", new InlineDispatchHandler("h2c")));
                     }).config(ctx));
             // client
@@ -108,7 +108,7 @@ public class HttpAggregatorRouteTest extends AbstractHttp2Test {
                                             }))//
                                     .branch(HttpRouteKey.BRANCH_H2C, b -> b //
                                             .nextDuplex("http-codec", new HttpServerDuplexe())  //
-                                            .nextDuplex("h2c-upgrade", new H2CUpgradeServerDuplexe(routingControl))//
+                                            .nextDuplex("h2c-upgrade", new H2CUpgradeServerDuplexer(routingControl))//
                                             .nextDecoder("h2c-handler", new InlineDispatchHandler("h2c")));
                         }).config(ctx);
             });
@@ -181,7 +181,7 @@ public class HttpAggregatorRouteTest extends AbstractHttp2Test {
                                         }))//
                                 .branch(HttpRouteKey.BRANCH_H2C, b -> b //
                                         .nextDuplex("http-codec", new HttpServerDuplexe())  //
-                                        .nextDuplex("h2c-upgrade", new H2CUpgradeServerDuplexe(routingControl))//
+                                        .nextDuplex("h2c-upgrade", new H2CUpgradeServerDuplexer(routingControl))//
                                         .nextDecoder("h2c-handler", new InlineDispatchHandler("h2c")));
                     }).config(ctx));
             // client

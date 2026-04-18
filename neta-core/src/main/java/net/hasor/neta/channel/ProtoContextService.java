@@ -32,19 +32,19 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
  * @see ProtoStackChain
  */
 class ProtoContextService implements ProtoBuildContext {
-    private final    SoChannel<?>          channel;
-    private final    SoContext             soContext;
-    private final    Map<Class<?>, Object> contextData;  // local to this ctx; upward lookup via context(Class<T>)
-    private final    ProtoStackChain       chainRoot;
-    private final    Map<String, Object>   namedHandlerMap;
-    private final    ProtoContextService   parentCtx;
-    private final    String                parentPrevStackName; // node before Router in parent chain (SND direction); null if Router is head-most
-    private final    String                parentNextStackName; // node after Router in parent chain (RCV direction); null if Router is tail-most
+    private final SoChannel<?>          channel;
+    private final SoContext             soContext;
+    private final Map<Class<?>, Object> contextData;  // local to this ctx; upward lookup via context(Class<T>)
+    private final ProtoStackChain       chainRoot;
+    private final Map<String, Object>   namedHandlerMap;
+    private final ProtoContextService   parentCtx;
+    private final String                parentPrevStackName; // node before Router in parent chain (SND direction); null if Router is head-most
+    private final String                parentNextStackName; // node after Router in parent chain (RCV direction); null if Router is tail-most
     //
-    private final    Map<String, Object>   flashMap;
-    private final    Deque<ProtoStatus>    statusStack;
-    private volatile ProtoStatus           statusCurrent;
-    private final    ProtoRecoveryState    recoveryState;
+    private final Map<String, Object> flashMap;
+    private final Deque<ProtoStatus>  statusStack;
+    private volatile ProtoStatus      statusCurrent;
+    private final ProtoRecoveryState  recoveryState;
 
     ProtoContextService(SoChannel<?> channel, SoContext soContext) {
         this.channel = channel;
@@ -169,7 +169,11 @@ class ProtoContextService implements ProtoBuildContext {
     /** {@inheritDoc} */
     @Override
     public <T> T context(Class<T> attachmentType, T attachment) {
-        this.contextData.put(attachmentType, attachment);
+        if (attachment == null) {
+            this.contextData.remove(attachmentType);
+        } else {
+            this.contextData.put(attachmentType, attachment);
+        }
         return attachment;
     }
 

@@ -15,8 +15,6 @@
  */
 package net.hasor.neta.codec.ssl;
 import java.lang.reflect.Method;
-import java.security.AccessController;
-import java.security.PrivilegedExceptionAction;
 import java.util.List;
 import java.util.function.BiFunction;
 import javax.net.ssl.SSLContext;
@@ -68,27 +66,17 @@ class JdkAlpnSslUtils {
             SSLContext context = SSLContext.getInstance(JdkSslContext.PROTOCOL);
             context.init(null, null, null);
             SSLEngine engine = context.createSSLEngine();
-            getHandshakeApplicationProtocol = AccessController.doPrivileged((PrivilegedExceptionAction<Method>) () -> {
-                return SSLEngine.class.getMethod("getHandshakeApplicationProtocol");
-            });
+            getHandshakeApplicationProtocol = SSLEngine.class.getMethod("getHandshakeApplicationProtocol");
             getHandshakeApplicationProtocol.invoke(engine);
-            getApplicationProtocol = AccessController.doPrivileged((PrivilegedExceptionAction<Method>) () -> {
-                return SSLEngine.class.getMethod("getApplicationProtocol");
-            });
+            getApplicationProtocol = SSLEngine.class.getMethod("getApplicationProtocol");
             getApplicationProtocol.invoke(engine);
-            setApplicationProtocols = AccessController.doPrivileged((PrivilegedExceptionAction<Method>) () -> {
-                return SSLParameters.class.getMethod("setApplicationProtocols", String[].class);
-            });
+            setApplicationProtocols = SSLParameters.class.getMethod("setApplicationProtocols", String[].class);
             setApplicationProtocols.invoke(engine.getSSLParameters(), new Object[] { ArrayUtils.EMPTY_STRING_ARRAY });
-            setHandshakeApplicationProtocolSelector = AccessController.doPrivileged((PrivilegedExceptionAction<Method>) () -> {
-                return SSLEngine.class.getMethod("setHandshakeApplicationProtocolSelector", BiFunction.class);
-            });
+            setHandshakeApplicationProtocolSelector = SSLEngine.class.getMethod("setHandshakeApplicationProtocolSelector", BiFunction.class);
             setHandshakeApplicationProtocolSelector.invoke(engine, (BiFunction<SSLEngine, List<String>, String>) (sslEngine, strings) -> {
                 return null;
             });
-            getHandshakeApplicationProtocolSelector = AccessController.doPrivileged((PrivilegedExceptionAction<Method>) () -> {
-                return SSLEngine.class.getMethod("getHandshakeApplicationProtocolSelector");
-            });
+            getHandshakeApplicationProtocolSelector = SSLEngine.class.getMethod("getHandshakeApplicationProtocolSelector");
             getHandshakeApplicationProtocolSelector.invoke(engine);
         } catch (Throwable t) {
             int version = SystemUtils.getJavaVersion();

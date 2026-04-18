@@ -17,16 +17,21 @@ package net.hasor.neta.codec.http.websocket;
 import java.util.ArrayList;
 import java.util.List;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoHandler;
 import net.hasor.neta.channel.SoEvent;
+import net.hasor.neta.channel.data.ProtoQueue;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.channel.transport.virtual.VrtTransfer;
 import net.hasor.neta.codec.http.HttpEvent;
 import net.hasor.neta.codec.http.HttpObject;
 import net.hasor.neta.codec.http.HttpThroughEvent;
 import org.junit.Test;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
@@ -83,6 +88,33 @@ public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
             assertEquals(WebSocketMessage.FINAL_SEQUENCE, msg.sequence());
             assertEquals("Hello", text(msg.content().copy()));
         });
+    }
+
+    @Test
+    public void testSingleTextFrameTransfersPayloadOwnershipIntoMessage() throws Throwable {
+        WebSocketInboundHandler handler = new WebSocketInboundHandler();
+        ProtoQueue<WebSocketFrame> src = new ProtoQueue<>(-1);
+        ProtoQueue<WebSocketMessage> dst = new ProtoQueue<>(-1);
+
+        ByteBuf payload = ascii("Hello");
+        WebSocketFrame frame = WebSocketUtils.textFrame(true, false, null, payload);
+        src.offerMessage(frame);
+
+        handler.onMessage(null, src, dst);
+
+        assertEquals(1, dst.queueSize());
+        WebSocketMessage message = dst.takeMessage();
+        try {
+            assertSame(payload, message.content());
+            assertNull(frame.content());
+            assertFalse(payload.isFree());
+            assertEquals("Hello", text(message.content().copy()));
+        } finally {
+            if (message != null) {
+                message.release();
+            }
+        }
+        assertTrue(payload.isFree());
     }
 
     @Test
@@ -146,6 +178,78 @@ public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
             assertEquals(WebSocketMessage.FINAL_SEQUENCE, msg.sequence());
             assertEquals("Hello-world", text(msg.content().copy()));
         });
+    }
+
+    @Test
+    public void testAggregatedFramesTransferPayloadOwnershipIntoCompositeMessage() throws Throwable {
+        WebSocketInboundHandler handler = new WebSocketInboundHandler(true);
+        ProtoQueue<WebSocketFrame> src = new ProtoQueue<>(-1);
+        ProtoQueue<WebSocketMessage> dst = new ProtoQueue<>(-1);
+
+        ByteBuf firstPayload = ascii("Hel");
+        ByteBuf secondPayload = ascii("lo-");
+        ByteBuf finalPayload = ascii("world");
+        WebSocketFrame firstFrame = WebSocketUtils.textFrame(false, false, null, firstPayload);
+        WebSocketFrame secondFrame = WebSocketUtils.continuationFrame(false, false, null, secondPayload);
+        WebSocketFrame finalFrame = WebSocketUtils.continuationFrame(true, false, null, finalPayload);
+
+        src.offerMessage(firstFrame);
+        src.offerMessage(secondFrame);
+        src.offerMessage(finalFrame);
+
+        handler.onMessage(null, src, dst);
+
+        assertEquals(1, dst.queueSize());
+        WebSocketMessage message = dst.takeMessage();
+        try {
+            assertEquals("Hello-world", text(message.content().copy()));
+            assertNull(firstFrame.content());
+            assertNull(secondFrame.content());
+            assertNull(finalFrame.content());
+            assertFalse(firstPayload.isFree());
+            assertFalse(secondPayload.isFree());
+            assertFalse(finalPayload.isFree());
+        } finally {
+            if (message != null) {
+                message.release();
+            }
+        }
+        assertTrue(firstPayload.isFree());
+        assertTrue(secondPayload.isFree());
+        assertTrue(finalPayload.isFree());
+    }
+
+    @Test
+    public void testAggregatedFramesReleaseEmptyTransferredStagePayload() throws Throwable {
+        WebSocketInboundHandler handler = new WebSocketInboundHandler(true);
+        ProtoQueue<WebSocketFrame> src = new ProtoQueue<>(-1);
+        ProtoQueue<WebSocketMessage> dst = new ProtoQueue<>(-1);
+
+        ByteBuf emptyStagePayload = ByteBufAllocator.DEFAULT.buffer(1, Integer.MAX_VALUE);
+        emptyStagePayload.markWriter();
+        ByteBuf finalPayload = ascii("world");
+        WebSocketFrame firstFrame = WebSocketUtils.textFrame(false, false, null, emptyStagePayload);
+        WebSocketFrame finalFrame = WebSocketUtils.continuationFrame(true, false, null, finalPayload);
+
+        src.offerMessage(firstFrame);
+        src.offerMessage(finalFrame);
+
+        handler.onMessage(null, src, dst);
+
+        assertEquals(1, dst.queueSize());
+        WebSocketMessage message = dst.takeMessage();
+        try {
+            assertEquals("world", text(message.content().copy()));
+            assertNull(firstFrame.content());
+            assertNull(finalFrame.content());
+            assertTrue(emptyStagePayload.isFree());
+            assertFalse(finalPayload.isFree());
+        } finally {
+            if (message != null) {
+                message.release();
+            }
+        }
+        assertTrue(finalPayload.isFree());
     }
 
     @Test

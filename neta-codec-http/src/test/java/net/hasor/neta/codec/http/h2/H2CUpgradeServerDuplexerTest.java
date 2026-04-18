@@ -8,14 +8,14 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.channel.routing.ProtoRoutingControl;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.codec.http.*;
-import net.hasor.neta.codec.http.routing.H2CUpgradeServerDuplexe;
+import net.hasor.neta.codec.http.routing.H2CUpgradeServerDuplexer;
 import net.hasor.neta.codec.http.routing.HttpAggregatorRoute;
 import net.hasor.neta.codec.http.routing.HttpRouteKey;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-public class H2CUpgradeServerDuplexeTest extends AbstractHttp2Test {
+public class H2CUpgradeServerDuplexerTest extends AbstractHttp2Test {
     private static final int    MAX_CONTENT_LENGTH = 1048576;
     private static final String ENCODED_SETTINGS   = Base64.getUrlEncoder().withoutPadding().encodeToString(new byte[] { 0x00, 0x03, 0x00, 0x00, 0x00, 0x64 });
 
@@ -44,7 +44,7 @@ public class H2CUpgradeServerDuplexeTest extends AbstractHttp2Test {
                                     }))//
                             .branch(HttpRouteKey.BRANCH_H2C, b -> b//
                                     .nextDuplex("http-codec", new HttpServerDuplexe())//
-                                    .nextDuplex("h2c-upgrade", new H2CUpgradeServerDuplexe(routingControl))//
+                                    .nextDuplex("h2c-upgrade", new H2CUpgradeServerDuplexer(routingControl))//
                                     .nextDecoder("h2c-handler", new InlineDispatchHandler("h2c")));
                 }).config(ctx);
             }, VrtSoConfig.asServer());
@@ -128,7 +128,7 @@ public class H2CUpgradeServerDuplexeTest extends AbstractHttp2Test {
                                     .nextDecoder("http-handler", new InlineDispatchHandler("h1")))//
                             .branch(HttpRouteKey.BRANCH_H2C, b -> b//
                                     .nextDuplex("http-codec", new HttpServerDuplexe())//
-                                    .nextDuplex("h2c-upgrade", new H2CUpgradeServerDuplexe(routingControl))//
+                                    .nextDuplex("h2c-upgrade", new H2CUpgradeServerDuplexer(routingControl))//
                                     .nextDecoder("h2c-handler", new InlineDispatchHandler("h2c")))//
                             .branch(HttpRouteKey.BRANCH_H2, b -> b//
                                     .nextDuplex("h2-frame", new Http2FrameDuplexe(true))//
@@ -211,6 +211,81 @@ public class H2CUpgradeServerDuplexeTest extends AbstractHttp2Test {
         });
     }
 
+    @Test
+    public void testUpgradePreservesRequestBodyAcrossBufferedParts() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe serverPipe = openVirtualPipe(neta, (ProtoInitializer) ctx -> {
+                ProtoHelper.standard().nextRouteAsStatic("protocol-detect", new HttpAggregatorRoute(), r -> {
+                    ProtoRoutingControl routingControl = r.control();
+                    r.branch(HttpRouteKey.BRANCH_H1, b -> b//
+                                    .nextDuplex("http-codec", new HttpServerDuplexe())//
+                                    .nextDecoder("http-aggregator", new HttpRequestAggregator(MAX_CONTENT_LENGTH))//
+                                    .nextDecoder("http-handler", new InlineDispatchHandler("h1")))//
+                            .branch(HttpRouteKey.BRANCH_H2, b -> b//
+                                    .nextDuplex("h2-frame", new Http2FrameDuplexe(true))//
+                                    .nextDuplex("h2-message", new Http2ObjectDuplexe(true, routingControl))//
+                                    .nextPartition("h2-stream", new Http2ObjectPartitionSelector(), p -> {
+                                        Http2ObjectPartitionPolicy policy = new Http2ObjectPartitionPolicy();
+                                        p.policy(policy).byDefault(partitionCtx -> {
+                                            partitionCtx.addLast("h2-control-lifecycle", new Http2ObjectStreamManager(p.control(), policy));
+                                        }).byInitializer(partitionCtx -> {
+                                            partitionCtx.addLast("h2-aggregator", new HttpServerDuplexeAggregator(MAX_CONTENT_LENGTH));
+                                            partitionCtx.addLastDecoder("h2-handler", new BodyEchoDispatchHandler("h2"));
+                                        });
+                                    }))//
+                            .branch(HttpRouteKey.BRANCH_H2C, b -> b//
+                                    .nextDuplex("http-codec", new HttpServerDuplexe())//
+                                    .nextDuplex("h2c-upgrade", new H2CUpgradeServerDuplexer(routingControl))//
+                                    .nextDecoder("h2c-handler", new InlineDispatchHandler("h2c")));
+                }).config(ctx);
+            }, VrtSoConfig.asServer());
+
+            VirtualPipe clientDecoder = openVirtualPipe(neta, ctx -> {
+                ProtoHelper.standard()//
+                        .nextDuplex("h2-frame", new Http2FrameDuplexe(false))//
+                        .nextDuplex("h2-message", new Http2ObjectDuplexe(false))//
+                        .nextDuplex("h2-client-aggregator", new HttpClientDuplexeAggregator(MAX_CONTENT_LENGTH))//
+                        .config(ctx);
+            }, VrtSoConfig.asClient());
+
+            serverPipe.channel().receiveData(ascii("POST /upgrade HTTP/1.1\r\n"//
+                    + "Host: example.com\r\n"//
+                    + "Connection: Upgrade, HTTP2-Settings\r\n"//
+                    + "Upgrade: h2c\r\n"//
+                    + "HTTP2-Settings: " + ENCODED_SETTINGS + "\r\n"//
+                    + "Content-Length: 5\r\n"//
+                    + "\r\n"//
+                    + "he"));
+            assertTrue(serverPipe.channelOutbound().isEmpty());
+
+            serverPipe.channel().receiveData(ascii("llo"));
+
+            assertTrue(waitUntil(() -> !serverPipe.channelOutbound().isEmpty() || !serverPipe.channelInboundErrors().isEmpty() || !serverPipe.channelOutboundErrors().isEmpty(), 1000L));
+            assertTrue(serverPipe.channelInboundErrors().isEmpty());
+            assertTrue(serverPipe.channelOutboundErrors().isEmpty());
+
+            byte[] firstOutbound = drainRawBytes(serverPipe.channelOutbound());
+            int headerEnd = findHeaderEnd(firstOutbound);
+            assertTrue(headerEnd > 0);
+
+            String responseHead = new String(firstOutbound, 0, headerEnd, StandardCharsets.US_ASCII);
+            byte[] handshakeBytes = Arrays.copyOfRange(firstOutbound, headerEnd, firstOutbound.length);
+            assertTrue(responseHead.startsWith("HTTP/1.1 101"));
+            assertTrue(responseHead.toLowerCase().contains("upgrade: h2c"));
+
+            List<HttpObject> handshakeObjects = receiveAndIntBound(clientDecoder, ByteBuf.wrap(handshakeBytes));
+            try {
+                assertEquals(1, handshakeObjects.size());
+                FullHttpResponse upgradedResponse = (FullHttpResponse) handshakeObjects.get(0);
+                assertEquals(1, upgradedResponse.streamId());
+                assertEquals(HttpStatus.OK, upgradedResponse.status());
+                assertEquals("h2:/upgrade:hello", utf8(upgradedResponse.content()));
+            } finally {
+                free(handshakeObjects);
+            }
+        });
+    }
+
     private byte[] drainRawBytes(Queue<Object> inboundQueue) {
         List<ByteBuf> payload = new ArrayList<ByteBuf>();
         for (Object item : drainQueue(inboundQueue)) {
@@ -250,6 +325,36 @@ public class H2CUpgradeServerDuplexeTest extends AbstractHttp2Test {
                 }
                 net.hasor.neta.codec.http.FullHttpRequest request = (net.hasor.neta.codec.http.FullHttpRequest) item;
                 context.sendData(textResponse(request.streamId(), this.routeTag + ":" + request.uri())).get();
+            }
+            return ProtoStatus.Next;
+        }
+
+        @Override
+        public boolean onEvent(ProtoContext context, SoEvent event) {
+            return true;
+        }
+    }
+
+    private static class BodyEchoDispatchHandler implements ProtoHandler<HttpObject, Object> {
+        private final String routeTag;
+
+        private BodyEchoDispatchHandler(String routeTag) {
+            this.routeTag = routeTag;
+        }
+
+        @Override
+        public void onInit(String name, int poolSize, ProtoContext context) {
+        }
+
+        @Override
+        public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<Object> dst) throws Throwable {
+            while (src.hasMore()) {
+                HttpObject item = src.takeMessage();
+                if (!(item instanceof net.hasor.neta.codec.http.FullHttpRequest)) {
+                    continue;
+                }
+                net.hasor.neta.codec.http.FullHttpRequest request = (net.hasor.neta.codec.http.FullHttpRequest) item;
+                context.sendData(textResponse(request.streamId(), this.routeTag + ":" + request.uri() + ":" + utf8(request.content()))).get();
             }
             return ProtoStatus.Next;
         }

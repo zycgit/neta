@@ -22,7 +22,7 @@ package net.hasor.neta.codec.http.h3;
  * {@link net.hasor.neta.channel.ProtoContext}。
  * </p>
  * <p>
- * 在 {@link net.hasor.neta.channel.ProtoRouting} 中的用法：
+ * 在 {@code net.hasor.neta.channel.ProtoRouting} 中的用法：
  * <pre>{@code
  * (context, rcvUp, rcvDown) -> {
  *     Http3Context h3 = context.context(Http3Context.class);

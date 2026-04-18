@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.codec.http;
 import java.util.List;
+import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import org.junit.Test;
 import static org.junit.Assert.*;
@@ -87,5 +88,57 @@ public class HttpResponseAggregationTest extends AbstractHttpTest {
             assertEquals("2", response.getString(HttpHeaderNames.CONTENT_LENGTH));
             assertEquals("{}", text(response.content()));
         });
+    }
+
+    @Test
+    public void testFullHttpResponseConstructorTransfersContentOwnership() {
+        ByteBuf body = ascii("done");
+        DefaultHttpContent content = new DefaultHttpContent(body);
+        DefaultFullHttpResponse response = new DefaultFullHttpResponse(new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK), content.transferContent(), new DefaultHttpHeaders());
+        try {
+            assertEquals(1, body.refCnt());
+
+            content.release();
+
+            assertEquals(1, body.refCnt());
+            assertEquals("done", text(response.content().retain()));
+        } finally {
+            response.release();
+        }
+        assertEquals(0, body.refCnt());
+    }
+
+    @Test
+    public void testFullHttpResponseAppendTransfersContentOwnership() {
+        ByteBuf body = ascii("done");
+        DefaultHttpContent content = new DefaultHttpContent(body);
+        DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK);
+        try {
+            response.appendContent(content);
+            assertEquals(1, body.refCnt());
+
+            content.release();
+
+            assertEquals(1, body.refCnt());
+            assertEquals("done", text(response.content().retain()));
+        } finally {
+            response.release();
+        }
+        assertEquals(0, body.refCnt());
+    }
+
+    @Test
+    public void testFullHttpResponseMergesHeaderBlocksInternally() {
+        DefaultHttpHeaders headers = new DefaultHttpHeaders();
+        headers.addHeader("X-Head", "one");
+        DefaultLastHttpHeaders trailers = new DefaultLastHttpHeaders();
+        trailers.addHeader("X-Trail", "two");
+        DefaultFullHttpResponse response = new DefaultFullHttpResponse(new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK), ByteBuf.EMPTY, headers, trailers);
+        try {
+            assertEquals("one", response.getString("X-Head"));
+            assertEquals("two", response.getString("X-Trail"));
+        } finally {
+            response.release();
+        }
     }
 }

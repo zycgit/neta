@@ -26,7 +26,7 @@ package net.hasor.neta.codec.http.h2;
  * <pre>
  *   +--------+ -- send H / recv H --> +--------------------+
  *   |  idle  |                        |        open        |
- *   +--------+ <-- send PP ---------- +--------------------+
+ *   +--------+ &lt;-- send PP ---------- +--------------------+
  *       |                                  |            |
  *       | recv PP                          | send ES    | recv ES
  *       v                                  v            v

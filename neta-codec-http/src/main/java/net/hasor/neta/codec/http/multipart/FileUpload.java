@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.multipart;
+import net.hasor.cobble.function.Release;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
@@ -33,7 +34,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-02-18
  */
-public interface FileUpload {
+public interface FileUpload extends Release {
     /**
      * Returns the {@code name} parameter from the {@code Content-Disposition} header,
      * which is the HTML form field name.
@@ -60,4 +61,10 @@ public interface FileUpload {
      * Returns the value of an additional part header by name, ignoring case, or {@code null} if it is absent.
      */
     String header(String name);
+
+    /**
+     * Releases the current part content when the request lifecycle ends.
+     */
+    @Override
+    void release();
 }

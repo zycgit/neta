@@ -53,6 +53,7 @@ public class DefaultFileUpload implements FileUpload {
         if (content == null) {
             throw new IllegalArgumentException("content must not be null");
         }
+
         this.name = name;
         this.filename = filename;
         this.contentType = contentType;
@@ -98,10 +99,18 @@ public class DefaultFileUpload implements FileUpload {
      */
     @Override
     public String header(String name) {
-        if (name == null) {
+        if (name != null) {
+            return headers.get(name.toLowerCase());
+        } else {
             return null;
         }
-        return headers.get(name.toLowerCase());
+    }
+
+    @Override
+    public void release() {
+        if (this.content != null) {
+            this.content.release();
+        }
     }
 
     /**

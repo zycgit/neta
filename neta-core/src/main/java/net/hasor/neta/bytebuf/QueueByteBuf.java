@@ -75,9 +75,9 @@ import net.hasor.neta.channel.data.ProtoRcvQueue;
 final class QueueByteBuf extends AbstractByteBuf {
     private final ProtoRcvQueue<ByteBuf> queue;
     private final List<Component>        components = new ArrayList<>();
-    private       int                    totalCapacity;
-    private       int                    lastAccessedComponentIndex;
-    private       int                    queuePeekCount;
+    private int                          totalCapacity;
+    private int                          lastAccessedComponentIndex;
+    private int                          queuePeekCount;
 
     /**
      * Creates a QueueByteBuf wrapping the given receive queue.
@@ -463,8 +463,9 @@ final class QueueByteBuf extends AbstractByteBuf {
      * Splits off the front portion of this buffer as a zero-copy {@link CompositeByteBuf}.
      * <p>
      * The returned ByteBuf is a read-only composite view. Components that fall entirely within
-     * the front portion are added via {@link CompositeByteBuf#addComponent(ByteBuf)} (zero-copy,
-     * retained). Boundary components that are only partially in the front portion are copied.
+    * the front portion are added via {@link CompositeByteBuf#addComponent(ByteBuf)} after an
+    * explicit retain for zero-copy sharing. Boundary components that are only partially in the
+    * front portion are copied.
      * <p>
      * After slicing, this buffer's readerIndex advances past the split point and
      * {@link #discardReadBytes()} is called to consume the front portion from the queue.
@@ -509,13 +510,14 @@ final class QueueByteBuf extends AbstractByteBuf {
             int overlapLen = overlapEnd - overlapStart;
 
             if (overlapStart == 0 && overlapLen == c.length) {
-                // Entire component is in front portion — zero-copy (addComponent retains)
-                result.addComponent(c.buf);
+                // Entire component is in front portion — zero-copy shared view.
+                result.addComponent(c.buf.retain());
             } else {
-                // Partial component — copy the overlap portion
+                // Partial component — copy the overlap portion and transfer ownership to the result.
                 byte[] partial = new byte[overlapLen];
                 c.buf.getBytes(overlapStart, partial, 0, overlapLen);
-                result.addComponent(ByteBuf.wrap(partial));
+                ByteBuf partialBuf = ByteBuf.wrap(partial);
+                result.addComponent(partialBuf);
             }
         }
 

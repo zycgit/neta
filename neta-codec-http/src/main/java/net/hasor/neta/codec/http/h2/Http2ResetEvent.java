@@ -36,7 +36,7 @@ package net.hasor.neta.codec.http.h2;
  *          |                  |                      | sendResetStream()    |
  *          |                  |                      |--------------------->|
  *          |                  | Http2ResetEvent      |                      |
- *          |                  |<---------------------|                      |
+ *          |                  |&lt;---------------------|                      |
  * </pre><pre>
  * Remote endpoint sends RST_STREAM
  *   Remote peer           Http2ObjectDecoder        ProtoContext        Application Handler
@@ -64,7 +64,7 @@ public class Http2ResetEvent extends AbstractHttp2Event {
     public static final long CANCEL         = -1L;
     public static final long INTERNAL_ERROR = -2L;
     public static final long REFUSED        = -3L;
-    private final       long errorCode;
+    private final long       errorCode;
 
     /**
      * Creates a stream-reset event.

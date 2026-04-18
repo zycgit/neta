@@ -31,9 +31,9 @@ class HttpContext {
     final ResponseDecodeState resp    = new ResponseDecodeState();
     final EncodeState         reqEnc  = new EncodeState();
     final EncodeState         respEnc = new EncodeState();
-    boolean            transparentMode;
-    long               transparentStreamId;
-    InboundMessageType inboundErrorType;
+    boolean                   transparentMode;
+    long                      transparentStreamId;
+    InboundMessageType        inboundErrorType;
 
     /** Returns the HttpContext for the current connection, creating one if necessary. */
     public static HttpContext getOrCreate(ProtoContext context) {
@@ -201,6 +201,10 @@ class HttpContext {
         void reset() {
             this.chunkedEncoding = false;
             this.trailerStarted = false;
+        }
+
+        void releaseAndReset() {
+            this.reset();
         }
     }
 }

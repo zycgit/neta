@@ -16,6 +16,7 @@
 package net.hasor.neta.codec.http.h2;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoHandler;
 import net.hasor.neta.channel.ProtoStatus;
@@ -77,13 +78,21 @@ public class Http2FrameEncoder implements ProtoHandler<Http2Frame, ByteBuf> {
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Http2Frame> src, ProtoSndQueue<ByteBuf> dst) throws Throwable {
         boolean isPrintLog = context.getConfig().isPrintLog();
         long channelID = context.getChannel().getChannelId();
+        boolean hasAny = false;
 
         while (src.hasMore()) {
+            if (!ByteBufUtils.hasWritableSlots(dst, 1)) {
+                return hasAny ? ProtoStatus.Next : ProtoStatus.Stop;
+            }
+
             Http2Frame frame = src.takeMessage();
             if (frame == null) {
                 continue;
             }
-            dst.offerMessage(encodeFrame(context, frame));
+
+            ByteBuf output = encodeFrame(context, frame);
+            dst.offerMessage(output);
+            hasAny = true;
             if (isPrintLog) {
                 if (frame.type() == Http2FrameType.PREFACE) {
                     logger.info("[H2-SND-FRAME] ch=" + channelID + " PREFACE len=" + frame.payloadLength());

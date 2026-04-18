@@ -21,7 +21,7 @@ import net.hasor.neta.codec.http.AbstractHttpEvent;
  * Event published after the websocket opening handshake completes.
  * <p>
  * This event is produced centrally by
- * {@link AbstractWebSocketHandshake#finishWebSocketUpgrade(net.hasor.neta.channel.ProtoContext, WebSocketContext)}.
+ * {@code AbstractWebSocketHandshake#finishWebSocketUpgrade(ProtoContext, WebSocketContext)}.
  * It is emitted after the handshake logic has installed the
  * {@link WebSocketContext} into both the current and root contexts and enabled
  * HTTP pass-through mode, then immediately published through the receive-side

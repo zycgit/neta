@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -32,4 +32,13 @@ public interface HttpContent extends HttpObject {
      * @return payload buffer
      */
     ByteBuf content();
+
+    /**
+     * Transfers the current payload ownership out of this wrapper.
+     * <p>
+     * After transfer, this wrapper no longer owns the payload and later {@link #release()}
+     * calls must not release the transferred buffer.
+     * @return transferred payload, or {@code null} if this object no longer owns one
+     */
+    ByteBuf transferContent();
 }

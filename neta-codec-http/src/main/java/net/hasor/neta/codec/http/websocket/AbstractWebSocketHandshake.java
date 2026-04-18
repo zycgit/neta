@@ -38,9 +38,9 @@ import net.hasor.neta.codec.http.*;
  * @version : 2026-03-22
  */
 public abstract class AbstractWebSocketHandshake implements ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> {
-    private static final Logger           logger         = Logger.getLogger(AbstractWebSocketHandshake.class);
-    private static final String           WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"; // RFC 6455
-    protected final      WebSocketVersion codecVersion;
+    private static final Logger      logger         = Logger.getLogger(AbstractWebSocketHandshake.class);
+    private static final String      WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"; // RFC 6455
+    protected final WebSocketVersion codecVersion;
 
     /**
      * Create the base handshake duplexer.

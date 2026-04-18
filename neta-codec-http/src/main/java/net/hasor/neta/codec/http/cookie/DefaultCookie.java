@@ -33,16 +33,16 @@ package net.hasor.neta.codec.http.cookie;
  */
 public class DefaultCookie implements Cookie {
     /** Sentinel value indicating that {@code Max-Age} is not set. */
-    public static final long    UNDEFINED_MAX_AGE = Long.MIN_VALUE;
-    private final       String  name;
-    private             String  value;
-    private             String  domain;
-    private             String  path;
-    private             long    maxAge            = UNDEFINED_MAX_AGE;
-    private             String  expires;
-    private             boolean secure;
-    private             boolean httpOnly;
-    private             String  sameSite;
+    public static final long UNDEFINED_MAX_AGE = Long.MIN_VALUE;
+    private final String     name;
+    private String           value;
+    private String           domain;
+    private String           path;
+    private long             maxAge            = UNDEFINED_MAX_AGE;
+    private String           expires;
+    private boolean          secure;
+    private boolean          httpOnly;
+    private String           sameSite;
 
     /**
      * Creates a new cookie with the given name and value.

@@ -67,9 +67,9 @@ import net.hasor.neta.codec.http.*;
  * @version : 2026-03-25
  */
 class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
-    private static final Logger        logger = Logger.getLogger(Http2ObjectDecoder.class);
-    private final        boolean       serverMode;
-    private final        Http2Settings localSettings;
+    private static final Logger logger = Logger.getLogger(Http2ObjectDecoder.class);
+    private final boolean       serverMode;
+    private final Http2Settings localSettings;
 
     public Http2ObjectDecoder(boolean serverMode) {
         this(serverMode, Http2Settings.defaultLocalSettings(serverMode));

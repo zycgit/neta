@@ -13,7 +13,7 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.channel.routing.ProtoRoutingControl;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.codec.http.*;
-import net.hasor.neta.codec.http.routing.H2CUpgradeServerDuplexe;
+import net.hasor.neta.codec.http.routing.H2CUpgradeServerDuplexer;
 import net.hasor.neta.codec.http.routing.HttpAggregatorRoute;
 import net.hasor.neta.codec.http.routing.HttpRouteKey;
 import okhttp3.OkHttpClient;
@@ -43,7 +43,7 @@ public class RealAggregatorTest extends AbstractHttp2Test {
 
                 routing.branch(HttpRouteKey.BRANCH_H1, b -> b//
                                 .nextDuplex("http-codec", new HttpServerDuplexe())//
-                                .nextDuplex("h1-upgrade", new H2CUpgradeServerDuplexe(routingControl))//
+                                .nextDuplex("h1-upgrade", new H2CUpgradeServerDuplexer(routingControl))//
                                 .nextDecoder("http-aggregator", new HttpRequestAggregator(MAX_CONTENT_LENGTH))//
                                 .nextDecoder("http-handler", new InlineDispatchHandler("h1")))//
                         .branch(HttpRouteKey.BRANCH_H2, b -> b//
@@ -60,7 +60,7 @@ public class RealAggregatorTest extends AbstractHttp2Test {
                                 }))//
                         .branch(HttpRouteKey.BRANCH_H2C, b -> b//
                                 .nextDuplex("http-codec", new HttpServerDuplexe())//
-                                .nextDuplex("h2c-upgrade", new H2CUpgradeServerDuplexe(routingControl))//
+                                .nextDuplex("h2c-upgrade", new H2CUpgradeServerDuplexer(routingControl))//
                                 .nextDecoder("h2c-handler", new InlineDispatchHandler("h2c")));
             }).config(ctx);
         };

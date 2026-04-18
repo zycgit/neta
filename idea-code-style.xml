@@ -1,11 +1,9 @@
 <code_scheme name="My" version="173">
   <option name="RIGHT_MARGIN" value="6000" />
   <JavaCodeStyleSettings>
+    <option name="LAYOUT_STATIC_IMPORTS_SEPARATELY" value="false" />
     <option name="IMPORT_LAYOUT_TABLE">
       <value>
-        <package name="" withSubpackages="true" static="false" module="true" />
-        <package name="java" withSubpackages="true" static="false" />
-        <package name="javax" withSubpackages="true" static="false" />
         <package name="" withSubpackages="true" static="false" />
         <package name="" withSubpackages="true" static="true" />
       </value>

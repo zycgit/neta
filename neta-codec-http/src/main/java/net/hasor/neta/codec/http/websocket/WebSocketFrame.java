@@ -87,6 +87,15 @@ public interface WebSocketFrame extends HttpObject {
     ByteBuf content();
 
     /**
+     * Transfers the current payload ownership out of this frame wrapper.
+     * <p>
+     * After transfer, this frame no longer owns the payload and later
+     * {@link #release()} calls must not release the transferred buffer.
+     * @return transferred payload, or {@code null} if this frame no longer owns one
+     */
+    ByteBuf transferContent();
+
+    /**
      * Return the payload length represented by the current frame object.
      * <p>
      * For ordinary frames, this value equals {@code content().readableBytes()}.

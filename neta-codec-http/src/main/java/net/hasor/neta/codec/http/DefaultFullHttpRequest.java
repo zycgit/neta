@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -29,9 +29,9 @@ import net.hasor.neta.bytebuf.CompositeByteBuf;
  * @version : 2026-02-18
  */
 public class DefaultFullHttpRequest extends AbstractHttpObject<FullHttpRequest> implements FullHttpRequest {
-    private final HttpRequest      requestLine;
-    private final HttpHeaders      headers;
-    private final CompositeByteBuf contentBuffer;
+    private final HttpRequest requestLine;
+    private final HttpHeaders headers;
+    private CompositeByteBuf  contentBuffer;
 
     /**
      * Create an aggregated request with empty content and empty headers.
@@ -40,7 +40,7 @@ public class DefaultFullHttpRequest extends AbstractHttpObject<FullHttpRequest> 
      * @param uri request target
      */
     public DefaultFullHttpRequest(HttpVersion version, HttpMethod method, String uri) {
-        this(version, method, uri, ByteBuf.EMPTY, new DefaultHttpHeaders(), new DefaultLastHttpHeaders());
+        this(new DefaultHttpRequest(version, method, uri), null, null);
     }
 
     /**
@@ -51,68 +51,45 @@ public class DefaultFullHttpRequest extends AbstractHttpObject<FullHttpRequest> 
      * @param content aggregated payload
      */
     public DefaultFullHttpRequest(HttpVersion version, HttpMethod method, String uri, ByteBuf content) {
-        this(version, method, uri, content, new DefaultHttpHeaders(), new DefaultLastHttpHeaders());
+        this(new DefaultHttpRequest(version, method, uri), null, content);
     }
 
     /**
-     * Create an aggregated request with the specified content and headers.
-     * @param version HTTP version
-     * @param method HTTP method
-     * @param uri request target
-     * @param content aggregated payload
-     * @param headers final header block
-     */
-    public DefaultFullHttpRequest(HttpVersion version, HttpMethod method, String uri, ByteBuf content, DefaultHttpHeaders headers) {
-        this(version, method, uri, content, headers, new DefaultLastHttpHeaders());
-    }
-
-    /**
-     * Create an aggregated request with the specified content, headers, and trailing headers.
-     * @param version HTTP version
-     * @param method HTTP method
-     * @param uri request target
-     * @param content aggregated payload
-     * @param headers request header view
-     * @param trailerHeaders trailing header view
-     */
-    public DefaultFullHttpRequest(HttpVersion version, HttpMethod method, String uri, ByteBuf content, DefaultHttpHeaders headers, DefaultHttpHeaders trailerHeaders) {
-        this(new DefaultHttpRequest(version, method, uri), headers, new DefaultHttpContent(content), trailerHeaders);
-    }
-
-    /**
-     * Create an aggregated request from a request line, headers, and content object.
+     * Create an aggregated request from a request line, body payload, and zero or more header blocks.
+     * Header blocks are merged internally in-order.
      * @param requestLine request line object
-     * @param headers request header view
-     * @param content aggregated content object
+     * @param headerBlocks header blocks to merge into the final header view
+     * @param content aggregated payload
      */
-    public DefaultFullHttpRequest(DefaultHttpRequest requestLine, DefaultHttpHeaders headers, DefaultHttpContent content) {
-        this(requestLine, headers, content, new DefaultLastHttpHeaders());
-    }
-
-    /**
-     * Create an aggregated request from a request line, headers, content object,
-     * and trailing headers.
-     * @param requestLine request line object
-     * @param headers request header view
-     * @param content aggregated content object
-     * @param trailerHeaders trailing header view
-     */
-    public DefaultFullHttpRequest(DefaultHttpRequest requestLine, DefaultHttpHeaders headers, DefaultHttpContent content, DefaultHttpHeaders trailerHeaders) {
+    public DefaultFullHttpRequest(DefaultHttpRequest requestLine, HttpHeaders[] headerBlocks, ByteBuf content) {
         if (requestLine == null) {
             throw new IllegalArgumentException("requestLine must not be null");
         }
-        if (headers == null) {
-            throw new IllegalArgumentException("headers must not be null");
-        }
-        if (content == null) {
-            throw new IllegalArgumentException("content must not be null");
-        }
 
         this.requestLine = requestLine;
-        this.headers = headers;
+        this.headers = mergeHeaders(this, headerBlocks);
         this.contentBuffer = ByteBufUtils.compositeBuffer();
-        this.contentBuffer.addComponent(content.content());
+        if (content != null) {
+            this.contentBuffer.addComponent(content);
+        }
+
         this.inheritHttpObjectState(requestLine);
+    }
+
+    private static HttpHeaders mergeHeaders(DefaultFullHttpRequest request, HttpHeaders[] headers) {
+        DefaultHttpHeaders merged = new DefaultHttpHeaders();
+        if (headers == null) {
+            return merged;
+        }
+        for (HttpHeaders headerBlock : headers) {
+            if (headerBlock != null && headerBlock.isBad()) {
+                request.setBadState(headerBlock.badReason());
+            }
+
+            merged.appendHeaders(headerBlock);
+        }
+
+        return merged;
     }
 
     @Override
@@ -260,12 +237,18 @@ public class DefaultFullHttpRequest extends AbstractHttpObject<FullHttpRequest> 
         return this.contentBuffer;
     }
 
+    @Override
+    public ByteBuf transferContent() {
+        CompositeByteBuf current = this.contentBuffer;
+        this.contentBuffer = ByteBufUtils.compositeBuffer();
+        return current;
+    }
+
     /**
      * Append a content chunk to the aggregated payload.
      * <p>
-     * The chunk data is added directly to the internal composite buffer while
-     * reusing the original payload buffer. After appending, the caller transfers
-     * responsibility for releasing that chunk payload to this object.
+     * Appending a {@link HttpContent} transfers its current payload ownership into
+     * this full request. The wrapper itself remains independently releasable.
      * @param content content chunk to append
      */
     public void appendContent(HttpContent content) {
@@ -273,7 +256,7 @@ public class DefaultFullHttpRequest extends AbstractHttpObject<FullHttpRequest> 
             return;
         }
 
-        this.contentBuffer.addComponent(content.content());
+        this.contentBuffer.addComponent(content.transferContent());
     }
 
     //

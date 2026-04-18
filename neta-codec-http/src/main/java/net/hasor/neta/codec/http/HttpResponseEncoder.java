@@ -15,9 +15,12 @@
  */
 package net.hasor.neta.codec.http;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoHandler;
 import net.hasor.neta.channel.ProtoStatus;
@@ -108,49 +111,124 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<ByteBuf> dst) throws Throwable {
         HttpContext httpCtx = HttpContext.getOrCreate(context);
         HttpContext.EncodeState respCtx = httpCtx.respEnc;
+        boolean hasAny = false;
+
         while (src.hasMore()) {
-            HttpObject msg = src.takeMessage();
-            if (msg == null) {
+            HttpObject head = src.peekMessage();
+            if (head == null) {
+                src.takeMessage();
                 continue;
             }
 
-            boolean consumed = false;
+            int requiredSlots = this.requiredOutboundSlots(respCtx, head, httpCtx.isTransparentMode());
+            if (!ByteBufUtils.hasWritableSlots(dst, requiredSlots)) {
+                return hasAny ? ProtoStatus.Next : ProtoStatus.Stop;
+            }
+
+            // takeMessage transfers ownership; always release the source message in this call.
+            HttpObject msg = src.takeMessage();
+            List<ByteBuf> outputs = null;
             try {
-                if (httpCtx.isTransparentMode()) {
-                    consumed = true;
-                    if (!(msg instanceof HttpByteBuf)) {
-                        throw new HttpProtocolStateException("transparent mode only accepts HttpByteBuf on response encoder.");
-                    }
-                    this.offerDirectContent(((HttpByteBuf) msg).content(), dst);
+                outputs = this.encodeMessage(respCtx, context, msg, httpCtx.isTransparentMode());
+                if (outputs.isEmpty()) {
+                    outputs = null;
                     continue;
                 }
-
-                if (msg instanceof HttpResponse) {
-                    consumed = true;
-                    this.handleStatusLinePart(respCtx, context, (HttpResponse) msg, dst);
-                }
-                if (msg instanceof HttpHeaders) {
-                    consumed = true;
-                    this.handleHeadersPart(respCtx, context, (HttpHeaders) msg, dst);
-                }
-                if (msg instanceof HttpContent) {
-                    consumed = true;
-                    this.handleBodyPart(respCtx, context, (HttpContent) msg, dst);
-                }
+                dst.offerMessage(outputs);
+                outputs = null;
+                hasAny = true;
             } finally {
-                if (consumed) {
-                    msg.release();
-                }
+                // Release partially encoded buffers on exceptional paths.
+                ByteBufUtils.releaseAll(outputs);
+                msg.release();
             }
         }
 
         return ProtoStatus.Next;
     }
 
+    @Override
+    public void onClose(ProtoContext context) {
+        HttpContext existing = context.context(HttpContext.class);
+        if (existing != null) {
+            existing.respEnc.releaseAndReset();
+        }
+    }
+
     //
 
+    private List<ByteBuf> encodeMessage(HttpContext.EncodeState respCtx, ProtoContext context, HttpObject msg, boolean transparentMode) {
+        List<ByteBuf> outputs = new ArrayList<>(4);
+
+        if (transparentMode) {
+            if (!(msg instanceof HttpByteBuf)) {
+                throw new HttpProtocolStateException("transparent mode only accepts HttpByteBuf on response encoder.");
+            }
+            this.appendDirectContent(this.takeOwnedContent((HttpByteBuf) msg), outputs);
+            return outputs;
+        }
+
+        if (msg instanceof HttpResponse) {
+            this.handleStatusLinePart(respCtx, context, (HttpResponse) msg, outputs);
+        }
+        if (msg instanceof HttpHeaders) {
+            this.handleHeadersPart(respCtx, context, (HttpHeaders) msg, outputs);
+        }
+        if (msg instanceof HttpContent) {
+            this.handleBodyPart(respCtx, context, (HttpContent) msg, outputs);
+        }
+        return outputs;
+    }
+
+    private int requiredOutboundSlots(HttpContext.EncodeState respCtx, HttpObject msg, boolean transparentMode) {
+        if (transparentMode) {
+            if (!(msg instanceof HttpByteBuf)) {
+                throw new HttpProtocolStateException("transparent mode only accepts HttpByteBuf on response encoder.");
+            }
+            return directContentSlots(((HttpByteBuf) msg).content());
+        }
+
+        int requiredSlots = 0;
+        boolean chunkedEncoding = respCtx.chunkedEncoding;
+        boolean trailerStarted = respCtx.trailerStarted;
+
+        if (msg instanceof HttpResponse) {
+            requiredSlots++;
+            chunkedEncoding = false;
+            trailerStarted = false;
+        }
+        if (msg instanceof HttpHeaders) {
+            if (msg instanceof TrailerHttpHeaders) {
+                requiredSlots++;
+                chunkedEncoding = true;
+                if (!trailerStarted) {
+                    trailerStarted = true;
+                }
+            } else {
+                requiredSlots++;
+                String transferEncoding = ((HttpHeaders) msg).getString(HttpHeaderNames.TRANSFER_ENCODING);
+                boolean isChunked = StringUtils.containsIgnoreCase(transferEncoding, HttpHeaderValues.CHUNKED);
+                chunkedEncoding = chunkedEncoding || isChunked;
+            }
+        }
+        if (msg instanceof HttpContent) {
+            ByteBuf body = ((HttpContent) msg).content();
+            int bodySlots = chunkedEncoding ? chunkContentSlots(body) : directContentSlots(body);
+            if (msg instanceof LastHttpContent) {
+                requiredSlots += bodySlots;
+                if (trailerStarted || chunkedEncoding) {
+                    requiredSlots++;
+                }
+            } else {
+                requiredSlots += bodySlots;
+            }
+        }
+
+        return requiredSlots;
+    }
+
     // status-line
-    private void handleStatusLinePart(HttpContext.EncodeState respCtx, ProtoContext context, HttpResponse response, ProtoSndQueue<ByteBuf> dst) {
+    private void handleStatusLinePart(HttpContext.EncodeState respCtx, ProtoContext context, HttpResponse response, List<ByteBuf> outputs) {
         respCtx.reset();
 
         ByteBuf buf = context.byteBufAllocator().buffer(128);
@@ -179,22 +257,22 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
         }
         buf.markWriter();
 
-        dst.offerMessage(buf);
+        outputs.add(buf);
     }
 
     // header
-    private void handleHeadersPart(HttpContext.EncodeState respCtx, ProtoContext context, HttpHeaders headers, ProtoSndQueue<ByteBuf> dst) {
+    private void handleHeadersPart(HttpContext.EncodeState respCtx, ProtoContext context, HttpHeaders headers, List<ByteBuf> outputs) {
         if (headers instanceof TrailerHttpHeaders) {
-            this.handleTrailerHeadersPart(respCtx, context, headers, dst);
+            this.handleTrailerHeadersPart(respCtx, context, headers, outputs);
         } else {
             String transferEncoding = headers != null ? headers.getString(HttpHeaderNames.TRANSFER_ENCODING) : null;
             boolean isChunked = StringUtils.containsIgnoreCase(transferEncoding, HttpHeaderValues.CHUNKED);
             respCtx.chunkedEncoding = respCtx.chunkedEncoding || isChunked;
-            this.handleInitialHeadersPart(context, headers, headers instanceof LastHttpHeaders, dst);
+            this.handleInitialHeadersPart(context, headers, headers instanceof LastHttpHeaders, outputs);
         }
     }
 
-    private void handleInitialHeadersPart(ProtoContext context, HttpHeaders headers, boolean closeHeaders, ProtoSndQueue<ByteBuf> dst) {
+    private void handleInitialHeadersPart(ProtoContext context, HttpHeaders headers, boolean closeHeaders, List<ByteBuf> outputs) {
         ByteBuf buf = context.byteBufAllocator().buffer(256);
 
         this.writeHeaders(buf, headers);
@@ -203,10 +281,10 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
         }
         buf.markWriter();
 
-        dst.offerMessage(buf);
+        outputs.add(buf);
     }
 
-    private void handleTrailerHeadersPart(HttpContext.EncodeState respCtx, ProtoContext context, HttpHeaders headers, ProtoSndQueue<ByteBuf> dst) {
+    private void handleTrailerHeadersPart(HttpContext.EncodeState respCtx, ProtoContext context, HttpHeaders headers, List<ByteBuf> outputs) {
         respCtx.chunkedEncoding = true;
         ByteBuf buf = context.byteBufAllocator().buffer(128);
 
@@ -218,7 +296,7 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
         this.writeHeaders(buf, headers);
         buf.markWriter();
 
-        dst.offerMessage(buf);
+        outputs.add(buf);
     }
 
     private void writeHeaders(ByteBuf buf, HttpHeaders headers) {
@@ -259,44 +337,44 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     }
 
     // body
-    private void handleBodyPart(HttpContext.EncodeState respCtx, ProtoContext context, HttpContent content, ProtoSndQueue<ByteBuf> dst) {
+    private void handleBodyPart(HttpContext.EncodeState respCtx, ProtoContext context, HttpContent content, List<ByteBuf> outputs) {
         if (content instanceof LastHttpContent) {
-            this.encodeLastContent(respCtx, context, (LastHttpContent) content, dst);
+            this.encodeLastContent(respCtx, context, (LastHttpContent) content, outputs);
         } else {
-            this.encodeContent(respCtx, context, content, dst);
+            this.encodeContent(respCtx, context, content, outputs);
         }
     }
 
-    private void encodeContent(HttpContext.EncodeState respCtx, ProtoContext context, HttpContent content, ProtoSndQueue<ByteBuf> dst) {
-        ByteBuf body = content.content();
+    private void encodeContent(HttpContext.EncodeState respCtx, ProtoContext context, HttpContent content, List<ByteBuf> outputs) {
+        ByteBuf body = this.takeOwnedContent(content);
         if (respCtx.chunkedEncoding) {
-            this.offerChunkContent(context, body, dst);
+            this.appendChunkContent(context, body, outputs);
         } else {
-            this.offerDirectContent(body, dst);
+            this.appendDirectContent(body, outputs);
         }
     }
 
-    private void encodeLastContent(HttpContext.EncodeState respCtx, ProtoContext context, LastHttpContent lastContent, ProtoSndQueue<ByteBuf> dst) {
-        ByteBuf body = lastContent.content();
+    private void encodeLastContent(HttpContext.EncodeState respCtx, ProtoContext context, LastHttpContent lastContent, List<ByteBuf> outputs) {
+        ByteBuf body = this.takeOwnedContent(lastContent);
 
         if (respCtx.trailerStarted) {
             if (respCtx.chunkedEncoding) {
-                this.offerChunkContent(context, body, dst);
+                this.appendChunkContent(context, body, outputs);
             } else {
-                this.offerDirectContent(body, dst);
+                this.appendDirectContent(body, outputs);
             }
-            this.offerTrailingHeadersTerminator(context, dst);
+            this.appendTrailingHeadersTerminator(context, outputs);
         } else if (respCtx.chunkedEncoding) {
-            this.offerChunkContent(context, body, dst);
-            this.offerLastChunk(context, dst);
+            this.appendChunkContent(context, body, outputs);
+            this.appendLastChunk(context, outputs);
         } else {
-            this.offerDirectContent(body, dst);
+            this.appendDirectContent(body, outputs);
         }
 
         respCtx.reset();
     }
 
-    private void offerChunkContent(ProtoContext context, ByteBuf body, ProtoSndQueue<ByteBuf> dst) {
+    private void appendChunkContent(ProtoContext context, ByteBuf body, List<ByteBuf> outputs) {
         if (body == null || body.readableBytes() == 0) {
             return;
         }
@@ -305,35 +383,53 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
         writeHexInt(prefix, body.readableBytes());
         prefix.writeBytes(CRLF, 0, CRLF.length);
         prefix.markWriter();
-        dst.offerMessage(prefix);
+        outputs.add(prefix);
 
-        dst.offerMessage(body.retain());
+        outputs.add(body);
 
         ByteBuf suffix = context.byteBufAllocator().buffer(CRLF.length);
         suffix.writeBytes(CRLF, 0, CRLF.length);
         suffix.markWriter();
-        dst.offerMessage(suffix);
+        outputs.add(suffix);
     }
 
-    private void offerDirectContent(ByteBuf body, ProtoSndQueue<ByteBuf> dst) {
+    private void appendDirectContent(ByteBuf body, List<ByteBuf> outputs) {
         if (body == null || body.readableBytes() == 0) {
             return;
         }
-        dst.offerMessage(body.retain());
+        outputs.add(body);
     }
 
-    private void offerLastChunk(ProtoContext context, ProtoSndQueue<ByteBuf> dst) {
+    private void appendLastChunk(ProtoContext context, List<ByteBuf> outputs) {
         ByteBuf lastBuf = context.byteBufAllocator().buffer(ZERO_CRLF_CRLF.length);
         lastBuf.writeBytes(ZERO_CRLF_CRLF, 0, ZERO_CRLF_CRLF.length);
         lastBuf.markWriter();
-        dst.offerMessage(lastBuf);
+        outputs.add(lastBuf);
     }
 
-    private void offerTrailingHeadersTerminator(ProtoContext context, ProtoSndQueue<ByteBuf> dst) {
+    private void appendTrailingHeadersTerminator(ProtoContext context, List<ByteBuf> outputs) {
         ByteBuf buf = context.byteBufAllocator().buffer(CRLF.length);
         buf.writeBytes(CRLF, 0, CRLF.length);
         buf.markWriter();
-        dst.offerMessage(buf);
+        outputs.add(buf);
+    }
+
+    private ByteBuf takeOwnedContent(HttpContent content) {
+        ByteBuf body = content.content();
+        if (body == null || body.readableBytes() == 0) {
+            // Keep zero-byte ownership in the wrapper so the caller-side finally block releases it.
+            return null;
+        }
+        return content.transferContent();
+    }
+
+    private ByteBuf takeOwnedContent(HttpByteBuf content) {
+        ByteBuf body = content.content();
+        if (body == null || body.readableBytes() == 0) {
+            // Keep zero-byte ownership in the wrapper so the caller-side finally block releases it.
+            return null;
+        }
+        return content.transferContent();
     }
 
     //
@@ -366,5 +462,13 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
             value >>>= 4;
         } while (value != 0);
         buf.writeBytes(scratch, idx + 1, 15 - idx);
+    }
+
+    private static int directContentSlots(ByteBuf body) {
+        return body == null || body.readableBytes() == 0 ? 0 : 1;
+    }
+
+    private static int chunkContentSlots(ByteBuf body) {
+        return body == null || body.readableBytes() == 0 ? 0 : 3;
     }
 }

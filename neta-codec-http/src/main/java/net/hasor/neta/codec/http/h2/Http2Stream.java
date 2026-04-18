@@ -24,12 +24,12 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @version : 2026-02-20
  */
 class Http2Stream {
-    private final long             streamId;
-    private       Http2StreamState state;
-    private       ByteBuf          accumulatedHeaderBlock;
-    private       boolean          endStreamPending;
-    private       boolean          initialHeadersEmitted;
-    private       boolean          terminalObjectEmitted;
+    private final long       streamId;
+    private Http2StreamState state;
+    private ByteBuf          accumulatedHeaderBlock;
+    private boolean          endStreamPending;
+    private boolean          initialHeadersEmitted;
+    private boolean          terminalObjectEmitted;
 
     /**
      * Creates a new HTTP/2 stream.

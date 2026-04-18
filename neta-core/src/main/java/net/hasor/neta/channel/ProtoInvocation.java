@@ -37,17 +37,17 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * @version : 2023-10-20
  */
 class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
-    public static final  String                                            RCV_ERROR_TAG = ProtoStackChain.class.getName() + "-rcv-error-tag";
-    public static final  String                                            SND_ERROR_TAG = ProtoStackChain.class.getName() + "-snd-error-tag";
-    private static final Logger                                            logger        = Logger.getLogger(ProtoInvocation.class);
-    private final        ProtoQueueView                                    rcvUp;
-    private final        ProtoQueueView                                    sndUp;
-    private final        String                                            name;
-    private final        ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler;
+    public static final String                                      RCV_ERROR_TAG = ProtoStackChain.class.getName() + "-rcv-error-tag";
+    public static final String                                      SND_ERROR_TAG = ProtoStackChain.class.getName() + "-snd-error-tag";
+    private static final Logger                                     logger        = Logger.getLogger(ProtoInvocation.class);
+    private final ProtoQueueView                                    rcvUp;
+    private final ProtoQueueView                                    sndUp;
+    private final String                                            name;
+    private final ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler;
     //
-    private final        ProtoStackChain                                   chainRoot;
-    protected            ProtoInvocation<Object, Object, Object, Object>   previous;
-    protected            ProtoInvocation<Object, Object, Object, Object>   next;
+    private final ProtoStackChain                             chainRoot;
+    protected ProtoInvocation<Object, Object, Object, Object> previous;
+    protected ProtoInvocation<Object, Object, Object, Object> next;
 
     ProtoInvocation(String name, int rcvSize, int sndSize, ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler, ProtoStackChain chainRoot) {
         Objects.requireNonNull(handler, "handler is null.");
@@ -192,7 +192,7 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         } catch (Throwable e) {
             long channelID = protoCtx.getChannel().getChannelId();
             if (protoCtx.getConfig().isPrintLog()) {
-                logger.error("channel(" + channelID + ") Stack " + this.name + " onClose error: " + e.getMessage(), e);
+                logger.error("channel(" + channelID + ") Stack " + this.name + " onClose error: " + e.getClass().getName() + ": " + e.getMessage(), e);
             } else {
                 logger.error("channel(" + channelID + ") Stack " + this.name + " onClose error: " + e.getMessage());
             }

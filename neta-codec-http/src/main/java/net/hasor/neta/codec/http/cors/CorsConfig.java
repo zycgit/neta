@@ -149,10 +149,10 @@ public final class CorsConfig {
         private final Set<String> allowedMethods   = new LinkedHashSet<>(Arrays.asList("GET", "HEAD", "POST"));
         private final Set<String> allowedHeaders   = new LinkedHashSet<>();
         private final Set<String> exposedHeaders   = new LinkedHashSet<>();
-        private       boolean     anyOrigin        = false;
-        private       boolean     allowCredentials = false;
-        private       long        maxAge           = -1;
-        private       boolean     enabled          = true;
+        private boolean           anyOrigin        = false;
+        private boolean           allowCredentials = false;
+        private long              maxAge           = -1;
+        private boolean           enabled          = true;
 
         private Builder() {
         }

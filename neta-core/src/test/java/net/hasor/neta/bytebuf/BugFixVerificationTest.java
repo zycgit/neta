@@ -257,8 +257,6 @@ public class BugFixVerificationTest {
             assert false : "expected IllegalStateException after free";
         } catch (IllegalStateException e) {
             assert e.getMessage().equals("has been released.") : "wrong message: " + e.getMessage();
-        } finally {
-            buf.free();
         }
     }
 
@@ -275,8 +273,6 @@ public class BugFixVerificationTest {
             assert false : "expected IllegalStateException after free";
         } catch (IllegalStateException e) {
             assert e.getMessage().equals("has been released.") : "wrong message: " + e.getMessage();
-        } finally {
-            buf.free();
         }
     }
 
@@ -293,8 +289,6 @@ public class BugFixVerificationTest {
             assert false : "expected IllegalStateException after free";
         } catch (IllegalStateException e) {
             assert e.getMessage().equals("has been released.") : "wrong message: " + e.getMessage();
-        } finally {
-            buf.free();
         }
     }
 
@@ -312,7 +306,6 @@ public class BugFixVerificationTest {
         } catch (IllegalStateException e) {
             assert e.getMessage().equals("has been released.") : "wrong message: " + e.getMessage();
         } finally {
-            buf1.free();
             dst.free();
         }
     }
@@ -330,8 +323,6 @@ public class BugFixVerificationTest {
         } catch (IllegalStateException | IndexOutOfBoundsException e) {
             // After free, indices are still set but components cleared.
             // The read path hits checkFree via _getByte.
-        } finally {
-            buf.free();
         }
     }
 
@@ -373,10 +364,6 @@ public class BugFixVerificationTest {
             assert false : "expected ISE after free";
         } catch (IllegalStateException e) {
             assert e.getMessage().equals("has been released.");
-        } finally {
-            buf1.free();
-            buf2.free();
-            buf3.free();
         }
     }
 

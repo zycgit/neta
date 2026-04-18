@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.routing;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.List;
+import java.util.Objects;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
@@ -56,7 +59,7 @@ import net.hasor.neta.codec.http.h2.Http2Settings;
  *     |---------------------->| buffer staged request parts      |
  *     |                       | validate Upgrade + Settings      |
  *     |                       | if not upgrade: passthrough      |
- *     |<----------------------| continue on current h2c branch tail
+ *     |&lt;----------------------| continue on current h2c branch tail
  *     |                       |                                  |
  *     |                       | if valid upgrade request         |
  *     |                       | send "101 Switching Protocols"   |
@@ -66,7 +69,7 @@ import net.hasor.neta.codec.http.h2.Http2Settings;
  *     |                       |                                  | emit server SETTINGS preface
  *     |                       |                                  | Http2ObjectDuplexe consumes seed immediately
  *     |                       |                                  | stream 1 enters normal h2 pipeline
- *     |<---------------------------------------------------------| upgraded response on stream 1
+ *     |&lt;---------------------------------------------------------| upgraded response on stream 1
  *     | client preface        |                                  |
  *     | + client SETTINGS     |                                  |
  *     |---------------------->| routed as normal h2 traffic      |
@@ -77,21 +80,21 @@ import net.hasor.neta.codec.http.h2.Http2Settings;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-04-07
  */
-public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> {
-    private static final Logger              logger              = Logger.getLogger(H2CUpgradeServerDuplexe.class);
-    private static final String              UPGRADE_REQUEST_KEY = H2CUpgradeServerDuplexe.class.getName() + ".upgradeRequest";
-    private final        ProtoRoutingControl control;
-    private final        Http2Settings       http2Settings;
-    private              boolean             upgraded;
+public class H2CUpgradeServerDuplexer implements ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> {
+    private static final Logger       logger              = Logger.getLogger(H2CUpgradeServerDuplexer.class);
+    private static final String       UPGRADE_REQUEST_KEY = H2CUpgradeServerDuplexer.class.getName() + ".upgradeRequest";
+    private final ProtoRoutingControl control;
+    private final Http2Settings       http2Settings;
+    private boolean                   upgraded;
 
     /**
      * Creates an h2c upgrade bridge with the given routing controller.
      */
-    public H2CUpgradeServerDuplexe(ProtoRoutingControl control) {
+    public H2CUpgradeServerDuplexer(ProtoRoutingControl control) {
         this(control, Http2Settings.defaultLocalSettings(true));
     }
 
-    private H2CUpgradeServerDuplexe(ProtoRoutingControl control, Http2Settings http2Settings) {
+    private H2CUpgradeServerDuplexer(ProtoRoutingControl control, Http2Settings http2Settings) {
         this.control = Objects.requireNonNull(control, "control is null");
         this.http2Settings = http2Settings != null ? new Http2Settings(http2Settings) : Http2Settings.defaultLocalSettings(true);
     }
@@ -236,17 +239,17 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
                 headers.appendHeaders((HttpHeaders) part);
             }
             if (part instanceof HttpContent) {
-                ByteBuf bodyPart = ((HttpContent) part).content();
+                ByteBuf bodyPart = ((HttpContent) part).transferContent();
                 if (bodyPart != null && bodyPart.readableBytes() > 0) {
                     if (content == null) {
                         content = ByteBufUtils.compositeBuffer(alloc);
                     }
-                    content.addComponent(this.copyContent(bodyPart));
+                    content.addComponent(bodyPart);
                 }
             }
         }
 
-        FullHttpRequest request = new DefaultFullHttpRequest(requestLine.protocolVersion(), requestLine.method(), requestLine.uri(), content == null ? ByteBuf.EMPTY : content, headers);
+        FullHttpRequest request = new DefaultFullHttpRequest(new DefaultHttpRequest(requestLine.protocolVersion(), requestLine.method(), requestLine.uri()), new HttpHeaders[] { headers }, content == null ? ByteBuf.EMPTY : content);
         request.streamId(requestLine.streamId());
         return request;
     }
@@ -333,7 +336,11 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
         }
 
         HttpObject message = src.takeMessage();
-        return message == null || dst.offerMessage(Collections.singletonList(message));
+        if (message != null) {
+            dst.offerMessage(message);
+        }
+
+        return true;
     }
 
     // Utils
@@ -385,19 +392,6 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
             }
         }
         return values;
-    }
-
-    private ByteBuf copyContent(ByteBuf source) {
-        int length = source.readableBytes();
-        if (length == 0) {
-            return ByteBuf.EMPTY;
-        }
-        byte[] copied = new byte[length];
-        source.getBytes(0, copied, 0, length);
-        ByteBuf target = ByteBufAllocator.DEFAULT.buffer(length, Integer.MAX_VALUE);
-        target.writeBytes(copied, 0, copied.length);
-        target.markWriter();
-        return target;
     }
 
 }

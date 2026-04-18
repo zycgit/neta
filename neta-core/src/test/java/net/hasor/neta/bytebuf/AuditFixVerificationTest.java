@@ -151,7 +151,6 @@ public class AuditFixVerificationTest {
         } finally {
             copy.free();
             composite.free();
-            part.free();
         }
     }
 

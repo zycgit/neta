@@ -34,13 +34,13 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * @version : 2026-04-11
  */
 public abstract class AbstractHttpAggregator<M extends HttpObject> implements ProtoHandler<HttpObject, HttpObject> {
-    public static final int            DEFAULT_MAX_CONTENT_LENGTH = 1048576;
-    protected final     Logger         logger                     = Logger.getLogger(this.getClass());
-    private final       String         STAGING_QUEUE_PREFIX       = this.getClass().getName() + ".staging";
-    private final       int            maxContentLength;
-    private final       String         stagingQueueKey            = STAGING_QUEUE_PREFIX;
-    private             AggregateState state                      = AggregateState.IDLE;
-    private             boolean        headersClosedHandled       = false;
+    public static final int DEFAULT_MAX_CONTENT_LENGTH = 1048576;
+    protected final Logger  logger                     = Logger.getLogger(this.getClass());
+    private final String    STAGING_QUEUE_PREFIX       = this.getClass().getName() + ".staging";
+    private final int       maxContentLength;
+    private final String    stagingQueueKey            = STAGING_QUEUE_PREFIX;
+    private AggregateState  state                      = AggregateState.IDLE;
+    private boolean         headersClosedHandled       = false;
 
     protected AbstractHttpAggregator() {
         this(DEFAULT_MAX_CONTENT_LENGTH);
@@ -89,6 +89,11 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
         if (httpContext.isTransparentMode()) {
             this.resetAggregation(src);
             while (src.hasMore()) {
+                // Backpressure boundary: do not take from src until dst can accept one message.
+                if (!dst.hasSlot()) {
+                    return ProtoStatus.Stop;
+                }
+
                 HttpObject msg = src.takeMessage();
                 if (msg != null) {
                     dst.offerMessage(msg);

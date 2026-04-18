@@ -43,7 +43,7 @@ package net.hasor.neta.codec.http;
 public class HttpProtocolException extends RuntimeException {
     private final HttpStatus status;
     private final long       errorCode;
-    private       long       streamId = -1;
+    private long             streamId = -1;
 
     /**
      * Creates a protocol exception that uses the default status {@link HttpStatus#BAD_REQUEST 400}.

@@ -17,12 +17,12 @@ package net.hasor.neta.codec.string;
 import java.nio.charset.Charset;
 import java.util.Objects;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoHandler;
 import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
-
 /**
  * Encodes each outbound {@link String} into a {@link ByteBuf} with the configured charset.
  * <p>
@@ -55,12 +55,21 @@ public class StringEncoder implements ProtoHandler<String, ByteBuf> {
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<String> src, ProtoSndQueue<ByteBuf> dst) {
         boolean hasAny = false;
         while (src.hasMore()) {
-            String string = src.takeMessage();
-            if (string != null) {
-                dst.offerMessage(ByteBuf.wrap(string.getBytes(this.charset)));
-                hasAny = true;
+            if (!ByteBufUtils.hasWritableSlots(dst, 1)) {
+                return hasAny ? ProtoStatus.Next : ProtoStatus.Stop;
             }
+            String string = src.takeMessage();
+            if (string == null) {
+                continue;
+            }
+            ByteBuf output = ByteBuf.wrap(string.getBytes(this.charset));
+            dst.offerMessage(output);
+            hasAny = true;
         }
         return hasAny ? ProtoStatus.Next : ProtoStatus.Stop;
+    }
+
+    @Override
+    public void onClose(ProtoContext context) {
     }
 }

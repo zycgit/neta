@@ -26,6 +26,20 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class Http2ObjectEncoderTest extends AbstractHttp2Test {
+    private static class TrackingHttpRequest extends DefaultHttpRequest {
+        private boolean released;
+
+        private TrackingHttpRequest(HttpVersion version, HttpMethod method, String uri) {
+            super(version, method, uri);
+        }
+
+        @Override
+        public void release() {
+            this.released = true;
+            super.release();
+        }
+    }
+
     private static String buildLargeHeaderValue(int size) {
         StringBuilder builder = new StringBuilder(size);
         for (int i = 0; i < size; i++) {
@@ -92,6 +106,28 @@ public class Http2ObjectEncoderTest extends AbstractHttp2Test {
             assertEquals("example.com", decodedHeaders.getString(HttpHeaderNames.PSEUDO_AUTHORITY));
             assertEquals("text/plain", decodedHeaders.getString(HttpHeaderNames.CONTENT_TYPE));
             assertEquals("hello-h2-message", new String(dataFrame.payload(), dataFrame.payloadOffset(), dataFrame.payloadLength(), StandardCharsets.US_ASCII));
+            assertEquals(0, dataBuf.refCnt());
+        });
+    }
+
+    @Test
+    public void testEncoderReleasesStagedRequestAfterBindingStartLine() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastEncoder("h2-message-encoder", new Http2ObjectEncoder(false));
+            }, VrtSoConfig.asClient());
+
+            TrackingHttpRequest request = new TrackingHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, "/staged");
+            DefaultLastHttpHeaders headers = new DefaultLastHttpHeaders();
+            headers.addHeader(HttpHeaderNames.HOST, "example.com");
+
+            List<Http2Frame> outbound = sendAndOutBound(pipe, request, headers, new DefaultLastHttpContent(ByteBuf.EMPTY));
+            assertEquals(4, outbound.size());
+            assertEquals(Http2FrameType.PREFACE, outbound.get(0).type());
+            assertEquals(Http2FrameType.SETTINGS, outbound.get(1).type());
+            assertEquals(Http2FrameType.HEADERS, outbound.get(2).type());
+            assertEquals(Http2FrameType.DATA, outbound.get(3).type());
+            assertTrue(request.released);
         });
     }
 

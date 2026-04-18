@@ -62,12 +62,12 @@ import net.hasor.neta.codec.http.*;
  * @version : 2026-03-25
  */
 class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
-    private static final Logger        logger                 = Logger.getLogger(Http2ObjectEncoder.class);
-    private static final byte[]        CLIENT_PREFACE         = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n".getBytes(StandardCharsets.US_ASCII);
-    private static final int           DEFAULT_MAX_FRAME_SIZE = 16384;
-    private final        boolean       serverMode;
-    private final        Http2Settings localSettings;
-    private final        HttpScheme    scheme                 = HttpScheme.HTTPS;
+    private static final Logger logger                 = Logger.getLogger(Http2ObjectEncoder.class);
+    private static final byte[] CLIENT_PREFACE         = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n".getBytes(StandardCharsets.US_ASCII);
+    private static final int    DEFAULT_MAX_FRAME_SIZE = 16384;
+    private final boolean       serverMode;
+    private final Http2Settings localSettings;
+    private final HttpScheme    scheme                 = HttpScheme.HTTPS;
 
     public Http2ObjectEncoder(boolean serverMode) {
         this(serverMode, Http2Settings.defaultLocalSettings(serverMode));
@@ -140,7 +140,11 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
             if (msg == null) {
                 continue;
             }
-            this.encodeHttpObject(state, context, msg, dst);
+            try {
+                this.encodeHttpObject(state, context, msg, dst);
+            } finally {
+                msg.release();
+            }
         }
         return ProtoStatus.Next;
     }
@@ -277,14 +281,14 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
             request.streamId(state.allocateNextStreamId());
         }
 
-        state.pendingStartLine(request);
+        state.pendingRequest(request);
         state.trailingHeadersSent(false);
     }
 
     private void bindResponse(Http2EncoderContent state, ProtoContext context, HttpResponse response) {
         long streamId = this.resolveResponseStreamId(state, context, response);
         response.streamId(streamId);
-        state.pendingStartLine(response);
+        state.pendingResponse(response);
         state.trailingHeadersSent(false);
     }
 
@@ -320,7 +324,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
     }
 
     private void encodeHeaderBlock(Http2EncoderContent state, ProtoContext context, HttpHeaders headers, ProtoSndQueue<Http2Frame> dst) {
-        if (state.pendingStartLine() != null) {
+        if (state.hasPendingStartLine()) {
             long streamId = this.resolveActiveStreamId(state, headers);
             this.encodePendingStartLine(state, headers, streamId, false, dst);
             return;
@@ -388,24 +392,23 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
 
     private long ensureHeaderBlock(Http2EncoderContent state, ProtoContext context, HttpObject content, ProtoSndQueue<Http2Frame> dst) {
         long streamId = this.resolveActiveStreamId(state, content);
-        if (state.pendingStartLine() != null) {
+        if (state.hasPendingStartLine()) {
             this.encodePendingStartLine(state, null, streamId, false, dst);
         }
         return streamId;
     }
 
     private void encodePendingStartLine(Http2EncoderContent state, HttpHeaders regularHeaders, long streamId, boolean endStream, ProtoSndQueue<Http2Frame> dst) {
-        HttpObject pendingStartLine = state.pendingStartLine();
-        if (pendingStartLine == null) {
+        if (!state.hasPendingStartLine()) {
             String msg = "HTTP/2: missing request/response start-line before header block";
             throw new HttpProtocolConnectionException(Http2ErrorCode.PROTOCOL_ERROR, msg);
         }
 
-        if (isWebSocketUpgradeHandshake(regularHeaders) || (state.pendingStartLineIsRequest() && isStandardWebSocketConnect(state.pendingRequest(), regularHeaders))) {
+        if (isWebSocketUpgradeHandshake(regularHeaders) || (state.pendingStartLineIsRequest() && isStandardWebSocketConnect(state.pendingMethod(), regularHeaders))) {
             state.markPendingUpgradeStream(streamId);
         }
 
-        HttpHeaders headers = state.pendingStartLineIsRequest() ? this.buildRequestHeaders(state.pendingRequest(), regularHeaders) : this.buildResponseHeaders(state.pendingResponse(), regularHeaders);
+        HttpHeaders headers = state.pendingStartLineIsRequest() ? this.buildRequestHeaders(state.pendingMethod(), state.pendingPath(), regularHeaders) : this.buildResponseHeaders(state.pendingStatus(), regularHeaders);
         this.encodeHeaders(state, headers, streamId, endStream, dst);
         state.clearPendingStartLine();
     }
@@ -460,16 +463,24 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
     }
 
     private HttpHeaders buildResponseHeaders(HttpResponse response, HttpHeaders regularHeaders) {
+        return this.buildResponseHeaders(response.status().code(), regularHeaders);
+    }
+
+    private HttpHeaders buildResponseHeaders(int statusCode, HttpHeaders regularHeaders) {
         HttpHeaders target = new DefaultHttpHeaders();
-        target.addHeader(HttpHeaderNames.PSEUDO_STATUS, String.valueOf(response.status().code()));
+        target.addHeader(HttpHeaderNames.PSEUDO_STATUS, String.valueOf(statusCode));
         this.copyRegularHeaders(regularHeaders, target, shouldPreserveWebSocketUpgradeHeaders(regularHeaders));
         return target;
     }
 
     private HttpHeaders buildRequestHeaders(HttpRequest request, HttpHeaders regularHeaders) {
+        return this.buildRequestHeaders(request.method().name(), request.uri(), regularHeaders);
+    }
+
+    private HttpHeaders buildRequestHeaders(String method, String uri, HttpHeaders regularHeaders) {
         HttpHeaders target = new DefaultHttpHeaders();
-        target.addHeader(HttpHeaderNames.PSEUDO_METHOD, request.method().name());
-        target.addHeader(HttpHeaderNames.PSEUDO_PATH, request.uri());
+        target.addHeader(HttpHeaderNames.PSEUDO_METHOD, method);
+        target.addHeader(HttpHeaderNames.PSEUDO_PATH, uri);
         String protocol = regularHeaders != null ? regularHeaders.getString(HttpHeaderNames.PSEUDO_PROTOCOL) : null;
         if (StringUtils.isNotBlank(protocol)) {
             target.addHeader(HttpHeaderNames.PSEUDO_PROTOCOL, protocol);
@@ -527,7 +538,11 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
     }
 
     private boolean isStandardWebSocketConnect(HttpRequest request, HttpHeaders headers) {
-        if (request == null || !HttpMethod.CONNECT.equals(request.method())) {
+        return request != null && this.isStandardWebSocketConnect(request.method().name(), headers);
+    }
+
+    private boolean isStandardWebSocketConnect(String method, HttpHeaders headers) {
+        if (!StringUtils.equalsIgnoreCase(HttpMethod.CONNECT.name(), method)) {
             return false;
         }
         return headers != null && StringUtils.equalsIgnoreCase(HttpHeaderValues.WEBSOCKET, headers.getString(HttpHeaderNames.PSEUDO_PROTOCOL));

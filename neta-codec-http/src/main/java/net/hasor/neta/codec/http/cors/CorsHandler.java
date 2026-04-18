@@ -102,6 +102,17 @@ public class CorsHandler implements ProtoHandler<HttpObject, Object> {
         }
 
         while (src.hasMore()) {
+            HttpObject peek = src.peekMessage();
+            if (peek == null) {
+                src.skipMessage(1);
+                continue;
+            }
+
+            int requiredSlots = computeRequiredSlots(peek);
+            if (dst.slotSize() < requiredSlots) {
+                return ProtoStatus.Stop;
+            }
+
             HttpObject object = src.takeMessage();
             if (object == null) {
                 continue;
@@ -109,6 +120,35 @@ public class CorsHandler implements ProtoHandler<HttpObject, Object> {
             processObject(object, dst);
         }
         return ProtoStatus.Next;
+    }
+
+    /**
+     * Estimates the maximum number of downstream slots processObject may consume for the next item.
+     * The estimate intentionally rounds up so the handler yields instead of taking and dropping.
+     */
+    private int computeRequiredSlots(HttpObject peek) {
+        long streamId = peek.streamId();
+        StreamState state = this.streamState.get(streamId);
+
+        // Discard mode releases locally and never forwards downstream.
+        if (state != null && state.discarding) {
+            return 0;
+        }
+
+        // A new request may first flush buffered parts from the previous request on the same stream.
+        if (peek instanceof HttpRequest) {
+            return state != null ? state.buffered.size() : 0;
+        }
+
+        // Header accumulation keeps buffering locally until LastHttpHeaders triggers preflight or flush.
+        if (state != null && !state.headerPhaseFinished) {
+            if (peek instanceof LastHttpHeaders) {
+                return Math.max(1, state.buffered.size() + 1);
+            }
+            return 0;
+        }
+
+        return 1;
     }
 
     private void processObject(HttpObject object, ProtoSndQueue<Object> dst) {
@@ -225,8 +265,8 @@ public class CorsHandler implements ProtoHandler<HttpObject, Object> {
         private final HttpRequest        requestLine;
         private final DefaultHttpHeaders requestHeaders = new DefaultHttpHeaders();
         private final List<HttpObject>   buffered       = new ArrayList<HttpObject>();
-        private       boolean            headerPhaseFinished;
-        private       boolean            discarding;
+        private boolean                  headerPhaseFinished;
+        private boolean                  discarding;
 
         private StreamState(HttpRequest requestLine) {
             this.streamId = requestLine.streamId();

@@ -16,12 +16,8 @@
 package net.hasor.neta.codec.ssl;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.security.AccessController;
 import java.security.PrivateKey;
-import java.security.PrivilegedAction;
 import java.security.Provider;
-import net.hasor.cobble.io.input.AutoCloseReader;
-import net.hasor.cobble.logging.Logger;
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.openssl.PEMDecryptorProvider;
 import org.bouncycastle.openssl.PEMEncryptedKeyPair;
@@ -34,6 +30,8 @@ import org.bouncycastle.operator.InputDecryptorProvider;
 import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.pkcs.PKCS8EncryptedPrivateKeyInfo;
 import org.bouncycastle.pkcs.PKCSException;
+import net.hasor.cobble.io.input.AutoCloseReader;
+import net.hasor.cobble.logging.Logger;
 
 /**
  * Optional PEM private-key reader backed by BouncyCastle.
@@ -78,28 +76,22 @@ class SslPemReaderByBouncyCastle {
     }
 
     private static void tryLoading() {
-        AccessController.doPrivileged(new PrivilegedAction<Void>() {
-            @Override
-            public Void run() {
-                try {
-                    ClassLoader classLoader = getClass().getClassLoader();
-                    // Check for bcprov-jdk15on:
-                    Class<Provider> bcProviderClass = (Class<Provider>) Class.forName(BC_PROVIDER, true, classLoader);
-                    // Check for bcpkix-jdk15on:
-                    Class.forName(BC_PEMPARSER, true, classLoader);
-                    bcProvider = bcProviderClass.getConstructor().newInstance();
-                    logger.debug("Bouncy Castle provider available");
-                    attemptedLoading = true;
-                } catch (Throwable e) {
-                    if (logger.isDebugEnabled()) {
-                        logger.error("Cannot load Bouncy Castle provider", e);
-                    }
-                    unavailabilityCause = e;
-                    attemptedLoading = true;
-                }
-                return null;
+        try {
+            ClassLoader classLoader = SslPemReaderByBouncyCastle.class.getClassLoader();
+            // Check for bcprov-jdk15on:
+            Class<Provider> bcProviderClass = (Class<Provider>) Class.forName(BC_PROVIDER, true, classLoader);
+            // Check for bcpkix-jdk15on:
+            Class.forName(BC_PEMPARSER, true, classLoader);
+            bcProvider = bcProviderClass.getConstructor().newInstance();
+            logger.debug("Bouncy Castle provider available");
+            attemptedLoading = true;
+        } catch (Throwable e) {
+            if (logger.isDebugEnabled()) {
+                logger.error("Cannot load Bouncy Castle provider", e);
             }
-        });
+            unavailabilityCause = e;
+            attemptedLoading = true;
+        }
     }
 
     /**

@@ -35,10 +35,10 @@ import net.hasor.neta.codec.http.websocket.*;
  * @version : 2026-04-07
  */
 public class DeflateFrameSupport implements WebSocketExtension {
-    public static final  String              EXTENSION_NAME = "deflate-frame";
+    public static final String               EXTENSION_NAME = "deflate-frame";
     private static final DeflateFrameSupport INSTANCE       = new DeflateFrameSupport();
     private static final byte[]              DEFLATE_TAIL   = new byte[] { 0x00, 0x00, (byte) 0xFF, (byte) 0xFF };
-    private final        String              extensionName;
+    private final String                     extensionName;
 
     /**
      * Return the singleton support instance.

@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http.websocket;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.bytebuf.CompositeByteBuf;
 import net.hasor.neta.codec.http.*;
@@ -52,57 +51,6 @@ final class HttpMessageParts {
      */
     public boolean isComplete() {
         return this.complete;
-    }
-
-    /**
-     * Append one request-side HTTP fragment into the current aggregation state.
-     * @param msg request-side HTTP fragment
-     */
-    public void appendRequest(HttpObject msg) {
-        boolean aggregateLike = msg instanceof HttpRequest && msg instanceof HttpContent;
-        if (msg instanceof HttpRequest) {
-            HttpRequest request = (HttpRequest) msg;
-            this.protocolVersion = request.protocolVersion();
-            this.method = request.method();
-            this.uri = request.uri();
-            this.streamId = request.streamId();
-            this.active = true;
-        }
-
-        if (msg instanceof HttpHeaders) {
-            this.headers().appendHeaders((HttpHeaders) msg);
-        }
-        if (msg instanceof HttpContent) {
-            this.appendBody(((HttpContent) msg).content());
-        }
-        if (msg instanceof LastHttpContent || aggregateLike) {
-            this.complete = true;
-        }
-    }
-
-    /**
-     * Append one response-side HTTP fragment into the current aggregation state.
-     * @param msg response-side HTTP fragment
-     */
-    public void appendResponse(HttpObject msg) {
-        boolean aggregateLike = msg instanceof HttpResponse && msg instanceof HttpContent;
-        if (msg instanceof HttpResponse) {
-            HttpResponse response = (HttpResponse) msg;
-            this.protocolVersion = response.protocolVersion();
-            this.status = response.status();
-            this.streamId = response.streamId();
-            this.active = true;
-        }
-
-        if (msg instanceof HttpHeaders) {
-            this.headers().appendHeaders((HttpHeaders) msg);
-        }
-        if (msg instanceof HttpContent) {
-            this.appendBody(((HttpContent) msg).content());
-        }
-        if (msg instanceof LastHttpContent || aggregateLike) {
-            this.complete = true;
-        }
     }
 
     /**
@@ -200,29 +148,132 @@ final class HttpMessageParts {
         return this.headers;
     }
 
-    private void appendBody(ByteBuf content) {
-        if (content == null || content.readableBytes() == 0) {
-            return;
+    /**
+     * Append one request-side HTTP fragment into the current aggregation state.
+     * @param msg request-side HTTP fragment
+     */
+    public void appendRequest(HttpObject msg) {
+        boolean aggregateLike = msg instanceof HttpRequest && msg instanceof HttpContent;
+        if (msg instanceof HttpRequest) {
+            this.captureRequestStart((HttpRequest) msg);
         }
 
+        this.appendHeaders(msg);
+        if (msg instanceof HttpContent) {
+            this.appendSharedBody(((HttpContent) msg).content());
+        }
+
+        this.markComplete(msg, aggregateLike);
+    }
+
+    /**
+     * Append one request-side HTTP fragment while taking ownership of any body payload.
+     * <p>
+     * This is only valid when the caller will not use the original content wrapper again
+     * except to release the remainder of its state.
+     * @param msg request-side HTTP fragment
+     */
+    public void appendOwnedRequest(HttpObject msg) {
+        boolean aggregateLike = msg instanceof HttpRequest && msg instanceof HttpContent;
+        if (msg instanceof HttpRequest) {
+            this.captureRequestStart((HttpRequest) msg);
+        }
+
+        this.appendHeaders(msg);
+        if (msg instanceof HttpContent) {
+            this.appendOwnedBody(((HttpContent) msg).transferContent());
+        }
+
+        this.markComplete(msg, aggregateLike);
+    }
+
+    /**
+     * Append one response-side HTTP fragment into the current aggregation state.
+     * @param msg response-side HTTP fragment
+     */
+    public void appendResponse(HttpObject msg) {
+        boolean aggregateLike = msg instanceof HttpResponse && msg instanceof HttpContent;
+        if (msg instanceof HttpResponse) {
+            this.captureResponseStart((HttpResponse) msg);
+        }
+
+        this.appendHeaders(msg);
+        if (msg instanceof HttpContent) {
+            this.appendSharedBody(((HttpContent) msg).content());
+        }
+
+        this.markComplete(msg, aggregateLike);
+    }
+
+    /**
+     * Append one response-side HTTP fragment while taking ownership of any body payload.
+     * <p>
+     * This is only valid when the caller will not use the original content wrapper again
+     * except to release the remainder of its state.
+     * @param msg response-side HTTP fragment
+     */
+    public void appendOwnedResponse(HttpObject msg) {
+        boolean aggregateLike = msg instanceof HttpResponse && msg instanceof HttpContent;
+        if (msg instanceof HttpResponse) {
+            this.captureResponseStart((HttpResponse) msg);
+        }
+
+        this.appendHeaders(msg);
+        if (msg instanceof HttpContent) {
+            this.appendOwnedBody(((HttpContent) msg).transferContent());
+        }
+
+        this.markComplete(msg, aggregateLike);
+    }
+
+    private void captureRequestStart(HttpRequest request) {
+        this.protocolVersion = request.protocolVersion();
+        this.method = request.method();
+        this.uri = request.uri();
+        this.streamId = request.streamId();
+        this.active = true;
+    }
+
+    private void captureResponseStart(HttpResponse response) {
+        this.protocolVersion = response.protocolVersion();
+        this.status = response.status();
+        this.streamId = response.streamId();
+        this.active = true;
+    }
+
+    private void appendHeaders(HttpObject msg) {
+        if (msg instanceof HttpHeaders) {
+            this.headers().appendHeaders((HttpHeaders) msg);
+        }
+    }
+
+    private void markComplete(HttpObject msg, boolean aggregateLike) {
+        if (msg instanceof LastHttpContent || aggregateLike) {
+            this.complete = true;
+        }
+    }
+
+    private CompositeByteBuf ensureBody() {
         if (this.body == null) {
             this.body = ByteBufUtils.compositeBuffer();
         }
-
-        this.body.addComponent(cloneContent(content));
+        return this.body;
     }
 
-    private static ByteBuf cloneContent(ByteBuf source) {
-        if (source == null || source.readableBytes() == 0) {
-            return ByteBuf.EMPTY;
+    private void appendSharedBody(ByteBuf content) {
+        if (content == null) {
+            return;
         }
+        if (content.readableBytes() == 0) {
+            return;
+        }
+        this.ensureBody().addComponent(content.retain());
+    }
 
-        int length = source.readableBytes();
-        byte[] copied = new byte[length];
-        source.getBytes(0, copied, 0, length);
-        ByteBuf target = ByteBufAllocator.DEFAULT.buffer(length, Integer.MAX_VALUE);
-        target.writeBytes(copied, 0, copied.length);
-        target.markWriter();
-        return target;
+    private void appendOwnedBody(ByteBuf content) {
+        if (content == null) {
+            return;
+        }
+        this.ensureBody().addComponent(content);
     }
 }

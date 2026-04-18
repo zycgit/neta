@@ -48,7 +48,11 @@ public abstract class SoAttrChannel<T> implements SoChannel<T> {
      */
     @Override
     public void setAttribute(String key, Object value) {
-        this.attributes.put(key, value);
+        if (value == null) {
+            this.attributes.remove(key);
+        } else {
+            this.attributes.put(key, value);
+        }
     }
 
     /**

@@ -43,8 +43,9 @@ import java.util.List;
  *     -> { buf=buf2, compositeOffset=c1.end, length=buf2.readableBytes() }
  * </pre>
  * <p>
- * Components are added via {@link #addComponent(ByteBuf)}, which retains the buffer
- * and makes its readable data immediately available in the composite view.
+ * Components are added via {@link #addComponent(ByteBuf)}. Appending a component means
+ * this composite takes ownership of the supplied buffer reference. Callers that still need
+ * to keep their own reference should {@link ByteBuf#retain()} before appending.
  * <p>
  * <b>Read operations</b> (read*, get*) are fully supported across component boundaries.
  * <br>
@@ -64,9 +65,9 @@ import java.util.List;
  */
 public class CompositeByteBuf extends AbstractByteBuf {
     private final List<Component> components;
-    private       int             totalCapacity;
+    private int                   totalCapacity;
     /** Cache the last accessed component index for sequential read optimization. */
-    private       int             lastAccessedComponentIndex;
+    private int                   lastAccessedComponentIndex;
 
     /**
      * Create a new empty CompositeByteBuf.
@@ -82,20 +83,30 @@ public class CompositeByteBuf extends AbstractByteBuf {
     }
 
     /**
-     * Appends a {@link ByteBuf} as a new component. The buffer's current readable data
-     * becomes part of this composite's readable data. The buffer is retained.
+     * Appends a {@link ByteBuf} as a new component.
      * <p>
-     * If the buffer has no readable data, it is ignored.
+     * Appending transfers ownership of the supplied buffer reference to this composite.
+     * Callers that still need their own reference should retain before calling.
+     * If the buffer has no readable data, ownership is still accepted and the buffer is
+     * released immediately because it contributes no readable component.
      * @param buf the buffer to add (its readable bytes become composite content)
      * @return this CompositeByteBuf for chaining
      */
     public CompositeByteBuf addComponent(ByteBuf buf) {
         checkFree();
-        if (buf == null || buf.readableBytes() == 0) {
+        if (buf == null) {
             return this;
         }
 
-        buf.retain();
+        if (buf.readableBytes() == 0) {
+            buf.release();
+            return this;
+        }
+
+        return this.appendComponent(buf);
+    }
+
+    private CompositeByteBuf appendComponent(ByteBuf buf) {
 
         Component c = new Component();
         c.buf = buf;
@@ -122,6 +133,9 @@ public class CompositeByteBuf extends AbstractByteBuf {
 
     /**
      * Appends multiple {@link ByteBuf} instances as new components.
+     * <p>
+     * Appending transfers ownership of each supplied buffer reference to this composite.
+     * Callers that still need their own references should retain before calling.
      * @param buffers the buffers to add
      * @return this CompositeByteBuf for chaining
      */
@@ -517,7 +531,7 @@ public class CompositeByteBuf extends AbstractByteBuf {
         int     compositeOffset; // start offset within the composite
         int     length;          // number of bytes contributed by this component
         // Cached for direct byte-level access (null for non-array-backed buffers)
-        byte[]  cachedArray;
-        int     cachedArrayBase; // base index into cachedArray for this component's data
+        byte[] cachedArray;
+        int    cachedArrayBase; // base index into cachedArray for this component's data
     }
 }

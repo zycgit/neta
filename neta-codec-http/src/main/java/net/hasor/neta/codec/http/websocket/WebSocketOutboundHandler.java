@@ -34,9 +34,9 @@ import net.hasor.neta.codec.http.HttpEvent;
  * @version : 2026-03-22
  */
 public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, WebSocketFrame> {
-    private final int             maxFramePayloadLength;
-    private       WebSocketOpcode fragmentType;
-    private       int             expectedSequence;
+    private final int       maxFramePayloadLength;
+    private WebSocketOpcode fragmentType;
+    private int             expectedSequence;
 
     /**
      * Create an outbound handler without automatic fragmentation.

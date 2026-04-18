@@ -47,20 +47,20 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
     private static final Logger                         logger              = Logger.getLogger(NetChannel.class);
     private static final ByteBuf[]                      EMPTY_BYTEBUF_ARRAY = new ByteBuf[0];
     private static final Map<Thread, Deque<NetChannel>> PIPELINE_CALL_CHAIN = new ConcurrentHashMap<>();
-    protected final      AsyncChannel                   asyncChannel;
-    protected final      NetListen                      forListen;
-    protected final      SoSndContext                   wContext;
-    protected final      SoContextService               soContext;
-    protected final      NetMonitor                     monitor;
-    protected final      ProtoStackChain                protoStack;
-    protected final      AtomicBoolean                  closeStatus;
-    protected final      Future<NetChannel>             closeFuture;
-    protected final      Object                         readTimeoutSyncObj;
+    protected final AsyncChannel                        asyncChannel;
+    protected final NetListen                           forListen;
+    protected final SoSndContext                        wContext;
+    protected final SoContextService                    soContext;
+    protected final NetMonitor                          monitor;
+    protected final ProtoStackChain                     protoStack;
+    protected final AtomicBoolean                       closeStatus;
+    protected final Future<NetChannel>                  closeFuture;
+    protected final Object                              readTimeoutSyncObj;
     //
-    final                ProtoContextService            protoCtx;
-    private final        long                           channelId;
-    private final        Object[]                       singleRcvBuf        = new Object[1]; // reusable 1-element array for single RCV
-    protected volatile   int                            readWaiters;
+    final ProtoContextService protoCtx;
+    private final long        channelId;
+    private final Object[]    singleRcvBuf = new Object[1]; // reusable 1-element array for single RCV
+    protected volatile int    readWaiters;
 
     /**
      * Create a logical channel bound to the underlying asynchronous transport channel and protocol stack.
@@ -82,9 +82,9 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
 
         this.protoCtx = new ProtoContextService(this, soContext);
         this.protoStack = this.protoCtx.getChainRoot();
-        initializer.config(this.protoCtx);
         this.closeStatus = new AtomicBoolean(false);
         this.closeFuture = new BasicFuture<>();
+        initializer.config(this.protoCtx);
     }
 
     /** Return true when the current thread is executing inside the pipeline call chain of any NetChannel. */
@@ -435,13 +435,19 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         if (future.isDone()) {
             return future;
         }
+        SoSndData sndData = null;
         try {
             synchronized (this) {
-                appendSoSndTask(toSoSndData(future, writeData));
+                sndData = toSoSndData(future, writeData);
+                appendSoSndTask(sndData);
             }
         } catch (Throwable e) {
             logger.error("snd(" + this.channelId + ") sendEncoded failed, " + e.getMessage(), e);
-            future.failed(e);
+            if (sndData != null) {
+                sndData.failed(e);
+            } else {
+                future.failed(e);
+            }
         }
         return future;
     }
@@ -459,15 +465,21 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
             return future;
         }
 
+        SoSndData sndData = null;
         try {
             ChainResult cr;
             synchronized (this) {
                 cr = this.protoStack.onSnd(this.protoCtx, stackName, writeData, null);
             }
-            appendSoSndTask(toSoSndData(future, cr.data));
+            sndData = toSoSndData(future, cr.data);
+            appendSoSndTask(sndData);
         } catch (Throwable e) {
             logger.error("snd(" + this.channelId + ") failed, " + e.getMessage(), e);
-            future.failed(e);
+            if (sndData != null) {
+                sndData.failed(e);
+            } else {
+                future.failed(e);
+            }
         }
         return future;
     }
@@ -550,14 +562,19 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
      * frames such as TLS {@code close_notify} can still be flushed after the close flow has started.
      */
     void flushForClose() {
+        SoSndData sndData = null;
         try {
             ChainResult cr;
             synchronized (this) {
                 cr = this.protoStack.onSnd(this.protoCtx, null, null, null);
             }
-            appendSoSndTask(toSoSndData(Futures.buildNoop(), cr.data));
+            sndData = toSoSndData(Futures.buildNoop(), cr.data);
+            appendSoSndTask(sndData);
         } catch (Throwable e) {
             logger.error("snd(" + this.channelId + ") flushForClose failed, " + e.getMessage(), e);
+            if (sndData != null) {
+                sndData.failed(e);
+            }
         }
     }
 

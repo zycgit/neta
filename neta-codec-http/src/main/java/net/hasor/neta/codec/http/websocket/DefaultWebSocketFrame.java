@@ -29,17 +29,18 @@ import net.hasor.neta.codec.http.AbstractHttpObject;
  */
 final class DefaultWebSocketFrame extends AbstractHttpObject<WebSocketFrame> implements WebSocketFrame {
     private static final int                               RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    private static final ObjHandler<DefaultWebSocketFrame> RECYCLE_HANDLER = new ObjHandler<DefaultWebSocketFrame>() {
-        @Override
-        public DefaultWebSocketFrame create() {
-            return new DefaultWebSocketFrame();
-        }
+    private static final ObjHandler<DefaultWebSocketFrame> RECYCLE_HANDLER = //
+            new ObjHandler<DefaultWebSocketFrame>() {
+                @Override
+                public DefaultWebSocketFrame create() {
+                    return new DefaultWebSocketFrame();
+                }
 
-        @Override
-        public void free(DefaultWebSocketFrame tar) {
-            RecycleObjectPool.free(RECYCLE_INDEX, tar);
-        }
-    };
+                @Override
+                public void free(DefaultWebSocketFrame tar) {
+                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
+                }
+            };
 
     private boolean         finalFragment;
     private boolean         rsv1;
@@ -125,6 +126,13 @@ final class DefaultWebSocketFrame extends AbstractHttpObject<WebSocketFrame> imp
     @Override
     public ByteBuf content() {
         return this.content;
+    }
+
+    @Override
+    public ByteBuf transferContent() {
+        ByteBuf current = this.content;
+        this.content = null;
+        return current;
     }
 
     /**

@@ -24,7 +24,7 @@ package net.hasor.neta.codec.http.websocket.extensions;
  * @version : 2026-04-07
  */
 public class XWebkitDeflateFrameSupport extends DeflateFrameSupport {
-    public static final  String                     EXTENSION_NAME = "x-webkit-deflate-frame";
+    public static final String                      EXTENSION_NAME = "x-webkit-deflate-frame";
     private static final XWebkitDeflateFrameSupport INSTANCE       = new XWebkitDeflateFrameSupport();
 
     /**

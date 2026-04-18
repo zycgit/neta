@@ -54,19 +54,19 @@ import net.hasor.neta.codec.http.HttpObject;
  * @version : 2026-02-18
  */
 public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocketFrame> {
-    private static final String                        PAYLOAD_STAGE_QUEUE_KEY = WebSocketFrameDecoder.class.getName() + ".payload.stage";
-    private static final Logger                        logger                  = Logger.getLogger(WebSocketFrameDecoder.class);
-    private static final int                           XOR_SCRATCH_SIZE        = 4096;
-    private final        byte[]                        maskKeyBuf              = new byte[4];
-    private final        byte[]                        headerBuf               = new byte[14]; // 2 base + 8 ext-len + 4 mask-key
-    private final        byte[]                        xorScratch              = new byte[XOR_SCRATCH_SIZE];
-    private final        WebSocketVersion              defaultVersion;
-    private final        boolean                       detectVersion;
-    private final        int                           maxPayloadChunkLength;
-    private              ByteBuf                       accumulator;
-    private              ProtoRcvQueueView<HttpObject> bufferedPayloadViewRef;
-    private              Rfc6455PayloadState           streamingState;
-    private              long                          currentStreamId;
+    private static final String           PAYLOAD_STAGE_QUEUE_KEY = WebSocketFrameDecoder.class.getName() + ".payload.stage";
+    private static final Logger           logger                  = Logger.getLogger(WebSocketFrameDecoder.class);
+    private static final int              XOR_SCRATCH_SIZE        = 4096;
+    private final byte[]                  maskKeyBuf              = new byte[4];
+    private final byte[]                  headerBuf               = new byte[14]; // 2 base + 8 ext-len + 4 mask-key
+    private final byte[]                  xorScratch              = new byte[XOR_SCRATCH_SIZE];
+    private final WebSocketVersion        defaultVersion;
+    private final boolean                 detectVersion;
+    private final int                     maxPayloadChunkLength;
+    private ByteBuf                       accumulator;
+    private ProtoRcvQueueView<HttpObject> bufferedPayloadViewRef;
+    private Rfc6455PayloadState           streamingState;
+    private long                          currentStreamId;
 
     /**
      * Streaming state used when a large RFC 6455 payload is emitted as multiple
@@ -90,9 +90,9 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         /** Total payload length of the original wire frame. */
         private final long            payloadLength;
         /** Remaining bytes still to be emitted. */
-        private       long            remainingPayloadLength;
+        private long                  remainingPayloadLength;
         /** Payload bytes that have already been emitted. */
-        private       long            emittedPayloadLength;
+        private long                  emittedPayloadLength;
 
         private Rfc6455PayloadState(WebSocketOpcode opcode, boolean finalFragment, boolean rsv1, boolean rsv2, boolean rsv3, boolean masked, byte[] maskKey, long payloadLength) {
             this.opcode = opcode;
@@ -186,9 +186,13 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
             WebSocketVersion version = resolveVersion(context);
             try {
                 if (version.isRfc6455Framing()) {
-                    while (decodeRfc6455Frame(context, dst)) { /* loop */ }
+                    while (decodeRfc6455Frame(context, dst)) {
+                        /* loop */
+                    }
                 } else {
-                    while (decodeHixie76Frame(context, dst)) { /* loop */ }
+                    while (decodeHixie76Frame(context, dst)) {
+                        /* loop */
+                    }
                 }
                 this.consumeBufferedPayload(this.accumulator.readBytes());
             } finally {
@@ -260,7 +264,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         for (HttpObject obj : this.bufferedPayloadViewRef.peekMessage(-1)) {
             ByteBuf content = rawContent(obj);
             if (content != null && content.readableBytes() > 0) {
-                composite.addComponent(content);
+                composite.addComponent(content.retain());
             }
         }
 
@@ -603,7 +607,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
             // Length-prefixed binary: read variable-length integer
             int lengthBytes = 0;
             long payloadLen = 0;
-            for (int i = 1; ; i++) {
+            for (int i = 1;; i++) {
                 if (i >= readable) {
                     return false; // need more data for length field
                 }

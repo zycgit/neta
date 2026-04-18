@@ -53,8 +53,8 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpO
     private static final Logger              logger           = Logger.getLogger(WebSocketFrameEncoder.class);
     private static final int                 XOR_SCRATCH_SIZE = 4096;
     private static final ThreadLocal<byte[]> XOR_SCRATCH      = ThreadLocal.withInitial(() -> new byte[XOR_SCRATCH_SIZE]);
-    private final        WebSocketVersion    defaultVersion;
-    private final        boolean             detectVersion;
+    private final WebSocketVersion           defaultVersion;
+    private final boolean                    detectVersion;
 
     /**
      * Create an encoder for the specified WebSocket protocol version.

@@ -33,6 +33,20 @@ public class Http3CodecTest {
     private static final Http3Settings CLIENT_H3_SETTINGS = Http3Settings.defaultLocalSettings(false);
     private static final Http3Settings SERVER_H3_SETTINGS = Http3Settings.defaultLocalSettings(true);
 
+    private static class TrackingHttpRequest extends DefaultHttpRequest {
+        private boolean released;
+
+        private TrackingHttpRequest(HttpVersion version, HttpMethod method, String uri) {
+            super(version, method, uri);
+        }
+
+        @Override
+        public void release() {
+            this.released = true;
+            super.release();
+        }
+    }
+
     // ========================= Mock & Helpers =========================
 
     private static ProtoContext mockContext() {
@@ -363,6 +377,31 @@ public class Http3CodecTest {
 
         assertTrue(secondOutput.size() >= 1);
         assertNotEquals(Http3FrameType.SETTINGS, secondOutput.poll().type());
+    }
+
+    @Test
+    public void testEncoderReleasesStagedRequestAfterBindingStartLine() throws Throwable {
+        Http3HttpToFrameEncoder encoder = new Http3HttpToFrameEncoder(false, CLIENT_H3_SETTINGS);
+        ProtoContext context = mockContext();
+        encoder.onInit(name, poolSize, context);
+
+        TrackingHttpRequest request = new TrackingHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.GET, "/staged");
+        DefaultLastHttpHeaders headers = new DefaultLastHttpHeaders();
+        headers.addHeader("host", "example.com");
+
+        SimpleProtoRcvQueue<HttpObject> input = new SimpleProtoRcvQueue<>();
+        SimpleProtoSndQueue<Http3Frame> output = new SimpleProtoSndQueue<>();
+        input.add(request);
+        input.add(headers);
+        input.add(new DefaultLastHttpContent(ByteBuf.EMPTY));
+
+        encoder.onMessage(context, input, output);
+
+        assertTrue(output.size() >= 3);
+        assertEquals(Http3FrameType.SETTINGS, output.poll().type());
+        assertEquals(Http3FrameType.HEADERS, output.poll().type());
+        assertEquals(Http3FrameType.DATA, output.poll().type());
+        assertTrue(request.released);
     }
 
     // ========================= HTTP Method Tests =========================

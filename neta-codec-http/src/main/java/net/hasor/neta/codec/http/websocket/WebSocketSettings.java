@@ -32,10 +32,10 @@ import net.hasor.neta.codec.http.websocket.extensions.XWebkitDeflateFrameSupport
  * @version : 2026-04-07
  */
 public class WebSocketSettings {
-    private final WebSocketVersion             version;
-    private       WebSocketAutoHandshakeConfig handshakeAutoConfig;
-    private       WebSocketHandshakeAuthorizer handshakeAuthorizer;
-    private final List<WebSocketExtension>     extensionSupports;
+    private final WebSocketVersion         version;
+    private WebSocketAutoHandshakeConfig   handshakeAutoConfig;
+    private WebSocketHandshakeAuthorizer   handshakeAuthorizer;
+    private final List<WebSocketExtension> extensionSupports;
 
     /**
      * Create a settings object with default values.
@@ -49,7 +49,6 @@ public class WebSocketSettings {
     /**
      * Create a settings object.
      * @param version WebSocket version
-     * @return settings object
      */
     public WebSocketSettings(WebSocketVersion version) {
         this.version = Objects.requireNonNull(version, "version is null");

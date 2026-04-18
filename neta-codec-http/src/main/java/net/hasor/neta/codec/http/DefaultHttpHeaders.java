@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -60,13 +60,10 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
         return this;
     }
 
-    public DefaultHttpHeaders addHeaderEntry(DefaultHttpHeaderEntry header) {
-        if (header == null) {
-            return this;
+    public void addHeaderEntry(DefaultHttpHeaderEntry header) {
+        if (header != null) {
+            this.entries.add(header);
         }
-
-        this.entries.add(header.retain());
-        return this;
     }
 
     public DefaultHttpHeaders appendHeaders(HttpHeaders headers) {
@@ -76,18 +73,15 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
 
         if (headers instanceof DefaultHttpHeaders) {
             DefaultHttpHeaders source = (DefaultHttpHeaders) headers;
-            List<DefaultHttpHeaderEntry> snapshot = new ArrayList<>(source.entries);
-            for (DefaultHttpHeaderEntry entry : snapshot) {
-                this.entries.add(entry.retain());
+            this.entries.addAll(source.entries);
+        } else {
+            for (String name : headers.headerNames()) {
+                for (String value : headers.getValues(name)) {
+                    this.entries.add(new DefaultHttpHeaderEntry(name, value));
+                }
             }
-            return this;
         }
 
-        for (String name : headers.headerNames()) {
-            for (String value : headers.getValues(name)) {
-                this.entries.add(new DefaultHttpHeaderEntry(name, value));
-            }
-        }
         return this;
     }
 

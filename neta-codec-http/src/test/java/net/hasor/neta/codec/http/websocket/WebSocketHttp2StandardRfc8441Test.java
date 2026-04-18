@@ -30,7 +30,7 @@ import net.hasor.neta.channel.routing.ProtoRoutingControl;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.h2.*;
-import net.hasor.neta.codec.http.routing.H2CUpgradeServerDuplexe;
+import net.hasor.neta.codec.http.routing.H2CUpgradeServerDuplexer;
 import net.hasor.neta.codec.http.routing.HttpAggregatorRoute;
 import net.hasor.neta.codec.http.routing.HttpRouteKey;
 import org.junit.Test;
@@ -223,12 +223,12 @@ public class WebSocketHttp2StandardRfc8441Test extends AbstractHttpTest {
 
                 routing.branch(HttpRouteKey.BRANCH_H1, b -> b//
                                 .nextDuplex("http-codec", new HttpServerDuplexe())//
-                                .nextDuplex("h1-upgrade", new H2CUpgradeServerDuplexe(routingControl))//
+                                .nextDuplex("h1-upgrade", new H2CUpgradeServerDuplexer(routingControl))//
                                 .nextDecoder("http-request", new HttpRequestAggregator(MAX_CONTENT_LENGTH))//
                                 .nextDecoder("http-handler", httpEchoHandler()))//
                         .branch(HttpRouteKey.BRANCH_H2C, b -> b//
                                 .nextDuplex("http-codec", new HttpServerDuplexe())//
-                                .nextDuplex("h2c-upgrade", new H2CUpgradeServerDuplexe(routingControl)))//
+                                .nextDuplex("h2c-upgrade", new H2CUpgradeServerDuplexer(routingControl)))//
                         .branch(HttpRouteKey.BRANCH_H2, b -> b//
                                 .nextDuplex("h2-frame", new Http2FrameDuplexe(true))//
                                 .nextDuplex("h2-message", new Http2ObjectDuplexe(true, routingControl))//

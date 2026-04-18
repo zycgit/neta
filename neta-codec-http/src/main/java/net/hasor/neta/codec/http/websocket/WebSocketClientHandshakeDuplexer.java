@@ -41,29 +41,29 @@ import net.hasor.neta.codec.http.*;
  * @version : 2026-03-22
  */
 public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake {
-    private static final Logger            logger              = LoggerFactory.getLogger(WebSocketClientHandshakeDuplexer.class);
-    private static final String            STATE_STORE_KEY     = WebSocketClientHandshakeDuplexer.class.getName() + ".stateStore";
-    private static final String            BUFFER_QUEUE_PREFIX = WebSocketClientHandshakeDuplexer.class.getName() + ".pendingRequest.";
-    private final        WebSocketSettings settings;
+    private static final Logger     logger              = LoggerFactory.getLogger(WebSocketClientHandshakeDuplexer.class);
+    private static final String     STATE_STORE_KEY     = WebSocketClientHandshakeDuplexer.class.getName() + ".stateStore";
+    private static final String     BUFFER_QUEUE_PREFIX = WebSocketClientHandshakeDuplexer.class.getName() + ".pendingRequest.";
+    private final WebSocketSettings settings;
 
     private static final class ClientHandshakeState {
-        private final HttpMessageParts              requestParts  = new HttpMessageParts();
-        private final HttpMessageParts              responseParts = new HttpMessageParts();
-        private       ProtoSndQueueView<HttpObject> bufferedRequestViewRef;
-        private       boolean                       requestPending;
-        private       boolean                       ready;
-        private       long                          requestStreamId;
-        private       boolean                       standardHttp2;
-        private       WebSocketVersion              version;
-        private       String                        path;
-        private       String                        host;
-        private       String                        origin;
-        private       String                        protocols;
-        private       String                        extensions;
-        private       String                        key;
-        private       String                        key1;
-        private       String                        key2;
-        private       byte[]                        key3;
+        private final HttpMessageParts        requestParts  = new HttpMessageParts();
+        private final HttpMessageParts        responseParts = new HttpMessageParts();
+        private ProtoSndQueueView<HttpObject> bufferedRequestViewRef;
+        private boolean                       requestPending;
+        private boolean                       ready;
+        private long                          requestStreamId;
+        private boolean                       standardHttp2;
+        private WebSocketVersion              version;
+        private String                        path;
+        private String                        host;
+        private String                        origin;
+        private String                        protocols;
+        private String                        extensions;
+        private String                        key;
+        private String                        key1;
+        private String                        key2;
+        private byte[]                        key3;
     }
 
     private static final class ClientHandshakeStateStore {
@@ -185,6 +185,11 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
 
     private ProtoStatus handleSend(ProtoContext context, ProtoRcvData<HttpObject> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
         while (src.hasMore()) {
+            // Do not take from src until dst can accept one message.
+            if (!dst.hasSlot()) {
+                return ProtoStatus.Stop;
+            }
+
             HttpObject msg = src.takeMessage();
             if (msg == null) {
                 continue;
@@ -319,6 +324,11 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
 
     private ProtoStatus handleReceive(ProtoContext context, ProtoRcvData<HttpObject> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
         while (src.hasMore()) {
+            // Do not take from src until dst can accept one message.
+            if (!dst.hasSlot()) {
+                return ProtoStatus.Stop;
+            }
+
             HttpObject msg = src.takeMessage();
             if (msg == null) {
                 continue;
@@ -357,7 +367,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
                 }
             }
 
-            state.responseParts.appendResponse(msg);
+            state.responseParts.appendOwnedResponse(msg);
             complete = state.responseParts.isComplete();
             if (!complete && this.isHttp2HeaderOnlyHandshakeBoundary(msg, state.responseParts)) {
                 complete = true;

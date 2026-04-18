@@ -74,18 +74,18 @@ import net.hasor.neta.codec.http.HttpProtocolStateException;
  * @version : 2026-02-24
  */
 public class Http2FrameDecoder implements ProtoHandler<ByteBuf, Http2Frame> {
-    private static final Logger  logger             = Logger.getLogger(Http2FrameDecoder.class);
+    private static final Logger logger             = Logger.getLogger(Http2FrameDecoder.class);
     /** HTTP/2 connection preface: {@code "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"}. */
-    private static final byte[]  CONNECTION_PREFACE = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] CONNECTION_PREFACE = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n".getBytes(StandardCharsets.US_ASCII);
     /** Frame header length, fixed at 9 bytes. */
-    private static final int     FRAME_HEADER_SIZE  = 9;
-    private final        int     maxFrameSize;
+    private static final int    FRAME_HEADER_SIZE  = 9;
+    private final int           maxFrameSize;
     /** Reusable frame-header buffer to avoid allocating a new {@code byte[9]} per frame. */
-    private final        byte[]  frameHeaderBuf     = new byte[FRAME_HEADER_SIZE];
+    private final byte[]        frameHeaderBuf     = new byte[FRAME_HEADER_SIZE];
     /** Reusable buffer for preface validation. */
-    private final        byte[]  prefaceCheckBuf    = new byte[24]; // "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
-    private              ByteBuf accumulator;
-    private              boolean prefaceReceived;
+    private final byte[]        prefaceCheckBuf    = new byte[24]; // "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
+    private ByteBuf             accumulator;
+    private boolean             prefaceReceived;
 
     /**
      * Creates a new HTTP/2 frame decoder.

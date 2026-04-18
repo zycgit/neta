@@ -21,7 +21,7 @@ package net.hasor.neta.channel.transport.quic;
  * <pre>
  *   INITIAL  -->  HANDSHAKE  -->  ESTABLISHED
  *      \                           /
- *       +---------> CLOSED <-------+
+ *       +---------> CLOSED &lt;-------+
  * </pre>
  * <p>This enum is a simplified projection of the internal {@link QuicAsyncChannelHandshake} state, used to describe
  * the current key phase of the connection and whether application data can already be sent and received; it does not

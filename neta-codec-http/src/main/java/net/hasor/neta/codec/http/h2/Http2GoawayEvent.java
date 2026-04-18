@@ -47,7 +47,7 @@ import java.util.Arrays;
  *          |                  |                      | queueControlFrame()  |
  *          |                  |                      |--------------------->|
  *          |                  | Http2GoawayEvent     |                      |
- *          |                  |<---------------------|                      |
+ *          |                  |&lt;---------------------|                      |
  * </pre><pre>
  * Local connection-level protocol error
  *   Http2ObjectDecoder        ProtoContext        Application Handler

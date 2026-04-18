@@ -41,14 +41,14 @@ package net.hasor.neta.codec.http.h2;
  * @see Http2Flags
  */
 public class Http2Frame {
-    public static final  long   MAX_STREAM_ID = 0x7FFFFFFFL;
+    public static final long    MAX_STREAM_ID = 0x7FFFFFFFL;
     private static final byte[] EMPTY         = new byte[0];
-    private final        int    type;
-    private final        int    flags;
-    private final        long   streamId;
-    private final        byte[] payload;
-    private final        int    payloadOffset;
-    private final        int    payloadLength;
+    private final int           type;
+    private final int           flags;
+    private final long          streamId;
+    private final byte[]        payload;
+    private final int           payloadOffset;
+    private final int           payloadLength;
 
     /**
      * Creates an HTTP/2 frame with the given type, flags, stream ID, and payload region.

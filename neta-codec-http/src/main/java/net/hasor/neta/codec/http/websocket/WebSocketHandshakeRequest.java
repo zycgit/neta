@@ -26,8 +26,8 @@ import net.hasor.neta.codec.http.HttpHeaders;
  * @version : 2026-03-22
  */
 public class WebSocketHandshakeRequest {
-    private       long               streamId;
-    private       boolean            released;
+    private long                     streamId;
+    private boolean                  released;
     private final WebSocketVersion   version;
     private final String             requestPath;
     private final String             requestedProtocols;

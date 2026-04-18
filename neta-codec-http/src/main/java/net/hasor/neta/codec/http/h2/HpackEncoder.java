@@ -55,8 +55,8 @@ class HpackEncoder {
     private final HpackDynamicTable dynamicTable;
     private final boolean           useIndexing;
     // Reusable encoding buffer that avoids the synchronization cost of ByteArrayOutputStream.
-    private       byte[]            buf = new byte[256];
-    private       int               pos;
+    private byte[] buf = new byte[256];
+    private int    pos;
 
     /**
      * Creates a new HPACK encoder.

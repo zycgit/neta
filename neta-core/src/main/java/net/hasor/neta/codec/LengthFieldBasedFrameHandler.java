@@ -145,6 +145,11 @@ public class LengthFieldBasedFrameHandler implements ProtoHandler<ByteBuf, ByteB
             return ProtoStatus.Next;
         }
 
+        if (src.hasMore() && !dst.hasSlot()) {
+            ByteBufUtils.resetReader(peekAll);
+            return ProtoStatus.Stop;
+        }
+
         // decode
         if (src.hasMore() && dst.hasSlot()) {
             ByteBuf haderBuf = context.byteBufAllocator().buffer(minLength);
@@ -183,7 +188,11 @@ public class LengthFieldBasedFrameHandler implements ProtoHandler<ByteBuf, ByteB
                     ByteBuf byteBuf = context.byteBufAllocator().buffer(len <= 0 ? 1 : len);
 
                     offerDataSize += this.readFrame(i, peekAll, haderBuf, byteBuf, this.initialBytesToStrip, (int) fieldLength);
-                    dst.offerMessage(byteBuf);
+                    if (!ByteBufUtils.offerOwnedBuffer(dst, byteBuf)) {
+                        ByteBufUtils.resetReader(peekAll);
+                        haderBuf.free();
+                        return ProtoStatus.Stop;
+                    }
 
                     this.flashRead(src, offerDataSize, peekAll);
                     haderBuf.free();

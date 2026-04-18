@@ -41,32 +41,32 @@ import net.hasor.neta.codec.http.*;
  * @version : 2026-03-22
  */
 public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake {
-    private static final Logger                       logger          = LoggerFactory.getLogger(WebSocketServerHandshakeDuplexer.class);
-    private static final String                       STATE_STORE_KEY = WebSocketServerHandshakeDuplexer.class.getName() + ".stateStore";
-    private final        WebSocketSettings            settings;
-    private final        WebSocketHandshakeAuthorizer authorizer;
+    private static final Logger                logger          = LoggerFactory.getLogger(WebSocketServerHandshakeDuplexer.class);
+    private static final String                STATE_STORE_KEY = WebSocketServerHandshakeDuplexer.class.getName() + ".stateStore";
+    private final WebSocketSettings            settings;
+    private final WebSocketHandshakeAuthorizer authorizer;
 
     private static final class ServerHandshakeState {
-        private final HttpMessageParts          requestParts = new HttpMessageParts();
-        private       boolean                   ready;
-        private       boolean                   authPending;
-        private       long                      authAttemptId;
-        private       long                      attemptSeq;
-        private       HttpVersion               httpVersion;
-        private       HttpMethod                method;
-        private       long                      streamId;
-        private       boolean                   standardHttp2;
-        private       WebSocketVersion          version;
-        private       String                    path;
-        private       String                    host;
-        private       String                    origin;
-        private       String                    protocols;
-        private       String                    extensions;
-        private       String                    key;
-        private       String                    key1;
-        private       String                    key2;
-        private       byte[]                    key3;
-        private       WebSocketHandshakeRequest handshakeRequest;
+        private final HttpMessageParts    requestParts = new HttpMessageParts();
+        private boolean                   ready;
+        private boolean                   authPending;
+        private long                      authAttemptId;
+        private long                      attemptSeq;
+        private HttpVersion               httpVersion;
+        private HttpMethod                method;
+        private long                      streamId;
+        private boolean                   standardHttp2;
+        private WebSocketVersion          version;
+        private String                    path;
+        private String                    host;
+        private String                    origin;
+        private String                    protocols;
+        private String                    extensions;
+        private String                    key;
+        private String                    key1;
+        private String                    key2;
+        private byte[]                    key3;
+        private WebSocketHandshakeRequest handshakeRequest;
     }
 
     private static final class ServerHandshakeStateStore {
@@ -181,6 +181,11 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
 
     private ProtoStatus handleSend(ProtoContext context, ProtoRcvData<HttpObject> src, ProtoSndQueue<HttpObject> dst) {
         while (src.hasMore()) {
+            // handleSendMessage consumes at most one downstream slot on forwarding paths.
+            if (!dst.hasSlot()) {
+                return ProtoStatus.Stop;
+            }
+
             HttpObject msg = src.takeMessage();
             if (msg == null) {
                 continue;
@@ -221,6 +226,11 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
     // handleReceive
     private ProtoStatus handleReceive(ProtoContext context, ProtoRcvData<HttpObject> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
         while (src.hasMore()) {
+            // Do not take from src until dst can accept one message.
+            if (!dst.hasSlot()) {
+                return ProtoStatus.Stop;
+            }
+
             HttpObject msg = src.takeMessage();
             if (msg == null) {
                 continue;
@@ -272,7 +282,7 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
             }
 
             // collect data.
-            state.requestParts.appendRequest(msg);
+            state.requestParts.appendOwnedRequest(msg);
             complete = state.requestParts.isComplete();
             if (!complete && this.isHttp2HeaderOnlyHandshakeBoundary(msg, state.requestParts)) {
                 complete = true;
@@ -451,11 +461,11 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
     //
     // authorization
     private final class AuthorizationCallback implements WebSocketHandshakeCallback {
-        private final    ProtoContext         context;
-        private final    ServerHandshakeState state;
-        private final    long                 attemptId;
-        private final    AtomicBoolean        completed;
-        private volatile boolean              inAuthorize;
+        private final ProtoContext         context;
+        private final ServerHandshakeState state;
+        private final long                 attemptId;
+        private final AtomicBoolean        completed;
+        private volatile boolean           inAuthorize;
 
         private AuthorizationCallback(ProtoContext context, ServerHandshakeState state, long attemptId) {
             this.context = context;

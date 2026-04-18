@@ -40,11 +40,11 @@ import net.hasor.neta.codec.http.HttpHeaderValues;
  * @version : 2026-02-18
  */
 public class MultipartEncoder {
-    private static final String          CRLF  = "\r\n";
-    private final        String          boundary;
-    private final        Charset         charset;
+    private static final String CRLF = "\r\n";
+    private final String        boundary;
+    private final Charset       charset;
     // Stores all part entries waiting to be encoded.
-    private final        List<PartEntry> parts = new ArrayList<>();
+    private final List<PartEntry> parts = new ArrayList<>();
 
     /** Creates an encoder with a random UUID boundary and the UTF-8 charset. */
     public MultipartEncoder() {

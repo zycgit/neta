@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.codec.http;
 import java.util.List;
+import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import org.junit.Test;
 import static org.junit.Assert.*;
@@ -113,5 +114,57 @@ public class HttpRequestAggregationTest extends AbstractHttpTest {
             assertEquals("4", request.getString(HttpHeaderNames.CONTENT_LENGTH));
             assertEquals("Wiki", text(request.content()));
         });
+    }
+
+    @Test
+    public void testFullHttpRequestConstructorTransfersContentOwnership() {
+        ByteBuf body = ascii("Wiki");
+        DefaultHttpContent content = new DefaultHttpContent(body);
+        DefaultFullHttpRequest request = new DefaultFullHttpRequest(new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/upload"), new HttpHeaders[] { new DefaultHttpHeaders() }, content.transferContent());
+        try {
+            assertEquals(1, body.refCnt());
+
+            content.release();
+
+            assertEquals(1, body.refCnt());
+            assertEquals("Wiki", text(request.content().retain()));
+        } finally {
+            request.release();
+        }
+        assertEquals(0, body.refCnt());
+    }
+
+    @Test
+    public void testFullHttpRequestAppendTransfersContentOwnership() {
+        ByteBuf body = ascii("Wiki");
+        DefaultHttpContent content = new DefaultHttpContent(body);
+        DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/upload");
+        try {
+            request.appendContent(content);
+            assertEquals(1, body.refCnt());
+
+            content.release();
+
+            assertEquals(1, body.refCnt());
+            assertEquals("Wiki", text(request.content().retain()));
+        } finally {
+            request.release();
+        }
+        assertEquals(0, body.refCnt());
+    }
+
+    @Test
+    public void testFullHttpRequestMergesHeaderBlocksInternally() {
+        DefaultHttpHeaders headers = new DefaultHttpHeaders();
+        headers.addHeader("X-Head", "one");
+        DefaultLastHttpHeaders trailers = new DefaultLastHttpHeaders();
+        trailers.addHeader("X-Trail", "two");
+        DefaultFullHttpRequest request = new DefaultFullHttpRequest(new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/merge"), new HttpHeaders[] { headers, trailers }, ByteBuf.EMPTY);
+        try {
+            assertEquals("one", request.getString("X-Head"));
+            assertEquals("two", request.getString("X-Trail"));
+        } finally {
+            request.release();
+        }
     }
 }

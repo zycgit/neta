@@ -42,12 +42,12 @@ class Http2DecoderContent {
     private final HpackDecoder               hpackDecoder;
     private final Http2Settings              localSettings;
     private final Http2Settings              remoteSettings          = new Http2Settings();
-    private       boolean                    prefaceReceived;
-    private       boolean                    pendingSettingsAck;
-    private       long                       openHeaderBlockStreamId = -1;
-    private       int                        openHeaderBlockType     = -1;
-    private       long                       openPromisedStreamId    = -1;
-    private       long                       lastEmittedStreamId     = 0;
+    private boolean                          prefaceReceived;
+    private boolean                          pendingSettingsAck;
+    private long                             openHeaderBlockStreamId = -1;
+    private int                              openHeaderBlockType     = -1;
+    private long                             openPromisedStreamId    = -1;
+    private long                             lastEmittedStreamId     = 0;
 
     /**
      * Creates the decoder-side connection state container.

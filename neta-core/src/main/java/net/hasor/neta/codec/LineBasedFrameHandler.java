@@ -16,12 +16,12 @@
 package net.hasor.neta.codec;
 import java.util.List;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoHandler;
 import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
-
 /**
  * Splits queued {@link ByteBuf} data into frames terminated by {@code '\n'} or {@code "\r\n"}.
  * <p>
@@ -45,6 +45,7 @@ public class LineBasedFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
     /** Maximum length of a frame we're willing to decode, Throws an exception when maxLength is exceeded */
     private final int     maxLength;
     private final boolean stripDelimiter;
+    private ByteBuf       pendingLine;
 
     /**
      * Creates a new decoder/encoder.
@@ -76,16 +77,39 @@ public class LineBasedFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
 
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
+        boolean hasAny = false;
+        if (this.pendingLine != null) {
+            if (!dst.offerMessage(this.pendingLine)) {
+                return ProtoStatus.Stop;
+            }
+            this.pendingLine = null;
+            hasAny = true;
+        }
+
         while (src.hasMore()) {
+            if (!dst.hasSlot()) {
+                return hasAny ? ProtoStatus.Next : ProtoStatus.Stop;
+            }
             List<ByteBuf> peekArray = src.peekMessage(src.queueSize());
             ByteBuf line = this.expectLine(context, src, peekArray);
+
             if (line != null) {
-                dst.offerMessage(line);
+                if (!dst.offerMessage(line)) {
+                    this.pendingLine = line;
+                    return hasAny ? ProtoStatus.Next : ProtoStatus.Stop;
+                }
+                hasAny = true;
             } else {
                 break;
             }
         }
         return ProtoStatus.Next;
+    }
+
+    @Override
+    public void onClose(ProtoContext context) {
+        ByteBufUtils.releaseAll(this.pendingLine);
+        this.pendingLine = null;
     }
 
     private ByteBuf expectLine(ProtoContext ctx, ProtoRcvQueue<ByteBuf> src, List<ByteBuf> peekArray) {
@@ -178,6 +202,7 @@ public class LineBasedFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
                 }
             }
         }
+
         tmpBuf.markWriter();
         return tmpBuf;
     }

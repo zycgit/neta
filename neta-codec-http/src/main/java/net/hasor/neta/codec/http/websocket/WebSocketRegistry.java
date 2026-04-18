@@ -29,7 +29,8 @@ import net.hasor.neta.channel.routing.PartitionKey;
  * @version : 2026-04-08
  */
 public final class WebSocketRegistry {
-    private final Map<WebSocketRegistryKey, WebSocketContext> contexts = new ConcurrentHashMap<>();
+    private static final String                               CLOSE_CLEANUP_BOUND_KEY = WebSocketRegistry.class.getName() + ".closeCleanupBound";
+    private final Map<WebSocketRegistryKey, WebSocketContext> contexts                = new ConcurrentHashMap<>();
 
     private WebSocketRegistry() {
     }
@@ -108,7 +109,10 @@ public final class WebSocketRegistry {
         if (context == null) {
             throw new IllegalArgumentException("context must not be null.");
         }
-        ensure(context).bind(key, wsContext);
+
+        WebSocketRegistry registry = ensure(context);
+        registry.bind(key, wsContext);
+        bindCloseCleanup(context, registry);
     }
 
     /**
@@ -160,6 +164,10 @@ public final class WebSocketRegistry {
             return null;
         }
         return this.contexts.remove(endpointKey);
+    }
+
+    void clear() {
+        this.contexts.clear();
     }
 
     /**
@@ -215,6 +223,26 @@ public final class WebSocketRegistry {
             return null;
         }
         return channel.findProtoContext(WebSocketRegistry.class);
+    }
+
+    private static void bindCloseCleanup(ProtoContext context, WebSocketRegistry registry) {
+        if (context == null || registry == null || context.getChannel() == null) {
+            return;
+        }
+
+        SoChannel<?> channel = context.getChannel();
+        Object bound = channel.getAttribute(CLOSE_CLEANUP_BOUND_KEY);
+        if (Boolean.TRUE.equals(bound)) {
+            return;
+        }
+
+        channel.setAttribute(CLOSE_CLEANUP_BOUND_KEY, true);
+        channel.onClose(ch -> {
+            WebSocketRegistry currentRegistry = WebSocketRegistry.get(ch);
+            if (currentRegistry != null) {
+                currentRegistry.clear();
+            }
+        });
     }
 
     /**

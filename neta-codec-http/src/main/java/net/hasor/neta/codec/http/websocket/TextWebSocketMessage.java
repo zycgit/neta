@@ -28,16 +28,16 @@ import net.hasor.neta.bytebuf.ByteBuf;
 public final class TextWebSocketMessage extends AbstractWebSocketMessage {
     private static final int                              RECYCLE_INDEX   = RecycleObjectPool.registerType();
     private static final ObjHandler<TextWebSocketMessage> RECYCLE_HANDLER = new ObjHandler<TextWebSocketMessage>() {
-        @Override
-        public TextWebSocketMessage create() {
-            return new TextWebSocketMessage();
-        }
+                                                                              @Override
+                                                                              public TextWebSocketMessage create() {
+                                                                                  return new TextWebSocketMessage();
+                                                                              }
 
-        @Override
-        public void free(TextWebSocketMessage tar) {
-            RecycleObjectPool.free(RECYCLE_INDEX, tar);
-        }
-    };
+                                                                              @Override
+                                                                              public void free(TextWebSocketMessage tar) {
+                                                                                  RecycleObjectPool.free(RECYCLE_INDEX, tar);
+                                                                              }
+                                                                          };
 
     private TextWebSocketMessage() {
     }

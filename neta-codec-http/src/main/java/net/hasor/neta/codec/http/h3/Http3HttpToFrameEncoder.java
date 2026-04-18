@@ -88,20 +88,24 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
                 continue;
             }
 
-            if (msg instanceof FullHttpResponse) {
-                encodeFullResponse(context, state, (FullHttpResponse) msg, dst, isPrintLog);
-            } else if (msg instanceof FullHttpRequest) {
-                encodeFullRequest(context, state, (FullHttpRequest) msg, dst, isPrintLog);
-            } else if (msg instanceof HttpResponse) {
-                encodeResponse(context, state, (HttpResponse) msg, dst, isPrintLog);
-            } else if (msg instanceof HttpRequest) {
-                encodeRequest(context, state, (HttpRequest) msg, dst, isPrintLog);
-            } else if (msg instanceof HttpHeaders) {
-                encodeHeaders(context, state, (HttpHeaders) msg, dst, isPrintLog);
-            } else if (msg instanceof LastHttpContent) {
-                encodeLastContent(context, state, (LastHttpContent) msg, dst, isPrintLog);
-            } else if (msg instanceof HttpContent) {
-                encodeContent(context, state, (HttpContent) msg, dst, isPrintLog);
+            try {
+                if (msg instanceof FullHttpResponse) {
+                    encodeFullResponse(context, state, (FullHttpResponse) msg, dst, isPrintLog);
+                } else if (msg instanceof FullHttpRequest) {
+                    encodeFullRequest(context, state, (FullHttpRequest) msg, dst, isPrintLog);
+                } else if (msg instanceof HttpResponse) {
+                    encodeResponse(context, state, (HttpResponse) msg, dst, isPrintLog);
+                } else if (msg instanceof HttpRequest) {
+                    encodeRequest(context, state, (HttpRequest) msg, dst, isPrintLog);
+                } else if (msg instanceof HttpHeaders) {
+                    encodeHeaders(context, state, (HttpHeaders) msg, dst, isPrintLog);
+                } else if (msg instanceof LastHttpContent) {
+                    encodeLastContent(context, state, (LastHttpContent) msg, dst, isPrintLog);
+                } else if (msg instanceof HttpContent) {
+                    encodeContent(context, state, (HttpContent) msg, dst, isPrintLog);
+                }
+            } finally {
+                msg.release();
             }
         }
 
@@ -128,8 +132,7 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
         boolean encodeMaxFieldSectionSize = maxFieldSectionSize < Long.MAX_VALUE;
         boolean encodeConnectProtocol = settings.enableConnectProtocol();
 
-        int totalLen = encodedSettingLength(Http3Settings.SETTINGS_QPACK_MAX_TABLE_CAPACITY, settings.qpackMaxTableCapacity())
-                + encodedSettingLength(Http3Settings.SETTINGS_QPACK_BLOCKED_STREAMS, settings.qpackBlockedStreams());
+        int totalLen = encodedSettingLength(Http3Settings.SETTINGS_QPACK_MAX_TABLE_CAPACITY, settings.qpackMaxTableCapacity()) + encodedSettingLength(Http3Settings.SETTINGS_QPACK_BLOCKED_STREAMS, settings.qpackBlockedStreams());
         if (encodeMaxFieldSectionSize) {
             totalLen += encodedSettingLength(Http3Settings.SETTINGS_MAX_FIELD_SECTION_SIZE, maxFieldSectionSize);
         }

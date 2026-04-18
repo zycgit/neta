@@ -25,7 +25,7 @@ import net.hasor.neta.channel.SoChannel;
  * <p><b>Typical usage:</b>
  * <pre>
  *   SslContext ssl = protoContext.context(SslContext.class);
- *   if (ssl != null && ssl.isReady()) {
+ *   if (ssl != null &amp;&amp; ssl.isReady()) {
  *       String alpn = ssl.getApplicationProtocol();
  *   }
  * </pre>

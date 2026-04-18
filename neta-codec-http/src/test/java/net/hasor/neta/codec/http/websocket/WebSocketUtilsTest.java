@@ -294,6 +294,25 @@ public class WebSocketUtilsTest extends AbstractWebSocketTest {
     }
 
     @Test
+    public void testFrameTransferContentDetachesReleaseResponsibility() {
+        ByteBuf payload = ByteBufAllocator.DEFAULT.buffer(16, Integer.MAX_VALUE);
+        payload.writeString("owned", StandardCharsets.UTF_8);
+        payload.markWriter();
+
+        WebSocketFrame frame = WebSocketUtils.textFrame(true, false, null, payload);
+        ByteBuf transferred = frame.transferContent();
+
+        assertSame(payload, transferred);
+        assertNull(frame.content());
+
+        frame.release();
+        assertFalse(payload.isFree());
+
+        transferred.release();
+        assertTrue(payload.isFree());
+    }
+
+    @Test
     public void testFrameReleaseIsIdempotent() {
         WebSocketFrame frame = WebSocketUtils.textFrame("safe-release");
         frame.release();

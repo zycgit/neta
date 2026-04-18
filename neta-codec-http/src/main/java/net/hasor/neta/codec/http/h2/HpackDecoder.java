@@ -57,9 +57,9 @@ class HpackDecoder {
     private final HpackDynamicTable dynamicTable;
     private final int               maxHeaderListSize;
     // Reusable decoded-result fields to avoid array allocations on the hot path.
-    private       int               decodedPos;
-    private       int               decodedInt;
-    private       String            decodedString;
+    private int    decodedPos;
+    private int    decodedInt;
+    private String decodedString;
 
     /**
      * Creates a new HPACK decoder.

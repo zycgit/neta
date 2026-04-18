@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h2;
-import java.util.*;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoDuplexer;
 import net.hasor.neta.channel.ProtoStatus;
@@ -24,7 +27,6 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.channel.routing.PartitionKey;
 import net.hasor.neta.channel.routing.ProtoPartitionControl;
 import net.hasor.neta.codec.http.HttpObject;
-import net.hasor.neta.codec.http.HttpProtocolStateException;
 import net.hasor.neta.codec.http.LastHttpContent;
 
 /**
@@ -42,9 +44,9 @@ public class Http2ObjectStreamManager implements ProtoDuplexer<HttpObject, HttpO
     private final ProtoPartitionControl       control;
     private final Http2ObjectPartitionPolicy  policy;
     private final Map<Long, StreamCloseState> streamCloseStates;
-    private       boolean                     inboundClosed;
-    private       boolean                     outboundClosed;
-    private       boolean                     partitionClosed;
+    private boolean                           inboundClosed;
+    private boolean                           outboundClosed;
+    private boolean                           partitionClosed;
 
     /**
      * Creates an HTTP/2 stream lifecycle manager.
@@ -152,12 +154,8 @@ public class Http2ObjectStreamManager implements ProtoDuplexer<HttpObject, HttpO
             }
 
             HttpObject message = src.takeMessage();
-            if (message == null) {
-                continue;
-            }
-
-            if (!dst.offerMessage(Collections.singletonList(message))) {
-                throw this.forwardFailure(message);
+            if (message != null) {
+                dst.offerMessage(message);
             }
         }
         return ProtoStatus.Next;
@@ -173,9 +171,8 @@ public class Http2ObjectStreamManager implements ProtoDuplexer<HttpObject, HttpO
             if (message == null) {
                 continue;
             }
-            if (!dst.offerMessage(Collections.singletonList(message))) {
-                throw this.forwardFailure(message);
-            }
+
+            dst.offerMessage(message);
 
             if (this.isTerminalObject(message)) {
                 if (inbound) {
@@ -190,12 +187,6 @@ public class Http2ObjectStreamManager implements ProtoDuplexer<HttpObject, HttpO
 
     private boolean isTerminalObject(HttpObject message) {
         return message instanceof LastHttpContent;
-    }
-
-    private HttpProtocolStateException forwardFailure(HttpObject message) {
-        String msg = "HTTP/2 lifecycle duplexer failed to forward stream message.";
-        long streamId = message != null ? message.streamId() : 0;
-        return streamId > 0 ? new HttpProtocolStateException(streamId, msg) : new HttpProtocolStateException(msg);
     }
 
     private boolean isDefaultPartition(ProtoContext context) {

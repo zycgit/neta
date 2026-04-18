@@ -501,13 +501,13 @@ public class AbstractHttpTest {
     }
 
     private DefaultFullHttpRequest snapshotFullHttpRequest(FullHttpRequest request) {
-        DefaultFullHttpRequest copy = new DefaultFullHttpRequest(request.protocolVersion(), request.method(), request.uri(), retainContent(request.content()), new DefaultHttpHeaders(), new DefaultLastHttpHeaders());
+        DefaultFullHttpRequest copy = new DefaultFullHttpRequest(request.protocolVersion(), request.method(), request.uri(), retainContent(request.content()));
         copy.appendHeaders(request);
         return inheritHttpObjectState(copy, request);
     }
 
     private DefaultFullHttpResponse snapshotFullHttpResponse(FullHttpResponse response) {
-        DefaultFullHttpResponse copy = new DefaultFullHttpResponse(response.protocolVersion(), response.status(), retainContent(response.content()), new DefaultHttpHeaders(), new DefaultLastHttpHeaders());
+        DefaultFullHttpResponse copy = new DefaultFullHttpResponse(response.protocolVersion(), response.status(), retainContent(response.content()));
         copy.appendHeaders(response);
         return inheritHttpObjectState(copy, response);
     }

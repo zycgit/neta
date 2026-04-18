@@ -16,10 +16,13 @@
 package net.hasor.neta.bytebuf;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.List;
 import net.hasor.cobble.SystemUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndData;
+import net.hasor.neta.channel.data.ProtoSndQueue;
 
 /**
  * Central registry for the {@link ByteBufAllocator}s pre-wired in Neta and
@@ -50,15 +53,15 @@ import net.hasor.neta.channel.data.ProtoRcvQueue;
  * @see BufferCleaner
  */
 public class ByteBufUtils {
-    public static final  ByteBufAllocator DEFAULT_ALLOCATOR;
-    public static final  ByteBufAllocator POOLED_HEAP_ALLOCATOR;
-    public static final  ByteBufAllocator POOLED_DIRECT_ALLOCATOR;
-    public static final  ByteBufAllocator UNPOOLED_HEAP_ALLOCATOR;
-    public static final  ByteBufAllocator UNPOOLED_DIRECT_ALLOCATOR;
-    public static final  BufferCleaner    CLEANER;
+    public static final ByteBufAllocator DEFAULT_ALLOCATOR;
+    public static final ByteBufAllocator POOLED_HEAP_ALLOCATOR;
+    public static final ByteBufAllocator POOLED_DIRECT_ALLOCATOR;
+    public static final ByteBufAllocator UNPOOLED_HEAP_ALLOCATOR;
+    public static final ByteBufAllocator UNPOOLED_DIRECT_ALLOCATOR;
+    public static final BufferCleaner    CLEANER;
     /** <p>The system default newline character.</p> */
-    static final         String           NEWLINE = SystemUtils.getSystemProperty("line.separator", "\n");
-    private static final Logger           logger  = Logger.getLogger(ByteBufUtils.class);
+    static final String                  NEWLINE = SystemUtils.getSystemProperty("line.separator", "\n");
+    private static final Logger          logger  = Logger.getLogger(ByteBufUtils.class);
 
     // ensure DEFAULT
     static {
@@ -244,7 +247,9 @@ public class ByteBufUtils {
     /**
      * Create a new {@link CompositeByteBuf} pre-populated with the given buffers.
      * <p>
-     * Each buffer's readable data becomes part of the composite. Buffers are retained.
+        * Each buffer's readable data becomes part of the composite and ownership is transferred
+        * to the returned composite. Callers that still need their own references should retain
+        * before passing buffers here.
      * @param buffers the buffers to combine
      * @return a new CompositeByteBuf containing all buffers
      */
@@ -254,6 +259,117 @@ public class ByteBufUtils {
             composite.addComponents(buffers);
         }
         return composite;
+    }
+
+    /** Returns whether the send container currently has at least {@code requiredSlots} writable slots. */
+    public static boolean hasWritableSlots(ProtoSndData<?> queue, int requiredSlots) {
+        if (requiredSlots <= 0) {
+            return true;
+        }
+        return queue != null && queue.slotSize() >= requiredSlots;
+    }
+
+    /** Counts how many non-null buffers are present in the array. */
+    public static int countBuffers(ByteBuf... buffers) {
+        if (buffers == null || buffers.length == 0) {
+            return 0;
+        }
+
+        int count = 0;
+        for (ByteBuf buffer : buffers) {
+            if (buffer != null) {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    /** Releases every non-null buffer in the array. */
+    public static void releaseAll(ByteBuf... buffers) {
+        if (buffers == null || buffers.length == 0) {
+            return;
+        }
+
+        for (ByteBuf buffer : buffers) {
+            if (buffer != null) {
+                buffer.release();
+            }
+        }
+    }
+
+    /** Releases every non-null buffer in the list. */
+    public static void releaseAll(List<ByteBuf> buffers) {
+        if (buffers == null || buffers.isEmpty()) {
+            return;
+        }
+        for (ByteBuf buffer : buffers) {
+            if (buffer != null) {
+                buffer.release();
+            }
+        }
+    }
+
+    /**
+     * Offers one owned buffer to the destination queue.
+     * <p>If the handoff fails, this method releases the buffer locally because ownership did not
+     * transfer downstream.</p>
+     */
+    public static boolean offerOwnedBuffer(ProtoSndQueue<ByteBuf> dst, ByteBuf buffer) {
+        if (buffer == null) {
+            return true;
+        }
+
+        boolean accepted = false;
+        try {
+            accepted = dst.offerMessage(buffer);
+            return accepted;
+        } finally {
+            if (!accepted) {
+                buffer.release();
+            }
+        }
+    }
+
+    /**
+     * Offers all owned buffers as one atomic batch.
+     * <p>Null buffers are ignored. If the handoff fails, every still-owned buffer is released
+     * locally because ownership did not transfer downstream.</p>
+     */
+    public static boolean offerOwnedBuffers(ProtoSndQueue<ByteBuf> dst, ByteBuf... buffers) {
+        if (buffers == null || buffers.length == 0) {
+            return true;
+        }
+
+        List<ByteBuf> offerList = new ArrayList<>(buffers.length);
+        for (ByteBuf buffer : buffers) {
+            if (buffer != null) {
+                offerList.add(buffer);
+            }
+        }
+
+        return offerOwnedBuffers(dst, offerList);
+    }
+
+    /**
+     * Offers all owned buffers in the list as one atomic batch.
+     * <p>If the handoff fails, every still-owned buffer is released locally because ownership did
+     * not transfer downstream.</p>
+     */
+    public static boolean offerOwnedBuffers(ProtoSndQueue<ByteBuf> dst, List<ByteBuf> buffers) {
+        if (buffers == null || buffers.isEmpty()) {
+            return true;
+        }
+
+        boolean accepted = false;
+        try {
+            accepted = dst.offerMessage(buffers);
+            return accepted;
+        } finally {
+            if (!accepted) {
+                releaseAll(buffers);
+            }
+        }
     }
 
     /** Returns the total readable byte count of all buffers in the list. */

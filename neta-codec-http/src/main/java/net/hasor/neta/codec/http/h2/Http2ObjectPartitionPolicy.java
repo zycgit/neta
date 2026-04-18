@@ -39,7 +39,8 @@ public class Http2ObjectPartitionPolicy implements ProtoPartitionPolicy {
     @Override
     /**
      * Decides whether the current data should create a new partition.
-     */ public ReceivePolicy newPartition(ProtoContext context, ProtoPartitionControl control, PartitionKey key, PartitionDataKind kind, Object data) {
+     */
+    public ReceivePolicy newPartition(ProtoContext context, ProtoPartitionControl control, PartitionKey key, PartitionDataKind kind, Object data) {
         switch (kind) {
             case Event:
                 return this.partitionForEvent(control, key, data);

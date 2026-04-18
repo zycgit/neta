@@ -18,12 +18,12 @@ import java.util.List;
 import net.hasor.cobble.ObjectUtils;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoHandler;
 import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
-
 /**
  * Re-chunks {@link ByteBuf} messages into frames whose size stays within a configured range.
  * <p>
@@ -73,7 +73,10 @@ public class LimitFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
 
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
-        if (src.hasMore() && dst.hasSlot()) {
+        if (src.hasMore() && !dst.hasSlot()) {
+            return ProtoStatus.Stop;
+        }
+        if (src.hasMore()) {
             boolean hasSlot = true;
             List<ByteBuf> peekAll = src.peekMessage(src.queueSize());
             ByteBuf dstBuf = null;
@@ -88,7 +91,12 @@ public class LimitFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
                     copy(buf, dstBuf, this.maxLength);
                     if (dstBuf.writerIndex() == this.maxLength) {
                         dstBuf.markWriter();
-                        dst.offerMessage(dstBuf);
+                        if (!ByteBufUtils.offerOwnedBuffer(dst, dstBuf)) {
+                            hasSlot = false;
+                            dstBuf = null;
+                            break;
+                        }
+
                         offerDataSize += dstBuf.readableBytes();
                         hasSlot = dst.hasSlot();
                         dstBuf = null;
@@ -100,9 +108,10 @@ public class LimitFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
             if (dstBuf != null) {
                 if (dstBuf.writerIndex() >= this.minLength && hasSlot) {
                     dstBuf.markWriter();
-                    dst.offerMessage(dstBuf);
-                    offerDataSize += dstBuf.readableBytes();
-                    dstBuf = null;
+                    if (ByteBufUtils.offerOwnedBuffer(dst, dstBuf)) {
+                        offerDataSize += dstBuf.readableBytes();
+                        dstBuf = null;
+                    }
                 }
                 IOUtils.closeQuietly(dstBuf);
             }

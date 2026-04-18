@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
+import static net.hasor.neta.bytebuf.Bits.*;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.hasor.cobble.ObjectUtils;
-import static net.hasor.neta.bytebuf.Bits.*;
-
 /**
  * Base implementation of {@link ByteBuf} index management.
  * <p>
@@ -33,7 +32,7 @@ import static net.hasor.neta.bytebuf.Bits.*;
  *   |       ancient        |   discardable   |     readable     |  overlayable  | writable |
  *   |&lt;----- already dropped by markReader() ----&gt;|&lt;-- visible --&gt;|&lt;-- rewritable --&gt;|
  * invariants
- *   0 <= markedReaderIndex <= readerIndex <= markedWriterIndex <= writerIndex <= capacity
+ *   0 &lt;= markedReaderIndex &lt;= readerIndex &lt;= markedWriterIndex &lt;= writerIndex &lt;= capacity
  * </pre>
  * Concrete subclasses differ only in how a logical offset is mapped to their
  * physical storage.
@@ -41,17 +40,17 @@ import static net.hasor.neta.bytebuf.Bits.*;
  * @version : 2022-11-01
  */
 public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
-    private final AtomicInteger                     refCnt    = new AtomicInteger(1);
-    protected     ByteBufAllocator                  alloc;
-    protected     int                               markedReaderIndex;
-    protected     int                               markedWriterIndex;
-    protected     int                               readerIndex;
-    protected     int                               writerIndex;
-    protected     ByteOrder                         byteOrder = ByteOrder.BIG_ENDIAN;
-    protected     boolean                           bigEndian = true;
-    protected     boolean                           freed     = false;
-    private       int                               maxCapacity;
-    private       ResourceLeakDetector.ResourceLeak leak;
+    private final AtomicInteger               refCnt    = new AtomicInteger(1);
+    protected ByteBufAllocator                alloc;
+    protected int                             markedReaderIndex;
+    protected int                             markedWriterIndex;
+    protected int                             readerIndex;
+    protected int                             writerIndex;
+    protected ByteOrder                       byteOrder = ByteOrder.BIG_ENDIAN;
+    protected boolean                         bigEndian = true;
+    protected boolean                         freed     = false;
+    private int                               maxCapacity;
+    private ResourceLeakDetector.ResourceLeak leak;
 
     protected void initByteBuf(ByteBufAllocator alloc, int maxCapacity) {
         this.alloc = alloc;
@@ -102,7 +101,7 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
         if (increment <= 0) {
             throw new IllegalArgumentException("increment: " + increment + " (expected: > 0)");
         }
-        for (; ; ) {
+        for (;;) {
             int refCnt = this.refCnt.get();
             if (refCnt == 0) {
                 throw new IllegalStateException("has been released.");
@@ -127,7 +126,7 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
         if (decrement <= 0) {
             throw new IllegalArgumentException("decrement: " + decrement + " (expected: > 0)");
         }
-        for (; ; ) {
+        for (;;) {
             int refCnt = this.refCnt.get();
             if (refCnt < decrement) {
                 throw new IllegalStateException("refCnt: " + refCnt + " (expected: >= " + decrement + ")");

@@ -26,7 +26,7 @@ import java.util.Objects;
  */
 public final class WebSocketRegistryKey {
     private static final WebSocketRegistryKey CONNECTION_SCOPE = new WebSocketRegistryKey(null);
-    private final        Long                 streamId;
+    private final Long                        streamId;
 
     private WebSocketRegistryKey(Long streamId) {
         this.streamId = streamId;

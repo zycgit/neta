@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -72,8 +72,7 @@ public class HttpResponseAggregator extends AbstractHttpAggregator<HttpResponse>
         boolean success = false;
         try {
             int contentLength = 0;
-            for (int index = 0; index < parts.size(); index++) {
-                HttpObject part = parts.get(index);
+            for (HttpObject part : parts) {
                 if (part instanceof HttpHeaders) {
                     fullResp.appendHeaders((HttpHeaders) part);
                     if (part instanceof LastHttpHeaders && !this.isHeadersClosedHandled()) {
@@ -85,6 +84,7 @@ public class HttpResponseAggregator extends AbstractHttpAggregator<HttpResponse>
                         }
                     }
                 }
+
                 ByteBuf content = this.contentOf(part);
                 if (content != null) {
                     int readable = content.readableBytes();
@@ -98,13 +98,14 @@ public class HttpResponseAggregator extends AbstractHttpAggregator<HttpResponse>
                     }
                     contentLength = newLength;
                     if (readable > 0) {
-                        this.appendContent(fullResp, part, content);
+                        this.appendContent(fullResp, part);
                     }
                 }
             }
 
             this.completeFullResponse(response, fullResp, contentLength);
             dst.offerMessage(fullResp);
+
             this.logAggregatedResponse(context, response, contentLength);
             success = true;
         } finally {
@@ -128,19 +129,21 @@ public class HttpResponseAggregator extends AbstractHttpAggregator<HttpResponse>
     private ByteBuf contentOf(HttpObject part) {
         if (part instanceof HttpContent) {
             return ((HttpContent) part).content();
-        }
-        if (part instanceof HttpByteBuf) {
+        } else if (part instanceof HttpByteBuf) {
             return ((HttpByteBuf) part).content();
+        } else {
+            return null;
         }
-        return null;
     }
 
-    private void appendContent(DefaultFullHttpResponse fullResp, HttpObject part, ByteBuf content) {
+    private void appendContent(DefaultFullHttpResponse fullResp, HttpObject part) {
         if (part instanceof HttpContent) {
-            fullResp.appendContent((HttpContent) part);
-            return;
+            fullResp.appendContent(((HttpContent) part).transferContent());
+        } else if (part instanceof HttpByteBuf) {
+            fullResp.appendContent(((HttpByteBuf) part).transferContent());
+        } else {
+            throw new IllegalStateException("unexpected content-bearing response part: " + part.getClass().getName());
         }
-        fullResp.appendContent(new DefaultHttpContent(content));
     }
 
     /**
@@ -160,6 +163,7 @@ public class HttpResponseAggregator extends AbstractHttpAggregator<HttpResponse>
         if (!success) {
             fullResp.release();
         }
+
         for (HttpObject part : parts) {
             if (part != null) {
                 part.release();

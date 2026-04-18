@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,6 +18,8 @@ import java.util.List;
 import java.util.concurrent.Future;
 import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufUtils;
+import net.hasor.neta.bytebuf.CompositeByteBuf;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
@@ -69,48 +71,54 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
         }
 
         HttpRequest request = (HttpRequest) parts.get(0);
-        DefaultFullHttpRequest fullReq = new DefaultFullHttpRequest(request.protocolVersion(), request.method(), request.uri(), ByteBuf.EMPTY);
+        DefaultHttpHeaders mergedHeaders = new DefaultLastHttpHeaders();
+        mergedHeaders.streamId(request.streamId());
+        CompositeByteBuf aggregatedContent = null;
+        DefaultFullHttpRequest fullReq = null;
         boolean handled = false;
         boolean success = false;
         try {
             int contentLength = 0;
-            for (int index = 0; index < parts.size(); index++) {
-                HttpObject part = parts.get(index);
+            for (HttpObject part : parts) {
                 if (part instanceof HttpHeaders) {
-                    fullReq.appendHeaders((HttpHeaders) part);
+                    mergedHeaders.appendHeaders((HttpHeaders) part);
                     if (part instanceof LastHttpHeaders && !this.isHeadersClosedHandled()) {
-                        long declaredLength = fullReq.getLong(HttpHeaderNames.CONTENT_LENGTH, -1);
-                        this.onHeadersClosed(context, request, fullReq, declaredLength);
-                        if (fullReq.isBad() || this.isDiscardMode()) {
+                        long declaredLength = mergedHeaders.getLong(HttpHeaderNames.CONTENT_LENGTH, -1);
+                        this.onHeadersClosed(context, request, mergedHeaders, declaredLength);
+                        if (mergedHeaders.isBad() || this.isDiscardMode()) {
                             handled = true;
                             return;
                         }
                     }
                 }
+
                 ByteBuf content = this.contentOf(part);
                 if (content != null) {
                     int readable = content.readableBytes();
                     int newLength = contentLength + readable;
                     if (newLength > this.maxContentLength()) {
-                        if (this.onContentTooLarge(context, request, fullReq, newLength) && this.isDiscardMode()) {
+                        if (this.onContentTooLarge(context, request, mergedHeaders, newLength) && this.isDiscardMode()) {
                             handled = true;
                             return;
                         }
                         throw new HttpContentTooLargeException("content length exceeds maximum: " + newLength + " > " + this.maxContentLength(), this.maxContentLength(), newLength);
                     }
+
                     contentLength = newLength;
                     if (readable > 0) {
-                        this.appendContent(fullReq, part, content);
+                        aggregatedContent = this.appendContent(aggregatedContent, part, content);
                     }
                 }
             }
 
+            fullReq = new DefaultFullHttpRequest(new DefaultHttpRequest(request.protocolVersion(), request.method(), request.uri()), new HttpHeaders[] { mergedHeaders }, aggregatedContent == null ? ByteBuf.EMPTY : aggregatedContent);
             this.completeFullRequest(request, fullReq, contentLength);
             dst.offerMessage(fullReq);
+
             this.logAggregatedRequest(context, request, contentLength);
             success = true;
         } finally {
-            this.releaseAggregatedRequest(parts, fullReq, success);
+            this.releaseAggregatedRequest(parts, fullReq, aggregatedContent, success);
             this.finishAggregation(src, success, handled);
         }
     }
@@ -156,12 +164,21 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
         return null;
     }
 
-    private void appendContent(DefaultFullHttpRequest fullReq, HttpObject part, ByteBuf content) {
-        if (part instanceof HttpContent) {
-            fullReq.appendContent((HttpContent) part);
-            return;
+    private CompositeByteBuf appendContent(CompositeByteBuf aggregatedContent, HttpObject part, ByteBuf content) {
+        if (aggregatedContent == null) {
+            aggregatedContent = ByteBufUtils.compositeBuffer();
         }
-        fullReq.appendContent(new DefaultHttpContent(content));
+
+        if (part instanceof HttpContent) {
+            aggregatedContent.addComponent(((HttpContent) part).transferContent());
+            return aggregatedContent;
+        }
+        if (part instanceof DefaultHttpByteBuf) {
+            aggregatedContent.addComponent(((DefaultHttpByteBuf) part).transferContent());
+            return aggregatedContent;
+        }
+        aggregatedContent.addComponent(content.retain());
+        return aggregatedContent;
     }
 
     /**
@@ -177,9 +194,12 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
     /**
      * Releases the staged request parts and, on failure, also releases the not-yet-emitted full request.
      */
-    private void releaseAggregatedRequest(List<HttpObject> parts, DefaultFullHttpRequest fullReq, boolean success) {
-        if (!success) {
+    private void releaseAggregatedRequest(List<HttpObject> parts, DefaultFullHttpRequest fullReq, CompositeByteBuf aggregatedContent, boolean success) {
+        if (!success && fullReq != null) {
             fullReq.release();
+        }
+        if (!success && fullReq == null && aggregatedContent != null) {
+            aggregatedContent.release();
         }
         for (HttpObject part : parts) {
             if (part != null) {

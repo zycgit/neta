@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,14 +15,13 @@
  */
 package net.hasor.neta.codec.http;
 import net.hasor.cobble.StringUtils;
-import net.hasor.cobble.function.Release;
 
 /**
  * Default implementation of a single HTTP header entry.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-10
  */
-public class DefaultHttpHeaderEntry implements Release {
+public class DefaultHttpHeaderEntry {
     private final String name;
     private final String value;
 
@@ -57,18 +56,5 @@ public class DefaultHttpHeaderEntry implements Release {
      */
     public String getValue() {
         return this.value;
-    }
-
-    /**
-     * Retain this header entry and return itself.
-     * @return current header entry
-     */
-    public DefaultHttpHeaderEntry retain() {
-        return this;
-    }
-
-    @Override
-    public void release() {
-        // HTTP header entries only hold immutable strings, so release is intentionally a no-op.
     }
 }

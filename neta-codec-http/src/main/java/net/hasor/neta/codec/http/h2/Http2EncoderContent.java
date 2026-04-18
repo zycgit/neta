@@ -17,7 +17,7 @@ package net.hasor.neta.codec.http.h2;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import net.hasor.neta.codec.http.HttpObject;
+import net.hasor.neta.codec.http.HttpMethod;
 import net.hasor.neta.codec.http.HttpRequest;
 import net.hasor.neta.codec.http.HttpResponse;
 
@@ -40,10 +40,14 @@ class Http2EncoderContent {
     private final Http2Settings localSettings;
     private final AtomicInteger nextStreamId;
     private final Set<Long>     pendingUpgradeStreams;
-    private       boolean       prefaceSent;
-    private       long          currentStreamId = 0;
-    private       HttpObject    pendingStartLine;
-    private       boolean       trailingHeadersSent;
+    private boolean             prefaceSent;
+    private long                currentStreamId = 0;
+    private boolean             pendingRequest;
+    private String              pendingMethod;
+    private String              pendingPath;
+    private boolean             pendingResponse;
+    private int                 pendingStatus;
+    private boolean             trailingHeadersSent;
 
     /**
      * Creates the encoder-side connection state container.
@@ -93,41 +97,64 @@ class Http2EncoderContent {
     /**
      * Returns the currently buffered request start-line object that has not yet entered header encoding.
      */
-    public HttpObject pendingStartLine() {
-        return this.pendingStartLine;
+    public boolean hasPendingStartLine() {
+        return this.pendingRequest || this.pendingResponse;
     }
 
     /**
      * Stores the request/response start-line object that is about to be encoded.
      */
-    public void pendingStartLine(HttpObject pendingStartLine) {
-        if (pendingStartLine != null && !(pendingStartLine instanceof HttpRequest) && !(pendingStartLine instanceof HttpResponse)) {
-            throw new IllegalArgumentException("pendingStartLine must be HttpRequest or HttpResponse");
+    public void pendingRequest(HttpRequest pendingStartLine) {
+        if (pendingStartLine == null) {
+            throw new IllegalArgumentException("pendingStartLine must not be null");
         }
-        this.pendingStartLine = pendingStartLine;
+        this.pendingRequest = true;
+        this.pendingMethod = pendingStartLine.method() != null ? pendingStartLine.method().name() : HttpMethod.GET.name();
+        this.pendingPath = pendingStartLine.uri();
+        this.pendingResponse = false;
+        this.pendingStatus = 0;
+    }
+
+    public void pendingResponse(HttpResponse pendingStartLine) {
+        if (pendingStartLine == null) {
+            throw new IllegalArgumentException("pendingStartLine must not be null");
+        }
+        this.pendingRequest = false;
+        this.pendingMethod = null;
+        this.pendingPath = null;
+        this.pendingResponse = true;
+        this.pendingStatus = pendingStartLine.status() != null ? pendingStartLine.status().code() : 200;
     }
 
     public boolean pendingStartLineIsRequest() {
-        return this.pendingStartLine instanceof HttpRequest;
+        return this.pendingRequest;
     }
 
     public boolean pendingStartLineIsResponse() {
-        return this.pendingStartLine instanceof HttpResponse;
+        return this.pendingResponse;
     }
 
-    public HttpRequest pendingRequest() {
-        return this.pendingStartLineIsRequest() ? (HttpRequest) this.pendingStartLine : null;
+    public String pendingMethod() {
+        return this.pendingMethod;
     }
 
-    public HttpResponse pendingResponse() {
-        return this.pendingStartLineIsResponse() ? (HttpResponse) this.pendingStartLine : null;
+    public String pendingPath() {
+        return this.pendingPath;
+    }
+
+    public int pendingStatus() {
+        return this.pendingStatus;
     }
 
     /**
      * Clears the currently buffered request/response start-line binding.
      */
     public void clearPendingStartLine() {
-        this.pendingStartLine = null;
+        this.pendingRequest = false;
+        this.pendingMethod = null;
+        this.pendingPath = null;
+        this.pendingResponse = false;
+        this.pendingStatus = 0;
     }
 
     /**

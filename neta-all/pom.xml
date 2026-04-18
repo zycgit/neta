@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>net.hasor</groupId>
@@ -98,6 +99,7 @@
                     <failOnError>false</failOnError>
                     <failOnWarnings>false</failOnWarnings>
                     <doclint>none</doclint>
+                    <detectJavaApiLink>false</detectJavaApiLink>
                     <!-- <excludePackageNames>net.hasor.cobble.setting.provider.yaml.lib.*,net.hasor.cobble.dynamic.asm.*</excludePackageNames>-->
                     <encoding>UTF-8</encoding>
                     <docencoding>UTF-8</docencoding>
@@ -113,6 +115,11 @@
                             <groupId>org.bouncycastle</groupId>
                             <artifactId>bcprov-jdk15on</artifactId>
                             <version>1.70</version>
+                        </dependency>
+                        <dependency>
+                            <groupId>com.jcraft</groupId>
+                            <artifactId>jzlib</artifactId>
+                            <version>1.1.3</version>
                         </dependency>
                     </additionalDependencies>
                 </configuration>

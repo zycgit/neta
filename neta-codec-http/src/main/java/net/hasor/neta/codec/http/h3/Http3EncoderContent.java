@@ -29,16 +29,16 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 class Http3EncoderContent {
     private final Http3Settings localSettings;
-    private final QpackEncoder qpackEncoder;
-    private final AtomicLong   nextStreamId;
-    private long               currentStreamId;
-    private boolean            settingsSent;
-    private boolean            pendingRequest;
-    private String             pendingMethod;
-    private String             pendingPath;
-    private String             pendingScheme;
-    private boolean            pendingResponse;
-    private int                pendingStatus;
+    private final QpackEncoder  qpackEncoder;
+    private final AtomicLong    nextStreamId;
+    private long                currentStreamId;
+    private boolean             settingsSent;
+    private boolean             pendingRequest;
+    private String              pendingMethod;
+    private String              pendingPath;
+    private String              pendingScheme;
+    private boolean             pendingResponse;
+    private int                 pendingStatus;
 
     Http3EncoderContent(boolean serverMode, Http3Settings localSettings) {
         this.localSettings = localSettings != null ? new Http3Settings(localSettings) : Http3Settings.defaultLocalSettings(serverMode);

@@ -33,8 +33,6 @@ public class CompositeByteBufExtendedTest {
             assert value == 0x123456 : "expected 0x123456, got " + Integer.toHexString(value);
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
         }
     }
 
@@ -51,8 +49,6 @@ public class CompositeByteBufExtendedTest {
             assert value == 0x123456 : "expected 0x123456, got " + Integer.toHexString(value);
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
         }
     }
 
@@ -71,9 +67,6 @@ public class CompositeByteBufExtendedTest {
             assert value == 0x0A0B0C : "expected 0x0A0B0C, got " + Integer.toHexString(value);
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
-            buf3.free();
         }
     }
 
@@ -93,8 +86,6 @@ public class CompositeByteBufExtendedTest {
             assert value == 0xFFFFFF : "readUInt24 0xFFFFFF should be 16777215, got " + value;
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
         }
     }
 
@@ -114,8 +105,6 @@ public class CompositeByteBufExtendedTest {
             assert value == 4294967295L : "readUInt32 0xFFFFFFFF should be 4294967295, got " + value;
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
         }
     }
 
@@ -137,9 +126,6 @@ public class CompositeByteBufExtendedTest {
             assert value == 0x0102030405060708L : "getInt64 spanning 3 components";
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
-            buf3.free();
         }
     }
 
@@ -166,8 +152,6 @@ public class CompositeByteBufExtendedTest {
             assert value == 1.5f : "getFloat32 spanning: expected 1.5, got " + value;
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
         }
     }
 
@@ -193,8 +177,6 @@ public class CompositeByteBufExtendedTest {
             assert Math.abs(value - 99.99) < 0.001 : "getFloat64 spanning: expected ~99.99, got " + value;
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
         }
     }
 
@@ -214,8 +196,6 @@ public class CompositeByteBufExtendedTest {
             assert composite.getUInt8(1) == 255 : "getUInt8 at component 1";
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
         }
     }
 
@@ -232,8 +212,6 @@ public class CompositeByteBufExtendedTest {
             assert value == 32768 : "getUInt16 spanning: expected 32768, got " + value;
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
         }
     }
 
@@ -250,8 +228,6 @@ public class CompositeByteBufExtendedTest {
             assert value == 16711681 : "getUInt24 spanning: expected 16711681, got " + value;
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
         }
     }
 
@@ -280,9 +256,6 @@ public class CompositeByteBufExtendedTest {
             assert line3 == null : "no more lines expected";
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
-            buf3.free();
         }
     }
 
@@ -303,8 +276,6 @@ public class CompositeByteBufExtendedTest {
             assert "World".equals(line2) : "second line: " + line2;
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
         }
     }
 
@@ -339,10 +310,6 @@ public class CompositeByteBufExtendedTest {
             }
         } finally {
             composite.free();
-            for (ByteBuf b : bufs) {
-                if (b != null)
-                    b.free();
-            }
         }
     }
 
@@ -363,10 +330,6 @@ public class CompositeByteBufExtendedTest {
             }
         } finally {
             composite.free();
-            for (ByteBuf b : bufs) {
-                if (b != null)
-                    b.free();
-            }
         }
     }
 
@@ -396,9 +359,6 @@ public class CompositeByteBufExtendedTest {
             assert composite.getByte(2) == 60 : "getByte(2) after 3 reads: expected 60";
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
-            buf3.free();
         }
     }
 
@@ -432,9 +392,6 @@ public class CompositeByteBufExtendedTest {
             assert composite.readByte() == 6;
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
-            buf3.free();
         }
     }
 
@@ -455,8 +412,6 @@ public class CompositeByteBufExtendedTest {
             assert pos >= 0 : "expect should find 'HELLO' spanning 2 components, got " + pos;
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
         }
     }
 
@@ -470,7 +425,6 @@ public class CompositeByteBufExtendedTest {
             assert pos < 0 : "expect should return negative for non-matching, got " + pos;
         } finally {
             composite.free();
-            buf.free();
         }
     }
 
@@ -491,8 +445,6 @@ public class CompositeByteBufExtendedTest {
             assert value == -32768 : "getInt16 spanning signed: expected -32768, got " + value;
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
         }
     }
 
@@ -514,8 +466,6 @@ public class CompositeByteBufExtendedTest {
             assert value2 == 0x345678 : "getInt24 at 1: expected 0x345678";
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
         }
     }
 
@@ -537,9 +487,6 @@ public class CompositeByteBufExtendedTest {
             assert value == 0x01020304 : "getInt32 spanning 3 components";
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
-            buf3.free();
         }
     }
 }

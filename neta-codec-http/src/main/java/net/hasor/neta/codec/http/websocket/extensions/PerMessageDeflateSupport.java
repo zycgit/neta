@@ -36,11 +36,11 @@ import net.hasor.neta.codec.http.websocket.*;
  * @version : 2026-04-07
  */
 public class PerMessageDeflateSupport implements WebSocketExtension {
-    public static final  String                   EXTENSION_NAME             = "permessage-deflate";
-    public static final  String                   CLIENT_NO_CONTEXT_TAKEOVER = "client_no_context_takeover";
-    public static final  String                   SERVER_NO_CONTEXT_TAKEOVER = "server_no_context_takeover";
-    public static final  String                   CLIENT_MAX_WINDOW_BITS     = "client_max_window_bits";
-    public static final  String                   SERVER_MAX_WINDOW_BITS     = "server_max_window_bits";
+    public static final String                    EXTENSION_NAME             = "permessage-deflate";
+    public static final String                    CLIENT_NO_CONTEXT_TAKEOVER = "client_no_context_takeover";
+    public static final String                    SERVER_NO_CONTEXT_TAKEOVER = "server_no_context_takeover";
+    public static final String                    CLIENT_MAX_WINDOW_BITS     = "client_max_window_bits";
+    public static final String                    SERVER_MAX_WINDOW_BITS     = "server_max_window_bits";
     private static final int                      DEFAULT_WINDOW_BITS        = 15;
     private static final PerMessageDeflateSupport INSTANCE                   = new PerMessageDeflateSupport();
     private static final byte[]                   DEFLATE_TAIL               = new byte[] { 0x00, 0x00, (byte) 0xFF, (byte) 0xFF };
@@ -314,10 +314,10 @@ public class PerMessageDeflateSupport implements WebSocketExtension {
 
     private static final class PerMessageDeflateRuntimeExtension implements WebSocketExtensionRuntime {
         private final WebSocketExtensionResult negotiatedExtension;
-        private       Inflater                 inboundInflater;
-        private       boolean                  inboundActive;
-        private       Deflater                 outboundDeflater;
-        private       boolean                  outboundActive;
+        private Inflater                       inboundInflater;
+        private boolean                        inboundActive;
+        private Deflater                       outboundDeflater;
+        private boolean                        outboundActive;
 
         private PerMessageDeflateRuntimeExtension(WebSocketExtensionResult negotiatedExtension) {
             this.negotiatedExtension = negotiatedExtension;

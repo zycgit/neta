@@ -26,6 +26,17 @@ import org.junit.Test;
  */
 public class CompositeByteBufTest {
 
+    private static void freeIfOwned(ByteBuf... bufs) {
+        if (bufs == null) {
+            return;
+        }
+        for (ByteBuf buf : bufs) {
+            if (buf != null && buf.refCnt() > 0) {
+                buf.free();
+            }
+        }
+    }
+
     // ========== Factory Tests ==========
 
     @Test
@@ -63,8 +74,6 @@ public class CompositeByteBufTest {
             assert composite.readableBytes() == 6;
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
         }
     }
 
@@ -81,7 +90,7 @@ public class CompositeByteBufTest {
             assert composite.capacity() == 3;
         } finally {
             composite.free();
-            buf.free();
+            freeIfOwned(buf);
         }
     }
 
@@ -99,9 +108,9 @@ public class CompositeByteBufTest {
             assert composite.readableBytes() == 6;
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
-            buf3.free();
+            freeIfOwned(buf1);
+            freeIfOwned(buf2);
+            freeIfOwned(buf3);
         }
     }
 
@@ -128,17 +137,35 @@ public class CompositeByteBufTest {
     }
 
     @Test
-    public void test_addComponent_retains_buf() {
+    public void test_addComponent_transfers_ownership() {
         CompositeByteBuf composite = ByteBufUtils.compositeBuffer();
         ByteBuf buf = ByteBuf.wrap(new byte[] { 1, 2, 3 });
         int refCntBefore = buf.refCnt();
+        boolean transferred = false;
         try {
             composite.addComponent(buf);
-            assert buf.refCnt() == refCntBefore + 1 : "addComponent should retain the buffer";
+            transferred = true;
+            assert buf.refCnt() == refCntBefore : "addComponent should not retain the buffer";
         } finally {
             composite.free();
-            buf.free();
+            if (!transferred) {
+                freeIfOwned(buf);
+            }
         }
+        assert buf.refCnt() == 0 : "component should be released by the composite";
+    }
+
+    @Test
+    public void test_addComponent_accepts_empty_and_releases_it() {
+        CompositeByteBuf composite = ByteBufUtils.compositeBuffer();
+        ByteBuf buf = ByteBuf.wrap(new byte[0]);
+        try {
+            composite.addComponent(buf);
+            assert composite.numComponents() == 0;
+        } finally {
+            composite.free();
+        }
+        assert buf.refCnt() == 0 : "empty component ownership should still be consumed";
     }
 
     @Test
@@ -152,8 +179,8 @@ public class CompositeByteBufTest {
             assert composite.numComponents() == 2;
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
+            freeIfOwned(buf1);
+            freeIfOwned(buf2);
         }
     }
 
@@ -169,9 +196,9 @@ public class CompositeByteBufTest {
             assert composite.readableBytes() == 3;
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
-            buf3.free();
+            freeIfOwned(buf1);
+            freeIfOwned(buf2);
+            freeIfOwned(buf3);
         }
     }
 
@@ -189,7 +216,7 @@ public class CompositeByteBufTest {
             assert composite.readableBytes() == 0;
         } finally {
             composite.free();
-            buf.free();
+            freeIfOwned(buf);
         }
     }
 
@@ -208,8 +235,8 @@ public class CompositeByteBufTest {
             assert composite.readByte() == 4;
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
+            freeIfOwned(buf1);
+            freeIfOwned(buf2);
         }
     }
 
@@ -224,7 +251,7 @@ public class CompositeByteBufTest {
             assert Arrays.equals(dst, new byte[] { 1, 2, 3 });
         } finally {
             composite.free();
-            buf.free();
+            freeIfOwned(buf);
         }
     }
 
@@ -242,8 +269,8 @@ public class CompositeByteBufTest {
             assert Arrays.equals(dst, new byte[] { 1, 2, 3, 4 });
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
+            freeIfOwned(buf1);
+            freeIfOwned(buf2);
         }
     }
 
@@ -263,9 +290,9 @@ public class CompositeByteBufTest {
             assert Arrays.equals(dst, new byte[] { 1, 2, 3 });
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
-            buf3.free();
+            freeIfOwned(buf1);
+            freeIfOwned(buf2);
+            freeIfOwned(buf3);
         }
     }
 
@@ -282,8 +309,8 @@ public class CompositeByteBufTest {
             assert value == 0x0102 : "expected 0x0102, got " + value;
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
+            freeIfOwned(buf1);
+            freeIfOwned(buf2);
         }
     }
 
@@ -300,8 +327,8 @@ public class CompositeByteBufTest {
             assert value == 256 : "expected 256, got " + value;
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
+            freeIfOwned(buf1);
+            freeIfOwned(buf2);
         }
     }
 
@@ -318,8 +345,8 @@ public class CompositeByteBufTest {
             assert value == 1L : "expected 1, got " + value;
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
+            freeIfOwned(buf1);
+            freeIfOwned(buf2);
         }
     }
 
@@ -338,7 +365,7 @@ public class CompositeByteBufTest {
             assert composite.readableBytes() == 3;
         } finally {
             composite.free();
-            buf.free();
+            freeIfOwned(buf);
         }
     }
 
@@ -357,8 +384,8 @@ public class CompositeByteBufTest {
             assert composite.getByte(3) == 'D';
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
+            freeIfOwned(buf1);
+            freeIfOwned(buf2);
         }
     }
 
@@ -376,8 +403,8 @@ public class CompositeByteBufTest {
             assert Arrays.equals(dst, new byte[] { 2, 3, 4, 5 });
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
+            freeIfOwned(buf1);
+            freeIfOwned(buf2);
         }
     }
 
@@ -395,8 +422,8 @@ public class CompositeByteBufTest {
             assert value == 0x01020304 : "expected 0x01020304, got " + Integer.toHexString(value);
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
+            freeIfOwned(buf1);
+            freeIfOwned(buf2);
         }
     }
 
@@ -421,8 +448,8 @@ public class CompositeByteBufTest {
             assert dst.get() == 4;
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
+            freeIfOwned(buf1);
+            freeIfOwned(buf2);
         }
     }
 
@@ -449,8 +476,8 @@ public class CompositeByteBufTest {
             }
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
+            freeIfOwned(buf1);
+            freeIfOwned(buf2);
         }
     }
 
@@ -469,8 +496,8 @@ public class CompositeByteBufTest {
             assert "Hello!".equals(str) : "expected 'Hello!', got '" + str + "'";
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
+            freeIfOwned(buf1);
+            freeIfOwned(buf2);
         }
     }
 
@@ -488,8 +515,8 @@ public class CompositeByteBufTest {
             assert "Hello".equals(line) : "expected 'Hello', got '" + line + "'";
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
+            freeIfOwned(buf1);
+            freeIfOwned(buf2);
         }
     }
 
@@ -524,7 +551,7 @@ public class CompositeByteBufTest {
             assert composite.writableBytes() == 0;
         } finally {
             composite.free();
-            buf.free();
+            freeIfOwned(buf);
         }
     }
 
@@ -536,10 +563,10 @@ public class CompositeByteBufTest {
         ByteBuf buf2 = ByteBuf.wrap(new byte[] { 3, 4 });
         CompositeByteBuf composite = ByteBufUtils.compositeBuffer();
 
-        composite.addComponent(buf1);
-        composite.addComponent(buf2);
+        composite.addComponent(buf1.retain());
+        composite.addComponent(buf2.retain());
 
-        // Each buf has refCnt=2 (original + retained by composite)
+        // Each buf has refCnt=2 (original + explicit shared retain for composite)
         assert buf1.refCnt() == 2;
         assert buf2.refCnt() == 2;
 
@@ -550,8 +577,7 @@ public class CompositeByteBufTest {
         assert buf2.refCnt() == 1;
         assert composite.isFree();
 
-        buf1.free();
-        buf2.free();
+        freeIfOwned(buf1, buf2);
     }
 
     @Test
@@ -568,7 +594,7 @@ public class CompositeByteBufTest {
         assert !composite.isFree();
 
         composite.free();
-        buf.free();
+        freeIfOwned(buf);
     }
 
     // ========== Copy ==========
@@ -595,8 +621,8 @@ public class CompositeByteBufTest {
             }
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
+            freeIfOwned(buf1);
+            freeIfOwned(buf2);
         }
     }
 
@@ -620,7 +646,7 @@ public class CompositeByteBufTest {
             }
         } finally {
             composite.free();
-            buf.free();
+            freeIfOwned(buf);
         }
     }
 
@@ -650,8 +676,8 @@ public class CompositeByteBufTest {
             assert Arrays.equals(array, new byte[] { 10, 20, 30, 40 });
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
+            freeIfOwned(buf1);
+            freeIfOwned(buf2);
         }
     }
 
@@ -680,8 +706,8 @@ public class CompositeByteBufTest {
             assert composite.readByte() == 4;
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
+            freeIfOwned(buf1);
+            freeIfOwned(buf2);
         }
     }
 
@@ -703,7 +729,7 @@ public class CompositeByteBufTest {
             assert composite.readByte() == 4;
         } finally {
             composite.free();
-            buf1.free();
+            freeIfOwned(buf1);
         }
     }
 
@@ -718,7 +744,7 @@ public class CompositeByteBufTest {
             assert composite.numComponents() == 1;
         } finally {
             composite.free();
-            buf.free();
+            freeIfOwned(buf);
         }
     }
 
@@ -728,10 +754,10 @@ public class CompositeByteBufTest {
         ByteBuf buf2 = ByteBuf.wrap(new byte[] { 3, 4 });
         CompositeByteBuf composite = ByteBufUtils.compositeBuffer();
 
-        composite.addComponent(buf1);
-        composite.addComponent(buf2);
+        composite.addComponent(buf1.retain());
+        composite.addComponent(buf2.retain());
 
-        // buf1 refCnt should be 2 (original + composite)
+        // buf1 refCnt should be 2 (original + explicit shared retain for composite)
         assert buf1.refCnt() == 2;
 
         // Read all of buf1
@@ -744,8 +770,7 @@ public class CompositeByteBufTest {
         assert buf2.refCnt() == 2 : "buf2 should still be retained";
 
         composite.free();
-        buf1.free();
-        buf2.free();
+        freeIfOwned(buf1, buf2);
     }
 
     // ========== SliceOff ==========
@@ -773,7 +798,7 @@ public class CompositeByteBufTest {
             }
         } finally {
             composite.free();
-            buf.free();
+            freeIfOwned(buf);
         }
     }
 
@@ -788,7 +813,7 @@ public class CompositeByteBufTest {
             assert composite.readableBytes() == 2;
         } finally {
             composite.free();
-            buf.free();
+            freeIfOwned(buf);
         }
     }
 
@@ -836,8 +861,8 @@ public class CompositeByteBufTest {
             assert composite.readByte() == 4;
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
+            freeIfOwned(buf1);
+            freeIfOwned(buf2);
         }
     }
 
@@ -866,9 +891,9 @@ public class CompositeByteBufTest {
             assert composite.readByte() == 6;
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
-            buf3.free();
+            freeIfOwned(buf1);
+            freeIfOwned(buf2);
+            freeIfOwned(buf3);
         }
     }
 
@@ -889,8 +914,8 @@ public class CompositeByteBufTest {
             assert components.get(1) == buf2;
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
+            freeIfOwned(buf1);
+            freeIfOwned(buf2);
         }
     }
 
@@ -904,7 +929,7 @@ public class CompositeByteBufTest {
             components.add(buf);
         } finally {
             composite.free();
-            buf.free();
+            freeIfOwned(buf);
         }
     }
 
@@ -927,7 +952,7 @@ public class CompositeByteBufTest {
             assert composite.readByte() == 2;
         } finally {
             composite.free();
-            buf.free();
+            freeIfOwned(buf);
         }
     }
 
@@ -944,7 +969,7 @@ public class CompositeByteBufTest {
             assert composite.readByte() == 4;
         } finally {
             composite.free();
-            buf.free();
+            freeIfOwned(buf);
         }
     }
 
@@ -960,7 +985,7 @@ public class CompositeByteBufTest {
             assert str.contains("CompositeByteBuf");
         } finally {
             composite.free();
-            buf.free();
+            freeIfOwned(buf);
         }
     }
 
@@ -976,7 +1001,7 @@ public class CompositeByteBufTest {
             assert value == 255 : "expected 255, got " + value;
         } finally {
             composite.free();
-            buf.free();
+            freeIfOwned(buf);
         }
     }
 
@@ -992,8 +1017,8 @@ public class CompositeByteBufTest {
             assert value == 65535 : "expected 65535, got " + value;
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
+            freeIfOwned(buf1);
+            freeIfOwned(buf2);
         }
     }
 
@@ -1004,7 +1029,7 @@ public class CompositeByteBufTest {
         CompositeByteBuf composite = ByteBufUtils.compositeBuffer();
         ByteBuf buf = ByteBuf.wrap(new byte[] { 1, 2, 3 });
         try {
-            composite.addComponent(buf); // buf refCnt: 1 -> 2
+            composite.addComponent(buf.retain()); // buf refCnt: 1 -> 2 via explicit shared retain
 
             ByteBuf readOnly = composite.asReadOnly();
             // ReadOnlyByteBuf delegates free() to composite,
@@ -1014,9 +1039,9 @@ public class CompositeByteBufTest {
             assert readOnly.readByte() == 1;
 
             // free via readOnly (which frees composite internally)
-            readOnly.free(); // composite refCnt: 1 -> 0, releases components, buf refCnt: 2 -> 1
+            readOnly.free(); // composite refCnt: 1 -> 0, releases the shared retain, buf refCnt: 2 -> 1
         } finally {
-            buf.free(); // buf refCnt: 1 -> 0
+            freeIfOwned(buf); // buf refCnt: 1 -> 0
         }
     }
 
@@ -1042,7 +1067,7 @@ public class CompositeByteBufTest {
             composite.free();
             for (ByteBuf b : bufs) {
                 if (b != null)
-                    b.free();
+                    freeIfOwned(b);
             }
         }
     }
@@ -1064,7 +1089,7 @@ public class CompositeByteBufTest {
             assert composite.readByte() == 50;
         } finally {
             composite.free();
-            buf.free();
+            freeIfOwned(buf);
         }
     }
 
@@ -1090,8 +1115,8 @@ public class CompositeByteBufTest {
             assert Math.abs(value - 3.14f) < 0.001f : "expected ~3.14, got " + value;
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
+            freeIfOwned(buf1);
+            freeIfOwned(buf2);
         }
     }
 
@@ -1114,8 +1139,8 @@ public class CompositeByteBufTest {
             assert Math.abs(value - 2.718281828) < 0.000001 : "expected ~2.718281828, got " + value;
         } finally {
             composite.free();
-            buf1.free();
-            buf2.free();
+            freeIfOwned(buf1);
+            freeIfOwned(buf2);
         }
     }
 }

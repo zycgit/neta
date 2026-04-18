@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <!-- Maven Info -->
     <modelVersion>4.0.0</modelVersion>
     <groupId>net.hasor</groupId>
@@ -17,6 +18,8 @@
         <downloadSources>true</downloadSources>
         <downloadJavadocs>true</downloadJavadocs>
         <jacoco.version>0.8.12</jacoco.version>
+        <maven.compiler.source>8</maven.compiler.source>
+        <maven.compiler.target>8</maven.compiler.target>
         <!--<maven.test.skip>true</maven.test.skip>-->
         <!--<skipTests>true</skipTests>-->
     </properties>
@@ -48,6 +51,7 @@
         <module>neta-all</module>
         <module>neta-core</module>
         <module>neta-codec-http</module>
+        <!-- <module>neta-codec-mail</module>-->
         <module>neta-codec-net</module>
     </modules>
 
@@ -65,13 +69,18 @@
             </dependency>
             <dependency>
                 <groupId>net.hasor</groupId>
+                <artifactId>neta-codec-mail</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>net.hasor</groupId>
                 <artifactId>neta-codec-net</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>net.hasor</groupId>
                 <artifactId>cobble-all</artifactId>
-                <version>4.8.5</version>
+                <version>4.8.6-SNAPSHOT</version>
             </dependency>
 
             <!-- for Test -->
@@ -121,6 +130,11 @@
                     <failOnError>false</failOnError>
                     <failOnWarnings>false</failOnWarnings>
                     <doclint>none</doclint>
+                    <!-- Suppress "packages in unnamed module" warning that appears when
+                         javadoc auto-links to the Java 8 API while the project uses JPMS. -->
+                    <detectJavaApiLink>false</detectJavaApiLink>
+                    <!-- Explicitly tell javadoc the source level so it never falls back to -1.1 -->
+                    <source>8</source>
                     <additionalJOption>--allow-script-in-comments</additionalJOption>
                     <encoding>UTF-8</encoding>
                     <docencoding>UTF-8</docencoding>
