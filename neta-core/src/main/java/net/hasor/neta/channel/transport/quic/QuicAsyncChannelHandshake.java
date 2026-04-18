@@ -14,17 +14,16 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.transport.quic;
+
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.security.PrivateKey;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
+
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.codec.ssl.SslCertConfig;
 import net.hasor.neta.codec.ssl.SslCertHelper;
@@ -53,65 +52,114 @@ import net.hasor.neta.codec.ssl.SslCertHelper;
  */
 class QuicAsyncChannelHandshake {
     /** Encryption level constants exposed to external callers; they map to the internal enum. */
-    static final         int             LEVEL_INITIAL                             = 0;
-    static final         int             LEVEL_HANDSHAKE                           = 1;
-    static final         int             LEVEL_APP                                 = 2;
+    static final int LEVEL_INITIAL   = 0;
+    static final int LEVEL_HANDSHAKE = 1;
+    static final int LEVEL_APP       = 2;
     // Transport parameter IDs (RFC 9000 §18.2, RFC 9221).
     /** Transport parameter IDs used when encoding and decoding QUIC transport parameters, see RFC 9000 §18.2. */
-    static final         int             PARAM_ORIGINAL_DESTINATION_CID            = 0x00; // The server must include this.
-    static final         int             PARAM_MAX_IDLE_TIMEOUT                    = 0x01;
-    static final         int             PARAM_MAX_UDP_PAYLOAD_SIZE                = 0x03;
-    static final         int             PARAM_INITIAL_MAX_DATA                    = 0x04;
-    static final         int             PARAM_INITIAL_MAX_STREAM_DATA_BIDI_LOCAL  = 0x05;
-    static final         int             PARAM_INITIAL_MAX_STREAM_DATA_BIDI_REMOTE = 0x06;
-    static final         int             PARAM_INITIAL_MAX_STREAM_DATA_UNI         = 0x07;
-    static final         int             PARAM_INITIAL_MAX_STREAMS_BIDI            = 0x08;
-    static final         int             PARAM_INITIAL_MAX_STREAMS_UNI             = 0x09;
-    static final         int             PARAM_ACK_DELAY_EXPONENT                  = 0x0a;
-    static final         int             PARAM_MAX_ACK_DELAY                       = 0x0b;
-    static final         int             PARAM_ACTIVE_CONNECTION_ID_LIMIT          = 0x0e;
-    static final         int             PARAM_INITIAL_SOURCE_CID                  = 0x0f; // Both peers must include this.
+    static final int            PARAM_ORIGINAL_DESTINATION_CID            = 0x00; // The server must include this.
+    static final int            PARAM_MAX_IDLE_TIMEOUT                    = 0x01;
+    static final int            PARAM_STATELESS_RESET_TOKEN               = 0x02; // Server-only; 16 bytes.
+    static final int            PARAM_MAX_UDP_PAYLOAD_SIZE                = 0x03;
+    static final int            PARAM_INITIAL_MAX_DATA                    = 0x04;
+    static final int            PARAM_INITIAL_MAX_STREAM_DATA_BIDI_LOCAL  = 0x05;
+    static final int            PARAM_INITIAL_MAX_STREAM_DATA_BIDI_REMOTE = 0x06;
+    static final int            PARAM_INITIAL_MAX_STREAM_DATA_UNI         = 0x07;
+    static final int            PARAM_INITIAL_MAX_STREAMS_BIDI            = 0x08;
+    static final int            PARAM_INITIAL_MAX_STREAMS_UNI             = 0x09;
+    static final int            PARAM_ACK_DELAY_EXPONENT                  = 0x0a;
+    static final int            PARAM_MAX_ACK_DELAY                       = 0x0b;
+    static final int            PARAM_DISABLE_ACTIVE_MIGRATION            = 0x0c; // Zero-length flag.
+    static final int            PARAM_ACTIVE_CONNECTION_ID_LIMIT          = 0x0e;
+    static final int            PARAM_INITIAL_SOURCE_CID                  = 0x0f; // Both peers must include this.
+    static final int            PARAM_RETRY_SOURCE_CID                    = 0x10; // Server-only, when a Retry was issued.
     /** max_datagram_frame_size transport parameter from RFC 9221; 0 means DATAGRAM is not supported. */
-    static final         int             PARAM_MAX_DATAGRAM_FRAME_SIZE             = 0x20;
-    private static final Logger          logger                                    = Logger.getLogger(QuicAsyncChannelHandshake.class);
+    static final int            PARAM_MAX_DATAGRAM_FRAME_SIZE             = 0x20;
+    private static final Logger logger                                    = Logger.getLogger(QuicAsyncChannelHandshake.class);
     // Identity information.
-    private final        boolean         clientMode;
-    private final        boolean         printLog;
-    private final        QuicSoConfig    soConfig;
-    private final        DatagramChannel udpChannel;
-    private final        SocketAddress   remoteAddress;
+    private final boolean         clientMode;
+    private final boolean         printLog;
+    private final QuicSoConfig    soConfig;
+    private final DatagramChannel udpChannel;
+    private final SocketAddress   remoteAddress;
 
     // Connection ID (RFC 9000 §5.1).
-    private final    byte[]                  localCid;   // Local Connection ID.
+    private final byte[] localCid;   // Local Connection ID.
     // QUIC version.
-    private final    QuicVersion             quicVersion;
+    private final QuicVersion quicVersion;
     // Packet numbers, monotonically increasing within each encryption level.
-    private final    AtomicLong              initialPacketNumber      = new AtomicLong(0);
-    private final    AtomicLong              handshakePacketNumber    = new AtomicLong(0);
-    private final    AtomicLong              appPacketNumber          = new AtomicLong(0);
+    private final AtomicLong initialPacketNumber   = new AtomicLong(0);
+    private final AtomicLong handshakePacketNumber = new AtomicLong(0);
+    private final AtomicLong appPacketNumber       = new AtomicLong(0);
     // Largest received packet numbers, used for ACK generation and packet number reconstruction.
-    private final    AtomicLong              maxInitialPacketNumber   = new AtomicLong(-1);
-    private final    AtomicLong              maxHandshakePacketNumber = new AtomicLong(-1);
-    private final    AtomicLong              maxAppPacketNumber       = new AtomicLong(-1);
+    private final AtomicLong   maxInitialPacketNumber   = new AtomicLong(-1);
+    private final AtomicLong   maxHandshakePacketNumber = new AtomicLong(-1);
+    private final AtomicLong   maxAppPacketNumber       = new AtomicLong(-1);
     /** 0-RTT packets received and buffered before the handshake completes. */
-    private final    List<byte[]>            bufferedRtt0Data         = new ArrayList<byte[]>();
+    private final List<byte[]> bufferedRtt0Data         = new ArrayList<byte[]>();
     /** Seen 0-RTT packet numbers, used for anti-replay protection per RFC 9001 §8.4. */
-    private final    Set<Long>               seenRtt0PacketNumbers    = new HashSet<>();
-    private          byte[]                  originalDcid; // DCID carried in the client's first Initial, used only by the server for transport parameters.
-    private          byte[]                  remoteCid;  // Peer Connection ID, used as the DCID when sending.
+    private final Set<Long>    seenRtt0PacketNumbers    = new HashSet<>();
+    private byte[]             originalDcid; // DCID carried in the client's first Initial, used only by the server for transport parameters.
+    private byte[]             remoteCid;  // Peer Connection ID, used as the DCID when sending.
     // Packet protection keys per level [key, iv, hp].
-    private          byte[][]                clientInitialKeys;
-    private          byte[][]                serverInitialKeys;
-    private          byte[][]                clientHandshakeKeys;
-    private          byte[][]                serverHandshakeKeys;
-    private          byte[][]                clientAppKeys;
-    private          byte[][]                serverAppKeys;
+    private byte[][] clientInitialKeys;
+    private byte[][] serverInitialKeys;
+    private byte[][] clientHandshakeKeys;
+    private byte[][] serverHandshakeKeys;
+    private byte[][] clientAppKeys;
+    private byte[][] serverAppKeys;
     // TLS engine, null when sslEnabled=false.
-    private          QuicTlsEngine           tlsEngine;
+    private QuicTlsEngine tlsEngine;
     // Handshake state.
-    private volatile QuicAsyncHandshakeState state                    = QuicAsyncHandshakeState.INITIAL;
+    private volatile QuicAsyncHandshakeState state               = QuicAsyncHandshakeState.INITIAL;
     /** Key update generation counter, starting from 0 after the handshake completes. */
-    private          int                     keyUpdateGeneration      = 0;
+    private int                              keyUpdateGeneration = 0;
+    /**
+     * Current outbound Key Phase bit (RFC 9001 §6): flipped by a local proactive key update.
+     * Starts at {@code 0} per §6, matching the generation installed at handshake completion.
+     */
+    private int                              currentKeyPhase     = 0;
+    /**
+     * Current {@code client_application_traffic_secret_N} (RFC 9001 §6.1). Starts as secret_0
+     * from the TLS handshake and is advanced by {@link #rotateWriteKeys} or
+     * {@link #rotateReadKeys} depending on role; null before the handshake completes.
+     */
+    private byte[]                           clientAppSecret;
+    /** Current {@code server_application_traffic_secret_N} (RFC 9001 §6.1); null before the handshake completes. */
+    private byte[]                           serverAppSecret;
+
+    // Retry state (RFC 9000 §17.2.5 / §7.3).
+    /** {@code true} once this client has accepted a Retry packet; guards the RFC 9000 §17.2.5.2 "at most one Retry" rule. */
+    private boolean retryProcessed = false;
+    /** Retry Token to echo in subsequent Initial packets, per RFC 9000 §8.1.2. */
+    private byte[]  retryToken     = new byte[0];
+    /**
+     * Source Connection ID carried in the server's Retry packet. The client must later verify the server's
+     * {@code retry_source_connection_id} transport parameter equals this value (RFC 9000 §7.3).
+     */
+    private byte[]  retrySourceCid;
+    /** Cached ClientHello bytes, reused to retransmit Initial after Retry without touching TLS engine state. */
+    private byte[]  pendingClientHello;
+
+    // Peer Transport Parameters (RFC 9000 §18.2) — validated receive-side values.
+    /**
+     * Non-zero when the peer's transport parameters violated a MUST-level RFC 9000 §7.3 / §18.2
+     * constraint; carries the QUIC error code (typically {@code TRANSPORT_PARAMETER_ERROR=0x08})
+     * that callers should use when closing the connection.
+     */
+    private long    peerTransportParamError;
+    /** Human-readable reason accompanying {@link #peerTransportParamError}; never null when the error is non-zero. */
+    private String  peerTransportParamErrorReason;
+    /** Peer-advertised {@code ack_delay_exponent} (RFC 9000 §18.2), defaulting to 3 when omitted. */
+    private int     peerAckDelayExponent        = 3;
+    /** Peer-advertised {@code max_ack_delay} in ms (RFC 9000 §18.2), defaulting to 25 when omitted. */
+    private long    peerMaxAckDelay             = 25L;
+    /** Peer-advertised {@code active_connection_id_limit} (RFC 9000 §18.2), defaulting to 2 when omitted. */
+    private long    peerActiveConnectionIdLimit = 2L;
+    /** Whether the peer sent {@code disable_active_migration} (RFC 9000 §18.2); when true, active migration is forbidden. */
+    private boolean peerDisableActiveMigration;
+    /** Peer-advertised {@code stateless_reset_token} (server only; 16 bytes), or null when absent. */
+    private byte[]  peerStatelessResetToken;
 
     // CRYPTO frame reassembly: Initial level, server receives ClientHello.
     /** Buffer used to reassemble fragmented CRYPTO stream data such as ClientHello. */
@@ -465,10 +513,15 @@ class QuicAsyncChannelHandshake {
 
     /**
      * Derives Initial encryption keys from the given Destination Connection ID; must be called
-     * before sending or processing any Initial packet.
+     * before sending or processing any Initial packet. The first call also fixes
+     * {@code originalDcid}; subsequent calls (e.g. after a Retry) only re-derive keys.
      */
     public void deriveInitialKeys(byte[] originalDcid) throws Exception {
-        this.originalDcid = originalDcid; // Keep it so it can later be written into transport parameters.
+        if (this.originalDcid == null) {
+            // Capture the first DCID chosen by the client (or observed by the server on the very
+            // first Initial); RFC 9000 §7.3 requires this to later be echoed as a transport parameter.
+            this.originalDcid = originalDcid;
+        }
         byte[][] secrets = QuicCrypto.deriveInitialSecrets(originalDcid, this.quicVersion);
         this.clientInitialKeys = QuicCrypto.derivePacketKeys(secrets[0], this.quicVersion);
         this.serverInitialKeys = QuicCrypto.derivePacketKeys(secrets[1], this.quicVersion);
@@ -759,6 +812,9 @@ class QuicAsyncChannelHandshake {
             // Install 1-RTT application keys.
             this.clientAppKeys = this.tlsEngine.getClientAppKeys();
             this.serverAppKeys = this.tlsEngine.getServerAppKeys();
+            // Seed the Key Update chain (RFC 9001 §6.1) with the initial application traffic secrets.
+            this.clientAppSecret = this.tlsEngine.getClientAppTrafficSecret();
+            this.serverAppSecret = this.tlsEngine.getServerAppTrafficSecret();
         }
 
         // Send a Handshake ACK back and then send HANDSHAKE_DONE in 1-RTT.
@@ -805,15 +861,21 @@ class QuicAsyncChannelHandshake {
         deriveInitialKeys(this.remoteCid);
 
         if (this.soConfig.isSslEnabled()) {
-            // Generate ClientHello via the TLS engine.
+            // RFC 9000 §7.3: the client MUST advertise initial_source_connection_id in its
+            // transport parameters. Push the SCID (= our localCid) into the TLS engine before
+            // encoding the ClientHello so the transport parameter extension includes it.
+            this.tlsEngine.setConnectionIds(this.localCid, null);
+            // Generate ClientHello via the TLS engine and cache it so we can retransmit it verbatim
+            // after processing a Retry without re-driving the TLS engine state machine.
             byte[] clientHello = this.tlsEngine.generateClientHello();
+            this.pendingClientHello = clientHello;
             byte[] cryptoFrame = QuicPacket.buildCryptoFrame(0, clientHello);
             long pn = nextInitialPacketNumber();
 
             // Encrypt and send the Initial packet, padding it to 1200 bytes as required by the specification.
             byte[][] sendKeys = getSendKeys(QuicAsyncHandshakeState.INITIAL);
             byte[] packet = QuicPacket.buildLongHeaderPacket(this.quicVersion, QuicPacket.TYPE_INITIAL,//
-                    this.remoteCid, this.localCid, new byte[0], pn, cryptoFrame,//
+                    this.remoteCid, this.localCid, this.retryToken, pn, cryptoFrame,//
                     sendKeys[0], sendKeys[1], sendKeys[2], 1200);
             sendPacket(packet, serverAddr);
         } else {
@@ -821,11 +883,121 @@ class QuicAsyncChannelHandshake {
             byte[] cryptoFrame = QuicPacket.buildCryptoFrame(0, new byte[0]);
             long pn = nextInitialPacketNumber();
             byte[] packet = QuicPacket.buildRawLongHeaderPacket(this.quicVersion, QuicPacket.TYPE_INITIAL,//
-                    this.remoteCid, this.localCid, new byte[0], pn, cryptoFrame);
+                    this.remoteCid, this.localCid, this.retryToken, pn, cryptoFrame);
             sendPacket(packet, serverAddr);
         }
 
         this.state = QuicAsyncHandshakeState.HANDSHAKE;
+    }
+
+    /**
+     * Processes a server-issued Retry packet on the client side, per RFC 9000 §17.2.5 and RFC 9001 §5.8.
+     * <p>The Retry is accepted when all of the following hold:
+     * <ul>
+     *   <li>No prior Retry has been accepted (RFC 9000 §17.2.5.2 — at most one Retry per attempt).</li>
+     *   <li>Retry DCID equals the client's original SCID ({@link #localCid}).</li>
+     *   <li>Retry SCID is non-empty.</li>
+     *   <li>Retry version matches the current handshake version.</li>
+     *   <li>The Retry Integrity Tag validates against the original DCID (RFC 9001 §5.8).</li>
+     * </ul>
+     * On success, Initial keys are re-derived from the Retry SCID and the Initial packet is
+     * retransmitted with the Retry Token attached.
+     * @param retry     parsed Retry packet
+     * @param retryWire raw on-the-wire Retry bytes (for integrity-tag verification)
+     * @return {@code true} when the Retry was accepted and a new Initial has been sent
+     */
+    public boolean processRetry(QuicPacket.RetryPacket retry, byte[] retryWire) throws Exception {
+        if (!this.clientMode) {
+            return false;
+        }
+        if (retry == null || retryWire == null) {
+            return false;
+        }
+        if (this.retryProcessed) {
+            if (this.printLog) {
+                logger.info("[QUIC-HS] ignoring additional Retry: already processed one (RFC 9000 §17.2.5.2)");
+            }
+            return false;
+        }
+        if (this.state != QuicAsyncHandshakeState.HANDSHAKE) {
+            if (this.printLog) {
+                logger.info("[QUIC-HS] ignoring Retry in state=" + this.state);
+            }
+            return false;
+        }
+        if (retry.version != this.quicVersion.getVersion()) {
+            if (this.printLog) {
+                logger.info("[QUIC-HS] ignoring Retry with version mismatch: retry=0x" //
+                        + String.format("%08x", retry.version) + " expected=0x" //
+                        + String.format("%08x", this.quicVersion.getVersion()));
+            }
+            return false;
+        }
+        if (retry.scid == null || retry.scid.length == 0) {
+            logger.warn("[QUIC-HS] discarding Retry with empty SCID (RFC 9000 §17.2.5.2)");
+            return false;
+        }
+        if (retry.dcid == null || !Arrays.equals(retry.dcid, this.localCid)) {
+            logger.warn("[QUIC-HS] discarding Retry whose DCID does not match our SCID (RFC 9000 §17.2.5.2)");
+            return false;
+        }
+        if (this.originalDcid == null) {
+            return false;
+        }
+        if (!QuicCrypto.verifyRetryIntegrityTag(this.originalDcid, retryWire, this.quicVersion)) {
+            logger.warn("[QUIC-HS] discarding Retry with invalid Integrity Tag (RFC 9001 §5.8)");
+            return false;
+        }
+
+        // Retry accepted — apply the new state.
+        this.retryProcessed = true;
+        this.retryToken = retry.retryToken != null ? retry.retryToken : new byte[0];
+        this.retrySourceCid = Arrays.copyOf(retry.scid, retry.scid.length);
+        this.remoteCid = Arrays.copyOf(retry.scid, retry.scid.length);
+
+        // Re-derive Initial keys using the server's new Source Connection ID (per RFC 9001 §5.2 / §5.8).
+        deriveInitialKeys(this.remoteCid);
+
+        // Per RFC 9000 §17.2.5.2 the Initial packet number space is not reset; we simply emit the
+        // next Initial with the new token, new DCID, and newly derived keys. Reuse the cached
+        // ClientHello bytes so the TLS engine state stays untouched.
+        long pn = nextInitialPacketNumber();
+        if (this.soConfig.isSslEnabled()) {
+            if (this.pendingClientHello == null) {
+                logger.error("[QUIC-HS] cannot retransmit Initial after Retry: ClientHello not cached");
+                return false;
+            }
+            byte[] cryptoFrame = QuicPacket.buildCryptoFrame(0, this.pendingClientHello);
+            byte[][] sendKeys = getSendKeys(QuicAsyncHandshakeState.INITIAL);
+            byte[] packet = QuicPacket.buildLongHeaderPacket(this.quicVersion, QuicPacket.TYPE_INITIAL,//
+                    this.remoteCid, this.localCid, this.retryToken, pn, cryptoFrame,//
+                    sendKeys[0], sendKeys[1], sendKeys[2], 1200);
+            sendPacket(packet, this.remoteAddress);
+        } else {
+            byte[] cryptoFrame = QuicPacket.buildCryptoFrame(0, new byte[0]);
+            byte[] packet = QuicPacket.buildRawLongHeaderPacket(this.quicVersion, QuicPacket.TYPE_INITIAL,//
+                    this.remoteCid, this.localCid, this.retryToken, pn, cryptoFrame);
+            sendPacket(packet, this.remoteAddress);
+        }
+        if (this.printLog) {
+            logger.info("[QUIC-HS] Retry accepted; re-sent Initial with token len=" + this.retryToken.length //
+                    + " new DCID len=" + this.remoteCid.length);
+        }
+        return true;
+    }
+
+    /** Returns {@code true} when a Retry packet has already been consumed by this client handshake. */
+    public boolean isRetryProcessed() {
+        return this.retryProcessed;
+    }
+
+    /**
+     * Returns the Source Connection ID that arrived in the server's Retry packet, or {@code null}
+     * when no Retry has been processed. The caller is expected to later verify the server's
+     * {@code retry_source_connection_id} transport parameter against this value (RFC 9000 §7.3).
+     */
+    public byte[] getRetrySourceCid() {
+        return this.retrySourceCid == null ? null : Arrays.copyOf(this.retrySourceCid, this.retrySourceCid.length);
     }
 
     /**
@@ -970,6 +1142,9 @@ class QuicAsyncChannelHandshake {
         // Install 1-RTT application keys.
         this.clientAppKeys = this.tlsEngine.getClientAppKeys();
         this.serverAppKeys = this.tlsEngine.getServerAppKeys();
+        // Seed the Key Update chain (RFC 9001 §6.1) with the initial application traffic secrets.
+        this.clientAppSecret = this.tlsEngine.getClientAppTrafficSecret();
+        this.serverAppSecret = this.tlsEngine.getServerAppTrafficSecret();
 
         // Send a Handshake ACK back to the server and then send the client's Finished.
         byte[] hsAck = QuicPacket.buildAckFrame(this.maxHandshakePacketNumber.get(), 0);
@@ -1124,6 +1299,11 @@ class QuicAsyncChannelHandshake {
     /**
      * Builds {@link QuicInitConfigData} from peer transport parameters extracted during the TLS
      * handshake; falls back to local soConfig defaults when no negotiated result is available.
+     * <p>
+     * This method also performs RFC 9000 §7.3 / §18.2 receive-side validation and records any
+     * violation into {@link #peerTransportParamError} / {@link #peerTransportParamErrorReason};
+     * callers must consult {@link #getPeerTransportParamError()} after invocation and close the
+     * connection with the returned error code on violation.
      */
     public QuicInitConfigData buildInitConfigData(SocketAddress localAddr, SocketAddress remoteAddr) {
         QuicInitConfigData data = new QuicInitConfigData();
@@ -1133,6 +1313,14 @@ class QuicAsyncChannelHandshake {
         if (this.tlsEngine != null) {
             byte[] peerParams = this.tlsEngine.getPeerTransportParams();
             if (peerParams != null && peerParams.length > 0) {
+                // Raw CID-valued transport parameters, validated below per RFC 9000 §7.3.
+                byte[] tpOriginalDcid = null;
+                byte[] tpInitialScid = null;
+                byte[] tpRetryScid = null;
+                boolean sawInitialScid = false;
+                boolean sawOriginalDcid = false;
+                boolean sawRetryScid = false;
+
                 // Parse QUIC transport parameters, see RFC 9000 §18: each item is varint(id) + varint(len) + value.
                 int pos = 0;
                 while (pos < peerParams.length) {
@@ -1150,6 +1338,7 @@ class QuicAsyncChannelHandshake {
                         long[] valResult = QuicVarInt.decode(peerParams, pos);
                         paramValue = valResult[0];
                     }
+                    int valueStart = pos;
                     pos += paramLen;
 
                     switch (paramId) {
@@ -1176,10 +1365,67 @@ class QuicAsyncChannelHandshake {
                         case PARAM_MAX_DATAGRAM_FRAME_SIZE:
                             data.setDatagramMaxDataSize(paramValue);
                             break;
+                        case PARAM_ACK_DELAY_EXPONENT:
+                            // RFC 9000 §18.2: value MUST NOT exceed 20; any larger value is a TRANSPORT_PARAMETER_ERROR.
+                            if (paramValue > 20) {
+                                markTpError(QuicErrorCode.TRANSPORT_PARAMETER_ERROR, "ack_delay_exponent " + paramValue + " > 20 (RFC 9000 §18.2)");
+                            } else {
+                                this.peerAckDelayExponent = (int) paramValue;
+                            }
+                            break;
+                        case PARAM_MAX_ACK_DELAY:
+                            // RFC 9000 §18.2: MUST be less than 2^14 ms (16384); values above are a TRANSPORT_PARAMETER_ERROR.
+                            if (paramValue >= (1L << 14)) {
+                                markTpError(QuicErrorCode.TRANSPORT_PARAMETER_ERROR, "max_ack_delay " + paramValue + " >= 2^14 (RFC 9000 §18.2)");
+                            } else {
+                                this.peerMaxAckDelay = paramValue;
+                            }
+                            break;
+                        case PARAM_ACTIVE_CONNECTION_ID_LIMIT:
+                            // RFC 9000 §18.2: MUST be >= 2; value less than 2 is a TRANSPORT_PARAMETER_ERROR.
+                            if (paramValue < 2) {
+                                markTpError(QuicErrorCode.TRANSPORT_PARAMETER_ERROR, "active_connection_id_limit " + paramValue + " < 2 (RFC 9000 §18.2)");
+                            } else {
+                                this.peerActiveConnectionIdLimit = paramValue;
+                            }
+                            break;
+                        case PARAM_DISABLE_ACTIVE_MIGRATION:
+                            // RFC 9000 §18.2: zero-length flag parameter.
+                            this.peerDisableActiveMigration = true;
+                            break;
+                        case PARAM_STATELESS_RESET_TOKEN:
+                            // RFC 9000 §18.2: 16 bytes, server-only. A client sending this is a TRANSPORT_PARAMETER_ERROR.
+                            if (this.clientMode) {
+                                if (paramLen != 16) {
+                                    markTpError(QuicErrorCode.TRANSPORT_PARAMETER_ERROR, "stateless_reset_token length " + paramLen + " != 16 (RFC 9000 §18.2)");
+                                } else {
+                                    this.peerStatelessResetToken = slice(peerParams, valueStart, paramLen);
+                                }
+                            } else {
+                                markTpError(QuicErrorCode.TRANSPORT_PARAMETER_ERROR, "stateless_reset_token received from client (RFC 9000 §18.2)");
+                            }
+                            break;
+                        case PARAM_ORIGINAL_DESTINATION_CID:
+                            sawOriginalDcid = true;
+                            tpOriginalDcid = slice(peerParams, valueStart, paramLen);
+                            break;
+                        case PARAM_INITIAL_SOURCE_CID:
+                            sawInitialScid = true;
+                            tpInitialScid = slice(peerParams, valueStart, paramLen);
+                            break;
+                        case PARAM_RETRY_SOURCE_CID:
+                            sawRetryScid = true;
+                            tpRetryScid = slice(peerParams, valueStart, paramLen);
+                            break;
                         default:
                             // Unknown or currently unsupported transport parameters are skipped directly.
                             break;
                     }
+                }
+
+                // ── RFC 9000 §7.3 CID transport parameter receive-side validation ─────────
+                if (this.peerTransportParamError == 0) {
+                    validatePeerCidParams(sawOriginalDcid, tpOriginalDcid, sawInitialScid, tpInitialScid, sawRetryScid, tpRetryScid);
                 }
                 return data;
             }
@@ -1194,6 +1440,128 @@ class QuicAsyncChannelHandshake {
         data.setPeerStreamMaxDataUni(this.soConfig.getTpInitialMaxStreamDataUni());
         data.setDatagramMaxDataSize(this.soConfig.getTpInitialDatagramFrameMaxData());
         return data;
+    }
+
+    /**
+     * Performs RFC 9000 §7.3 receive-side CID validation and, on violation, records the QUIC
+     * error code into {@link #peerTransportParamError}.
+     * <p>
+     * Rules enforced (excerpt):
+     * <ul>
+     *   <li>Server MUST send {@code original_destination_connection_id}; client MUST check it
+     *       against the DCID carried in its first Initial.</li>
+     *   <li>Both peers MUST send {@code initial_source_connection_id}; the receiver MUST match it
+     *       against the SCID the peer used in its first Initial.</li>
+     *   <li>If a Retry was processed by the client, the server MUST send {@code retry_source_connection_id}
+     *       equal to the SCID carried in the Retry, and MUST NOT send it otherwise.</li>
+     * </ul>
+     */
+    private void validatePeerCidParams(boolean sawOdcid, byte[] tpOdcid, boolean sawIscid, byte[] tpIscid, boolean sawRscid, byte[] tpRscid) {
+        // initial_source_connection_id is mandatory for both peers.
+        if (!sawIscid) {
+            markTpError(QuicErrorCode.TRANSPORT_PARAMETER_ERROR, "missing initial_source_connection_id (RFC 9000 §7.3)");
+            return;
+        }
+        if (!bytesEqual(tpIscid, this.remoteCid)) {
+            markTpError(QuicErrorCode.TRANSPORT_PARAMETER_ERROR, "initial_source_connection_id mismatch (RFC 9000 §7.3)");
+            return;
+        }
+
+        if (this.clientMode) {
+            // Client expectations on server's transport parameters.
+            if (!sawOdcid) {
+                markTpError(QuicErrorCode.TRANSPORT_PARAMETER_ERROR, "server missing original_destination_connection_id (RFC 9000 §7.3)");
+                return;
+            }
+            if (!bytesEqual(tpOdcid, this.originalDcid)) {
+                markTpError(QuicErrorCode.TRANSPORT_PARAMETER_ERROR, "original_destination_connection_id mismatch (RFC 9000 §7.3)");
+                return;
+            }
+            if (this.retryProcessed) {
+                if (!sawRscid) {
+                    markTpError(QuicErrorCode.TRANSPORT_PARAMETER_ERROR, "server missing retry_source_connection_id after Retry (RFC 9000 §7.3)");
+                    return;
+                }
+                if (!bytesEqual(tpRscid, this.retrySourceCid)) {
+                    markTpError(QuicErrorCode.TRANSPORT_PARAMETER_ERROR, "retry_source_connection_id mismatch (RFC 9000 §7.3)");
+                }
+            } else if (sawRscid) {
+                markTpError(QuicErrorCode.TRANSPORT_PARAMETER_ERROR, "retry_source_connection_id sent without Retry (RFC 9000 §7.3)");
+            }
+        } else {
+            // Server expectations on client's transport parameters: must NOT send ODCID / RSCID.
+            if (sawOdcid) {
+                markTpError(QuicErrorCode.TRANSPORT_PARAMETER_ERROR, "client sent original_destination_connection_id (RFC 9000 §18.2)");
+                return;
+            }
+            if (sawRscid) {
+                markTpError(QuicErrorCode.TRANSPORT_PARAMETER_ERROR, "client sent retry_source_connection_id (RFC 9000 §18.2)");
+            }
+        }
+    }
+
+    /** Sets {@link #peerTransportParamError} only when no prior error has been recorded. */
+    private void markTpError(long code, String reason) {
+        if (this.peerTransportParamError == 0) {
+            this.peerTransportParamError = code;
+            this.peerTransportParamErrorReason = reason;
+            if (this.printLog) {
+                logger.info("[QUIC-HS] transport parameter violation (0x" + Long.toHexString(code) + "): " + reason);
+            }
+        }
+    }
+
+    /** Copies {@code length} bytes from {@code src[offset..offset+length)}; returns an empty array when {@code length == 0}. */
+    private static byte[] slice(byte[] src, int offset, int length) {
+        byte[] out = new byte[length];
+        if (length > 0) {
+            System.arraycopy(src, offset, out, 0, length);
+        }
+        return out;
+    }
+
+    /** Byte-array equality tolerating null as "absent" (two nulls are equal). */
+    private static boolean bytesEqual(byte[] a, byte[] b) {
+        return Arrays.equals(a == null ? new byte[0] : a, b == null ? new byte[0] : b);
+    }
+
+    /**
+     * Returns the QUIC error code recorded during peer transport-parameter validation, or
+     * {@code 0} when no violation was detected. Callers should invoke this after
+     * {@link #buildInitConfigData} and close the connection with the returned code when non-zero.
+     */
+    public long getPeerTransportParamError() {
+        return this.peerTransportParamError;
+    }
+
+    /** Returns a human-readable reason for the transport-parameter violation; never null when the error is non-zero. */
+    public String getPeerTransportParamErrorReason() {
+        return this.peerTransportParamErrorReason;
+    }
+
+    /** Returns the peer-advertised {@code ack_delay_exponent} (RFC 9000 §18.2), 3 when omitted. */
+    public int getPeerAckDelayExponent() {
+        return this.peerAckDelayExponent;
+    }
+
+    /** Returns the peer-advertised {@code max_ack_delay} in milliseconds (RFC 9000 §18.2), 25 when omitted. */
+    public long getPeerMaxAckDelay() {
+        return this.peerMaxAckDelay;
+    }
+
+    /** Returns the peer-advertised {@code active_connection_id_limit} (RFC 9000 §18.2), 2 when omitted. */
+    public long getPeerActiveConnectionIdLimit() {
+        return this.peerActiveConnectionIdLimit;
+    }
+
+    /** Returns {@code true} when the peer sent {@code disable_active_migration} (RFC 9000 §18.2). */
+    public boolean isPeerDisableActiveMigration() {
+        return this.peerDisableActiveMigration;
+    }
+
+    /** Returns the peer-advertised {@code stateless_reset_token} (server only), or null when absent. */
+    public byte[] getPeerStatelessResetToken() {
+        return this.peerStatelessResetToken;
     }
 
     /**
@@ -1255,27 +1623,42 @@ class QuicAsyncChannelHandshake {
     }
 
     /**
-     * Rotates read keys using HKDF-Expand-Label with the quic ku label according to RFC 9001 §6,
-     * for decrypting inbound packets.
+     * Advances the <em>read</em> application-phase traffic secret by one generation per
+     * RFC 9001 §6.1, then re-derives the matching packet-protection key and IV.
+     * <p>
+     * Derivation chain (RFC 8446 §7.5 / RFC 9001 §6.1):
+     * <pre>
+     *   secret_{N+1} = HKDF-Expand-Label(secret_N, "quic ku", "", Hash.length)
+     *   key_{N+1}    = HKDF-Expand-Label(secret_{N+1}, "quic key", "", key_len)
+     *   iv_{N+1}     = HKDF-Expand-Label(secret_{N+1}, "quic iv",  "", iv_len)
+     * </pre>
+     * The header-protection key is intentionally preserved across generations, per RFC 9001 §6.6.
+     * <p>
+     * Note: this method only rolls local key material; packet-level receive-path trial decryption
+     * with the next-generation keys and the three-generation retention window remain part of the
+     * P1.6 work outlined in the RFC gap audit and are not executed here.
      */
     public void rotateReadKeys() throws Exception {
-        // Determine which keys are our read keys
+        byte[] currentSecret = this.clientMode ? this.serverAppSecret : this.clientAppSecret;
         byte[][] currentRecvKeys = getRecvKeys(QuicAsyncHandshakeState.ESTABLISHED);
-        if (currentRecvKeys == null || currentRecvKeys.length < 3) {
-            throw new IllegalStateException("No application read keys available for rotation");
+        if (currentSecret == null || currentRecvKeys == null || currentRecvKeys.length < 3) {
+            throw new IllegalStateException("No application read secret/keys available for rotation");
         }
-        // Derive new traffic secret using HKDF-Expand-Label with "quic ku" label
-        // RFC 9001 §6.1: uses "quic ku" label for QUIC key update
-        byte[] currentSecret = currentRecvKeys[0]; // key as secret (simplified)
-        byte[] newKey = QuicCrypto.hkdfExpandLabel(currentSecret, "quic ku", new byte[0], 16, "quic ");
-        byte[] newIv = QuicCrypto.hkdfExpandLabel(currentSecret, "quic iv", new byte[0], 12, "quic ");
-        // HP key remains the same after key update (RFC 9001 §6.6)
+        int keyLen = currentRecvKeys[0].length;
+        int ivLen = currentRecvKeys[1].length;
+        int hashLen = currentSecret.length;
+        // Advance the traffic secret by one generation with the "quic ku" label.
+        byte[] nextSecret = QuicCrypto.hkdfExpandLabel(currentSecret, "quic ku", new byte[0], hashLen, "tls13 ");
+        // Re-derive the packet key and IV from the new secret; HP key is preserved.
+        byte[] nextKey = QuicCrypto.hkdfExpandLabel(nextSecret, "quic key", new byte[0], keyLen, "tls13 ");
+        byte[] nextIv = QuicCrypto.hkdfExpandLabel(nextSecret, "quic iv", new byte[0], ivLen, "tls13 ");
         byte[] hp = currentRecvKeys[2];
-        byte[][] newRecvKeys = new byte[][] { newKey, newIv, hp };
-        // Install new read keys
+        byte[][] newRecvKeys = new byte[][] { nextKey, nextIv, hp };
         if (this.clientMode) {
+            this.serverAppSecret = nextSecret;
             this.serverAppKeys = newRecvKeys;
         } else {
+            this.clientAppSecret = nextSecret;
             this.clientAppKeys = newRecvKeys;
         }
         if (this.printLog) {
@@ -1284,28 +1667,50 @@ class QuicAsyncChannelHandshake {
     }
 
     /**
-     * Rotates write keys when proactively initiating or responding to a key update, for encrypting
-     * outbound packets, see RFC 9001 §6.
+     * Advances the <em>write</em> application-phase traffic secret by one generation per
+     * RFC 9001 §6.1, re-derives the matching packet-protection key and IV, flips the local
+     * {@linkplain #getCurrentKeyPhase() Key Phase} bit, and bumps
+     * {@link #getKeyUpdateGeneration()}.
+     * <p>
+     * See {@link #rotateReadKeys()} for the HKDF chain; the header-protection key is preserved
+     * per RFC 9001 §6.6. Packet-level outbound Key Phase bit usage remains the responsibility of
+     * the send path, which should consult {@link #getCurrentKeyPhase()} on every short-header
+     * 1-RTT packet.
      */
     public void rotateWriteKeys() throws Exception {
+        byte[] currentSecret = this.clientMode ? this.clientAppSecret : this.serverAppSecret;
         byte[][] currentSendKeys = getSendKeys(QuicAsyncHandshakeState.ESTABLISHED);
-        if (currentSendKeys == null || currentSendKeys.length < 3) {
-            throw new IllegalStateException("No application write keys available for rotation");
+        if (currentSecret == null || currentSendKeys == null || currentSendKeys.length < 3) {
+            throw new IllegalStateException("No application write secret/keys available for rotation");
         }
-        byte[] currentSecret = currentSendKeys[0];
-        byte[] newKey = QuicCrypto.hkdfExpandLabel(currentSecret, "quic ku", new byte[0], 16, "quic ");
-        byte[] newIv = QuicCrypto.hkdfExpandLabel(currentSecret, "quic iv", new byte[0], 12, "quic ");
+        int keyLen = currentSendKeys[0].length;
+        int ivLen = currentSendKeys[1].length;
+        int hashLen = currentSecret.length;
+        byte[] nextSecret = QuicCrypto.hkdfExpandLabel(currentSecret, "quic ku", new byte[0], hashLen, "tls13 ");
+        byte[] nextKey = QuicCrypto.hkdfExpandLabel(nextSecret, "quic key", new byte[0], keyLen, "tls13 ");
+        byte[] nextIv = QuicCrypto.hkdfExpandLabel(nextSecret, "quic iv", new byte[0], ivLen, "tls13 ");
         byte[] hp = currentSendKeys[2];
-        byte[][] newSendKeys = new byte[][] { newKey, newIv, hp };
+        byte[][] newSendKeys = new byte[][] { nextKey, nextIv, hp };
         if (this.clientMode) {
+            this.clientAppSecret = nextSecret;
             this.clientAppKeys = newSendKeys;
         } else {
+            this.serverAppSecret = nextSecret;
             this.serverAppKeys = newSendKeys;
         }
         this.keyUpdateGeneration++;
+        this.currentKeyPhase ^= 1;
         if (this.printLog) {
-            logger.info("[QUIC-HS] write keys rotated (generation " + this.keyUpdateGeneration + ")");
+            logger.info("[QUIC-HS] write keys rotated (generation " + this.keyUpdateGeneration + ", key phase=" + this.currentKeyPhase + ")");
         }
+    }
+
+    /**
+     * Returns the current outbound Key Phase bit (0 or 1) per RFC 9001 §6. The short-header
+     * send path must encode this value into bit 0x04 of the first byte on every 1-RTT packet.
+     */
+    public int getCurrentKeyPhase() {
+        return this.currentKeyPhase;
     }
 
     /**

@@ -36,30 +36,30 @@ import net.hasor.neta.codec.ssl.SslCertConfig;
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicTlsEngine {
-    private static final Logger logger                    = Logger.getLogger(QuicTlsEngine.class);
+    private static final Logger logger = Logger.getLogger(QuicTlsEngine.class);
     // ── TLS Constants ──────────────────────────────────────────────────
-    private static final int    TLS_VERSION_12            = 0x0303; // legacy
-    private static final int    TLS_VERSION_13            = 0x0304;
+    private static final int TLS_VERSION_12 = 0x0303; // legacy
+    private static final int TLS_VERSION_13 = 0x0304;
     // Cipher suite
-    private static final int    TLS_AES_128_GCM_SHA256    = 0x1301;
+    private static final int TLS_AES_128_GCM_SHA256 = 0x1301;
     // Handshake types
-    private static final int    HT_CLIENT_HELLO           = 0x01;
-    private static final int    HT_SERVER_HELLO           = 0x02;
-    private static final int    HT_ENCRYPTED_EXTENSIONS   = 0x08;
-    private static final int    HT_CERTIFICATE            = 0x0B;
-    private static final int    HT_CERTIFICATE_VERIFY     = 0x0F;
-    private static final int    HT_FINISHED               = 0x14;
+    private static final int HT_CLIENT_HELLO         = 0x01;
+    private static final int HT_SERVER_HELLO         = 0x02;
+    private static final int HT_ENCRYPTED_EXTENSIONS = 0x08;
+    private static final int HT_CERTIFICATE          = 0x0B;
+    private static final int HT_CERTIFICATE_VERIFY   = 0x0F;
+    private static final int HT_FINISHED             = 0x14;
     // Extension types
-    private static final int    EXT_SERVER_NAME           = 0x0000;
-    private static final int    EXT_SUPPORTED_GROUPS      = 0x000A;
-    private static final int    EXT_SIGNATURE_ALGORITHMS  = 0x000D;
-    private static final int    EXT_ALPN                  = 0x0010;
-    private static final int    EXT_SUPPORTED_VERSIONS    = 0x002B;
-    private static final int    EXT_KEY_SHARE             = 0x0033;
-    private static final int    EXT_QUIC_TRANSPORT_PARAMS = 0x0039;
+    private static final int EXT_SERVER_NAME           = 0x0000;
+    private static final int EXT_SUPPORTED_GROUPS      = 0x000A;
+    private static final int EXT_SIGNATURE_ALGORITHMS  = 0x000D;
+    private static final int EXT_ALPN                  = 0x0010;
+    private static final int EXT_SUPPORTED_VERSIONS    = 0x002B;
+    private static final int EXT_KEY_SHARE             = 0x0033;
+    private static final int EXT_QUIC_TRANSPORT_PARAMS = 0x0039;
     // Named groups
-    private static final int    GROUP_X25519              = 0x001d;
-    private static final int    GROUP_SECP256R1           = 0x0017;
+    private static final int GROUP_X25519    = 0x001d;
+    private static final int GROUP_SECP256R1 = 0x0017;
 
     // ── Pure-Java X25519 constants (RFC 7748 §5) — no JDK version restriction ──
     /** p = 2^255 - 19, the finite-field prime used by Curve25519. */
@@ -82,48 +82,48 @@ class QuicTlsEngine {
     private final SoChannel<?>      channel;
     private final QuicVersion       quicVersion;
     // ── Client mode state ──────────────────────────────────────────────
-    private final boolean           clientMode;
+    private final boolean clientMode;
     // TLS handshake state
-    private       byte[]            clientRandom;
-    private       byte[]            serverRandom;
-    private       byte[]            clientSessionId; // legacy session_id echo
-    private       byte[]            peerKeyShareP256;   // client's P-256 public key (65 bytes uncompressed)
-    private       byte[]            peerKeyShareX25519; // client's X25519 public key (32 bytes, little-endian)
-    private       int               selectedGroup = GROUP_SECP256R1; // negotiated key exchange group
-    private       byte[]            x25519EphemeralPrivKey; // our X25519 scalar (clamped, 32 bytes)
-    private       byte[]            x25519EphemeralPubKey;  // our X25519 public key in wire format (32 bytes LE)
-    private       byte[]            peerQuicTransportParams;
-    private       List<String>      peerAlpnProtocols; // parsed from ClientHello EXT_ALPN
-    private       String            negotiatedAlpn;    // result of ALPN negotiation
-    private       String            peerSniHost;       // server_name from ClientHello SNI extension
+    private byte[]       clientRandom;
+    private byte[]       serverRandom;
+    private byte[]       clientSessionId; // legacy session_id echo
+    private byte[]       peerKeyShareP256;   // client's P-256 public key (65 bytes uncompressed)
+    private byte[]       peerKeyShareX25519; // client's X25519 public key (32 bytes, little-endian)
+    private int          selectedGroup = GROUP_SECP256R1; // negotiated key exchange group
+    private byte[]       x25519EphemeralPrivKey; // our X25519 scalar (clamped, 32 bytes)
+    private byte[]       x25519EphemeralPubKey;  // our X25519 public key in wire format (32 bytes LE)
+    private byte[]       peerQuicTransportParams;
+    private List<String> peerAlpnProtocols; // parsed from ClientHello EXT_ALPN
+    private String       negotiatedAlpn;    // result of ALPN negotiation
+    private String       peerSniHost;       // server_name from ClientHello SNI extension
     // Generated during handshake
-    private       KeyPair           serverEphemeralKeyPair;
-    private       byte[]            sharedSecret;
-    private       byte[]            masterSecret;   // TLS master_secret, derived separately from sharedSecret.
+    private KeyPair serverEphemeralKeyPair;
+    private byte[]  sharedSecret;
+    private byte[]  masterSecret;   // TLS master_secret, derived separately from sharedSecret.
     // Transcript hash (incremental SHA-256)
-    private       MessageDigest     transcriptHash;
+    private MessageDigest transcriptHash;
     // Derived keys
-    private       byte[]            clientHandshakeTrafficSecret;
-    private       byte[]            serverHandshakeTrafficSecret;
-    private       byte[]            clientAppTrafficSecret;
-    private       byte[]            serverAppTrafficSecret;
+    private byte[] clientHandshakeTrafficSecret;
+    private byte[] serverHandshakeTrafficSecret;
+    private byte[] clientAppTrafficSecret;
+    private byte[] serverAppTrafficSecret;
     // QUIC packet protection keys: [key, iv, hp]
-    private       byte[][]          clientHandshakeKeys;
-    private       byte[][]          serverHandshakeKeys;
-    private       byte[][]          clientAppKeys;
-    private       byte[][]          serverAppKeys;
+    private byte[][] clientHandshakeKeys;
+    private byte[][] serverHandshakeKeys;
+    private byte[][] clientAppKeys;
+    private byte[][] serverAppKeys;
     // Generated TLS messages
-    private       byte[]            serverHelloMsg;
+    private byte[] serverHelloMsg;
     // CID transport parameters required by RFC 9000 §7.3.
-    private       byte[]            sourceConnectionId;       // The server or client localCid, corresponding to initial_source_connection_id.
-    private       byte[]            originalDestinationCid;   // Original DCID from the client's first Initial, used only by the server.
-    private       byte[]            encryptedExtensionsMsg;
-    private       byte[]            certificateMsg;
-    private       byte[]            certificateVerifyMsg;
-    private       byte[]            serverFinishedMsg;
-    private       byte[]            clientHelloMsg;           // client mode: the generated ClientHello
-    private       byte[]            clientFinishedMsg;        // client mode: the generated client Finished
-    private       X509Certificate[] peerCertChain;  // server's certificate chain received during handshake
+    private byte[]            sourceConnectionId;       // The server or client localCid, corresponding to initial_source_connection_id.
+    private byte[]            originalDestinationCid;   // Original DCID from the client's first Initial, used only by the server.
+    private byte[]            encryptedExtensionsMsg;
+    private byte[]            certificateMsg;
+    private byte[]            certificateVerifyMsg;
+    private byte[]            serverFinishedMsg;
+    private byte[]            clientHelloMsg;           // client mode: the generated ClientHello
+    private byte[]            clientFinishedMsg;        // client mode: the generated client Finished
+    private X509Certificate[] peerCertChain;  // server's certificate chain received during handshake
 
     /**
      * Creates a TLS 1.3/QUIC engine for the given role, where clientMode=true means client and
@@ -478,6 +478,24 @@ class QuicTlsEngine {
 
     public byte[][] getServerAppKeys() {
         return serverAppKeys;
+    }
+
+    /**
+     * Returns the {@code client_application_traffic_secret_0} established after the TLS handshake
+     * (TLS 1.3 §7.1). This is the initial secret used as the seed for RFC 9001 §6.1 Key Update
+     * HKDF chains; {@code null} until {@link #deriveApplicationSecrets()} has completed.
+     */
+    public byte[] getClientAppTrafficSecret() {
+        return clientAppTrafficSecret;
+    }
+
+    /**
+     * Returns the {@code server_application_traffic_secret_0} established after the TLS handshake
+     * (TLS 1.3 §7.1). This is the initial secret used as the seed for RFC 9001 §6.1 Key Update
+     * HKDF chains; {@code null} until {@link #deriveApplicationSecrets()} has completed.
+     */
+    public byte[] getServerAppTrafficSecret() {
+        return serverAppTrafficSecret;
     }
 
     /**

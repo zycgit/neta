@@ -26,7 +26,7 @@ import javax.crypto.spec.SecretKeySpec;
  * @author 赵永春 (zyc@hasor.net)
  */
 final class QuicCrypto {
-    public static final  int GCM_TAG_LENGTH      = 16;
+    public static final int  GCM_TAG_LENGTH      = 16;
     private static final int GCM_TAG_LENGTH_BITS = 128;
 
     private QuicCrypto() {
@@ -234,6 +234,127 @@ final class QuicCrypto {
         for (int i = 0; i < pnLength; i++) {
             packet[pnOffset + i] ^= mask[1 + i];
         }
+    }
+
+    // ── Retry Integrity Tag (RFC 9001 §5.8, RFC 9369 §3.3.3) ─────────────────
+
+    /**
+     * Retry Integrity Tag key for QUIC v1, defined in RFC 9001 §5.8.
+     * <p>Hex value {@code be0c690b9f66575a1d766b54e368c84e}.
+     */
+    private static final byte[] RETRY_KEY_V1   = hexToBytes("be0c690b9f66575a1d766b54e368c84e");
+    /**
+     * Retry Integrity Tag nonce for QUIC v1, defined in RFC 9001 §5.8.
+     * <p>Hex value {@code 461599d35d632bf2239825bb}.
+     */
+    private static final byte[] RETRY_NONCE_V1 = hexToBytes("461599d35d632bf2239825bb");
+    /**
+     * Retry Integrity Tag key for QUIC v2, defined in RFC 9369 §3.3.3.
+     * <p>Hex value {@code 8fb4b01b56ac48e260fbcbcead7ccc92}.
+     */
+    private static final byte[] RETRY_KEY_V2   = hexToBytes("8fb4b01b56ac48e260fbcbcead7ccc92");
+    /**
+     * Retry Integrity Tag nonce for QUIC v2, defined in RFC 9369 §3.3.3.
+     * <p>Hex value {@code d86969bc2d7c6d9990efb04a}.
+     */
+    private static final byte[] RETRY_NONCE_V2 = hexToBytes("d86969bc2d7c6d9990efb04a");
+
+    /**
+     * Builds the Retry Pseudo-Packet as defined in RFC 9001 §5.8.
+     * <pre>
+     *   Retry Pseudo-Packet {
+     *     ODCID Length (8),
+     *     Original Destination Connection ID (0..160),
+     *     Header Form (1),
+     *     Fixed Bit (1),
+     *     Long Packet Type (2),
+     *     Unused (4),
+     *     Version (32),
+     *     DCID Len (8), Destination Connection ID (0..160),
+     *     SCID Len (8), Source Connection ID (0..160),
+     *     Retry Token (..),
+     *   }
+     * </pre>
+     * @param odcid                   original destination CID from the client's first Initial
+     * @param retryPacketWithoutTag   Retry packet bytes starting at the first byte (long header) and ending
+     *                                immediately before the 16-byte integrity tag
+     */
+    public static byte[] buildRetryPseudoPacket(byte[] odcid, byte[] retryPacketWithoutTag) {
+        int odcidLen = odcid != null ? odcid.length : 0;
+        byte[] out = new byte[1 + odcidLen + retryPacketWithoutTag.length];
+        out[0] = (byte) odcidLen;
+        if (odcidLen > 0) {
+            System.arraycopy(odcid, 0, out, 1, odcidLen);
+        }
+        System.arraycopy(retryPacketWithoutTag, 0, out, 1 + odcidLen, retryPacketWithoutTag.length);
+        return out;
+    }
+
+    /**
+     * Returns the version-specific AEAD_AES_128_GCM key used for Retry Integrity Tag computation.
+     */
+    private static byte[] retryKey(QuicVersion version) {
+        if (version == QuicVersion.V2) {
+            return RETRY_KEY_V2;
+        }
+        return RETRY_KEY_V1;
+    }
+
+    /**
+     * Returns the version-specific AEAD_AES_128_GCM nonce used for Retry Integrity Tag computation.
+     */
+    private static byte[] retryNonce(QuicVersion version) {
+        if (version == QuicVersion.V2) {
+            return RETRY_NONCE_V2;
+        }
+        return RETRY_NONCE_V1;
+    }
+
+    /**
+     * Computes the 16-byte Retry Integrity Tag for a Retry packet, as required by RFC 9001 §5.8
+     * (and RFC 9369 §3.3.3 for QUIC v2).
+     * <p>The tag is the AEAD_AES_128_GCM authentication tag produced with:
+     * <ul>
+     *   <li>key = Retry key fixed by the version</li>
+     *   <li>nonce = Retry nonce fixed by the version</li>
+     *   <li>plaintext = empty</li>
+     *   <li>AAD = Retry Pseudo-Packet (see {@link #buildRetryPseudoPacket})</li>
+     * </ul>
+     * @param odcid                 original destination CID
+     * @param retryPacketWithoutTag Retry packet bytes without the trailing 16-byte tag
+     * @param version               QUIC version; {@link QuicVersion#V1} or {@link QuicVersion#V2}
+     * @return the 16-byte integrity tag
+     */
+    public static byte[] computeRetryIntegrityTag(byte[] odcid, byte[] retryPacketWithoutTag, QuicVersion version) throws Exception {
+        byte[] aad = buildRetryPseudoPacket(odcid, retryPacketWithoutTag);
+        // AEAD_AES_128_GCM over empty plaintext returns a 16-byte ciphertext that is exactly the tag.
+        byte[] ct = aesGcmEncrypt(retryKey(version), retryNonce(version), new byte[0], aad);
+        if (ct.length != GCM_TAG_LENGTH) {
+            throw new IllegalStateException("unexpected Retry tag length " + ct.length);
+        }
+        return ct;
+    }
+
+    /**
+     * Validates the 16-byte Retry Integrity Tag of a received Retry packet per RFC 9001 §5.8.
+     * @param odcid      original destination CID the client previously sent
+     * @param retryBytes full Retry packet bytes including the trailing 16-byte tag
+     * @param version    QUIC version
+     * @return {@code true} when the trailing tag matches the computed AEAD tag
+     */
+    public static boolean verifyRetryIntegrityTag(byte[] odcid, byte[] retryBytes, QuicVersion version) throws Exception {
+        if (retryBytes == null || retryBytes.length < GCM_TAG_LENGTH + 1) {
+            return false;
+        }
+        int tagOffset = retryBytes.length - GCM_TAG_LENGTH;
+        byte[] withoutTag = new byte[tagOffset];
+        System.arraycopy(retryBytes, 0, withoutTag, 0, tagOffset);
+        byte[] expected = computeRetryIntegrityTag(odcid, withoutTag, version);
+        int diff = 0;
+        for (int i = 0; i < GCM_TAG_LENGTH; i++) {
+            diff |= (expected[i] ^ retryBytes[tagOffset + i]) & 0xFF;
+        }
+        return diff == 0;
     }
 
     // ── TLS key-schedule helper methods (RFC 8446 §7.1) ──────────────────────

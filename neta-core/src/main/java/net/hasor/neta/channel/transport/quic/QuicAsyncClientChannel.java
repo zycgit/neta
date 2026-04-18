@@ -48,11 +48,11 @@ import net.hasor.neta.channel.transport.udp.UdpAsyncClientChannel;
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicAsyncClientChannel extends UdpAsyncClientChannel {
-    private static final Logger                    logger = Logger.getLogger(QuicAsyncClientChannel.class);
-    private              QuicAsyncChannelHandshake handshake;
-    private              QuicChannelAsync          connAsync;
-    private              ProtoInitializer          pendingInitializer;
-    private              Future<NetChannel>        pendingFuture;
+    private static final Logger       logger = Logger.getLogger(QuicAsyncClientChannel.class);
+    private QuicAsyncChannelHandshake handshake;
+    private QuicChannelAsync          connAsync;
+    private ProtoInitializer          pendingInitializer;
+    private Future<NetChannel>        pendingFuture;
 
     protected QuicAsyncClientChannel(long channelId, DatagramChannel channel, SoContext context, SocketAddress remoteAddress, QuicSoConfig soConfig) throws IOException {
         super(channelId, channel, context, remoteAddress, soConfig);
@@ -222,6 +222,12 @@ class QuicAsyncClientChannel extends UdpAsyncClientChannel {
             return;
         }
 
+        // ── Retry (RFC 9000 §17.2.5, RFC 9001 §5.8) ──────────────────────────
+        if (QuicPacket.isRetryPacket(rawData)) {
+            processRetry(rawData);
+            return;
+        }
+
         QuicPacket.ParsedPacket parsed = QuicPacket.parseLongHeader(rawData, 0, rawData.length);
         if (parsed == null) {
             return;
@@ -276,6 +282,25 @@ class QuicAsyncClientChannel extends UdpAsyncClientChannel {
             }
         } catch (Exception e) {
             logger.error("QUIC client handshake error: " + e.getMessage(), e);
+            this.pendingFuture.failed(e);
+        }
+    }
+
+    /**
+     * Handles an incoming Retry packet (RFC 9000 §17.2.5, RFC 9001 §5.8). The integrity tag is
+     * validated inside {@link QuicAsyncChannelHandshake#processRetry}; on success the handshake
+     * re-derives Initial keys and retransmits the Initial with the attached Retry Token.
+     */
+    private void processRetry(byte[] rawData) {
+        QuicPacket.RetryPacket retry = QuicPacket.parseRetry(rawData, 0, rawData.length);
+        if (retry == null) {
+            logger.warn("[QUIC] malformed Retry packet, discarded");
+            return;
+        }
+        try {
+            this.handshake.processRetry(retry, rawData);
+        } catch (Exception e) {
+            logger.error("QUIC client Retry processing failed: " + e.getMessage(), e);
             this.pendingFuture.failed(e);
         }
     }
@@ -403,6 +428,16 @@ class QuicAsyncClientChannel extends UdpAsyncClientChannel {
 
         QuicInitConfigData initData = this.handshake.buildInitConfigData(localAddr, this.remoteAddress);
 
+        // RFC 9000 §7.3 / §18.2 receive-side validation: if the server's transport parameters
+        // violated a MUST-level constraint, fail the connection with the recorded QUIC error code.
+        long tpError = this.handshake.getPeerTransportParamError();
+        if (tpError != 0) {
+            String reason = this.handshake.getPeerTransportParamErrorReason();
+            logger.warn("[QUIC] server transport parameter violation (0x" + Long.toHexString(tpError) + "): " + reason);
+            this.pendingFuture.failed(new IOException("QUIC transport parameter error 0x" + Long.toHexString(tpError) + ": " + reason));
+            return;
+        }
+
         try {
             // Create QuicChannelAsync (client mode: listen=null)
             this.connAsync = new QuicChannelAsync(//
@@ -436,6 +471,11 @@ class QuicAsyncClientChannel extends UdpAsyncClientChannel {
             }
 
             if (parsed == null || parsed.payload == null) {
+                // RFC 9000 §10.3.1: if decryption fails, check whether the trailing 16 bytes
+                // match a peer Stateless Reset Token and, if so, enter the draining period.
+                if (this.connAsync.matchesStatelessResetToken(rawData)) {
+                    this.connAsync.enterDrainingSilently("Stateless Reset received (RFC 9000 §10.3.1)");
+                }
                 return;
             }
 

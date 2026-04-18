@@ -649,6 +649,105 @@ final class QuicPacket {
         return versions;
     }
 
+    // ── Retry (RFC 9000 §17.2.5) ────────────────────────────────────────
+
+    /**
+     * Returns {@code true} when {@code data} starts with a QUIC Retry packet (long header form,
+     * type Retry mapped per the given version). A Retry packet has no Length/Packet-Number field
+     * and therefore cannot be parsed with {@link #parseLongHeader}.
+     */
+    public static boolean isRetryPacket(byte[] data) {
+        if (data == null || data.length < 7) {
+            return false;
+        }
+        if ((data[0] & 0x80) == 0 || (data[0] & 0x40) == 0) {
+            return false; // not a long header with Fixed Bit set
+        }
+        int version = ((data[1] & 0xFF) << 24) | ((data[2] & 0xFF) << 16) | ((data[3] & 0xFF) << 8) | (data[4] & 0xFF);
+        if (version == 0) {
+            return false; // Version Negotiation
+        }
+        QuicVersion ver = QuicVersion.fromVersion(version);
+        if (ver == null) {
+            return false;
+        }
+        int wireType = (data[0] & 0x30) >> 4;
+        return ver.wireToLogicalType(wireType) == TYPE_RETRY;
+    }
+
+    /**
+     * Parsed representation of a QUIC Retry packet (RFC 9000 §17.2.5, RFC 9369 §3.3.3).
+     */
+    public static final class RetryPacket {
+        /** 32-bit wire protocol version number carried in the Retry header. */
+        public int    version;
+        /** Destination Connection ID echoed from the client's Initial SCID. */
+        public byte[] dcid;
+        /** Server-chosen Source Connection ID; the client uses it as its new DCID. */
+        public byte[] scid;
+        /** Opaque Retry Token to be echoed in the client's subsequent Initial packets. */
+        public byte[] retryToken;
+        /** 16-byte Retry Integrity Tag, see RFC 9001 §5.8. */
+        public byte[] integrityTag;
+    }
+
+    /**
+     * Parses a Retry packet (RFC 9000 §17.2.5). The trailing 16 bytes are the Retry Integrity Tag
+     * (RFC 9001 §5.8); everything between the header and the tag is the Retry Token. Returns
+     * {@code null} when the buffer does not contain a well-formed Retry packet.
+     */
+    public static RetryPacket parseRetry(byte[] data, int offset, int length) {
+        if (data == null || length < 1 + 4 + 1 + 1 + 16) {
+            return null;
+        }
+        int pos = offset;
+        byte firstByte = data[pos++];
+        if ((firstByte & 0x80) == 0 || (firstByte & 0x40) == 0) {
+            return null;
+        }
+        int version = ((data[pos] & 0xFF) << 24) | ((data[pos + 1] & 0xFF) << 16) | ((data[pos + 2] & 0xFF) << 8) | (data[pos + 3] & 0xFF);
+        pos += 4;
+        QuicVersion ver = QuicVersion.fromVersion(version);
+        if (ver == null) {
+            return null;
+        }
+        int wireType = (firstByte & 0x30) >> 4;
+        if (ver.wireToLogicalType(wireType) != TYPE_RETRY) {
+            return null;
+        }
+        int end = offset + length;
+        int dcidLen = data[pos++] & 0xFF;
+        if (pos + dcidLen >= end) {
+            return null;
+        }
+        byte[] dcid = new byte[dcidLen];
+        System.arraycopy(data, pos, dcid, 0, dcidLen);
+        pos += dcidLen;
+        int scidLen = data[pos++] & 0xFF;
+        if (pos + scidLen > end) {
+            return null;
+        }
+        byte[] scid = new byte[scidLen];
+        System.arraycopy(data, pos, scid, 0, scidLen);
+        pos += scidLen;
+        int tagOffset = end - 16;
+        if (tagOffset < pos) {
+            return null;
+        }
+        int tokenLen = tagOffset - pos;
+        byte[] token = new byte[tokenLen];
+        System.arraycopy(data, pos, token, 0, tokenLen);
+        byte[] tag = new byte[16];
+        System.arraycopy(data, tagOffset, tag, 0, 16);
+        RetryPacket pkt = new RetryPacket();
+        pkt.version = version;
+        pkt.dcid = dcid;
+        pkt.scid = scid;
+        pkt.retryToken = token;
+        pkt.integrityTag = tag;
+        return pkt;
+    }
+
     // ── Raw (non-TLS) Short Header ─────────────────────────────────────
 
     /**

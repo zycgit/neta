@@ -56,58 +56,58 @@ import net.hasor.neta.channel.*;
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicChannelAsync implements AsyncChannel {
-    private static final Logger                           logger = Logger.getLogger(QuicChannelAsync.class);
-    private final        long                             channelId;
-    private final        SocketAddress                    localAddress;
-    private final        boolean                          clientMode;
-    private final        QuicSoConfig                     quicSoConfig;
+    private static final Logger logger = Logger.getLogger(QuicChannelAsync.class);
+    private final long          channelId;
+    private final SocketAddress localAddress;
+    private final boolean       clientMode;
+    private final QuicSoConfig  quicSoConfig;
     //
-    private final        DatagramChannel                  ownerUdp;
-    private final        NetListen                        forListen;
-    private final        ProtoInitializer                 initializer;
-    private final        SoContextService                 context;
-    private final        QuicAsyncChannelHandshake        handshake;
+    private final DatagramChannel           ownerUdp;
+    private final NetListen                 forListen;
+    private final ProtoInitializer          initializer;
+    private final SoContextService          context;
+    private final QuicAsyncChannelHandshake handshake;
     //
-    private final        AtomicBoolean                    closed;
+    private final AtomicBoolean closed;
     //
-    private final        Set<Long>                        streamIds;
-    private final        Map<Long, QuicStreamChannel>     streamMap;
-    private final        Map<Long, QuicStreamState>       streamStates;
+    private final Set<Long>                    streamIds;
+    private final Map<Long, QuicStreamChannel> streamMap;
+    private final Map<Long, QuicStreamState>   streamStates;
     //
     // ── ACK, Loss Detection, Congestion Control, Flow Control
-    private final        QuicAckTracker                   ackTracker;
-    private final        QuicSentPacketTracker            sentPacketTracker;
-    private final        QuicCongestionControl            congestionControl;
-    private final        QuicFlowControl                  flowControl;
+    private final QuicAckTracker        ackTracker;
+    private final QuicSentPacketTracker sentPacketTracker;
+    private final QuicCongestionControl congestionControl;
+    private final QuicFlowControl       flowControl;
     //
     // ── Stream Reassembly
-    private final        Map<Long, QuicStreamReassembler> streamReassemblers;
+    private final Map<Long, QuicStreamReassembler> streamReassemblers;
     //
     // ── CRYPTO frame reassembly for post-handshake messages (1-RTT) ──
-    private final        QuicStreamReassembler            cryptoReassembler;
+    private final QuicStreamReassembler cryptoReassembler;
     //
     // ── Connection ID Management
-    private final        QuicConnectionIdManager          cidManager;
+    private final QuicConnectionIdManager cidManager;
     //
     // ── Path Validation
-    private final        QuicPathValidator                pathValidator;
-    private final        Map<Long, PendingPing>           pendingPings;
-    private final        AtomicBoolean                    messageWriting;
-    private final        long                             connectionDatagramMaxData; // Last time (in milliseconds) any packet was sent or received on this connection.
-    private volatile     long                             lastActivityTime;
-    private volatile     long                             connectionMaxData;
+    private final QuicPathValidator      pathValidator;
+    private final Map<Long, PendingPing> pendingPings;
+    private final AtomicBoolean          messageWriting;
+    private final long                   connectionDatagramMaxData; // Last time (in milliseconds) any packet was sent or received on this connection.
+    private volatile long                lastActivityTime;
+    private volatile long                connectionMaxData;
     // stream for bidi
-    private volatile     long                             peerMaxStreamsBidi;
-    private volatile     long                             nextRemoteBidiStreamId;
-    private volatile     long                             peerStreamMaxDataBidiLocal;
-    private volatile     long                             peerStreamMaxDataBidiRemote;
+    private volatile long peerMaxStreamsBidi;
+    private volatile long nextRemoteBidiStreamId;
+    private volatile long peerStreamMaxDataBidiLocal;
+    private volatile long peerStreamMaxDataBidiRemote;
     // stream for uni
-    private volatile     long                             peerMaxStreamsUni;
-    private volatile     long                             nextRemoteUniStreamId;
-    private volatile     long                             peerStreamMaxDataUni;
-    private              QuicChannel                      quicChannel;
-    private volatile     QuicDatagramChannel              datagramChannel;
-    private volatile     SocketAddress                    remoteAddress;
+    private volatile long                peerMaxStreamsUni;
+    private volatile long                nextRemoteUniStreamId;
+    private volatile long                peerStreamMaxDataUni;
+    private QuicChannel                  quicChannel;
+    private volatile QuicDatagramChannel datagramChannel;
+    private volatile SocketAddress       remoteAddress;
 
     public QuicChannelAsync(QuicInitConfigData handshakeData, DatagramChannel ownerUdp, QuicSoConfig soConfig,//
             SoContextService context, ProtoInitializer initializer, QuicListen listen,//
@@ -329,6 +329,37 @@ class QuicChannelAsync implements AsyncChannel {
      */
     boolean isClosed() {
         return this.closed.get();
+    }
+
+    /**
+     * Checks whether the trailing 16 bytes of a received short-header datagram match any peer
+     * Stateless Reset Token known to this connection (RFC 9000 §10.3.1). Long-header packets and
+     * buffers shorter than 21 bytes are rejected.
+     */
+    boolean matchesStatelessResetToken(byte[] datagram) {
+        if (datagram == null || datagram.length < 21) {
+            return false;
+        }
+        if ((datagram[0] & 0x80) != 0) {
+            return false; // long header
+        }
+        byte[] token = new byte[16];
+        System.arraycopy(datagram, datagram.length - 16, token, 0, 16);
+        return this.cidManager.isStatelessReset(token);
+    }
+
+    /**
+     * Enters the draining period (RFC 9000 §10.2.2 / §10.3.1) without transmitting any additional
+     * frames. Used when a received packet has been identified as a Stateless Reset.
+     */
+    void enterDrainingSilently(String reason) {
+        if (!this.closed.compareAndSet(false, true)) {
+            return;
+        }
+        logger.warn("[QUIC] entering draining period: " + reason);
+        QuicConnectionCloseException ex = new QuicConnectionCloseException(QuicErrorCode.NO_ERROR, reason);
+        notifyAllChannelsException(ex);
+        closeAllStreams();
     }
 
     /**
@@ -775,10 +806,10 @@ class QuicChannelAsync implements AsyncChannel {
     }
 
     static class QuicStreamState {
-        private final    long       streamId;
-        private final    AtomicLong sendOffset;
-        private volatile long       maxDataSize;
-        private volatile long       lastActivityTime;
+        private final long       streamId;
+        private final AtomicLong sendOffset;
+        private volatile long    maxDataSize;
+        private volatile long    lastActivityTime;
 
         QuicStreamState(long streamId, long maxDataSize) {
             this.streamId = streamId;
@@ -1382,7 +1413,8 @@ class QuicChannelAsync implements AsyncChannel {
 
     /**
      * Processes post-handshake CRYPTO data received in 1-RTT packets, such as NewSessionTicket
-     * (0x04) and KeyUpdate (0x18).
+     * (0x04). Per RFC 9001 §6 a peer that receives a TLS KeyUpdate (0x18) over QUIC MUST close
+     * the connection with a CRYPTO_ERROR carrying the TLS {@code unexpected_message} alert.
      */
     private void handlePostHandshakeCrypto(byte[] data) {
         if (data == null || data.length < 4) {
@@ -1390,8 +1422,14 @@ class QuicChannelAsync implements AsyncChannel {
         }
         int msgType = data[0] & 0xFF;
         if (msgType == 0x18) {
-            // KeyUpdate (TLS 1.3, RFC 8446 §4.6.3)
-            handleKeyUpdate(data);
+            // RFC 9001 §6: "Endpoints MUST NOT send KeyUpdate messages; a peer that receives such
+            // a message MUST treat it as a connection error of type 0x010a".
+            logger.warn("[QUIC] received forbidden TLS KeyUpdate over QUIC; closing with CRYPTO_ERROR(0x010a) per RFC 9001 §6");
+            QuicException ex = new QuicException(QuicErrorCode.CRYPTO_ERROR_UNEXPECTED_MESSAGE,//
+                    "TLS KeyUpdate is not allowed over QUIC (RFC 9001 §6)");
+            notifyAllChannelsException(ex);
+            this.closeWithError(QuicErrorCode.CRYPTO_ERROR_UNEXPECTED_MESSAGE,//
+                    "TLS KeyUpdate forbidden over QUIC", null);
         } else if (msgType == 0x04) {
             // NewSessionTicket (TLS 1.3, RFC 8446 §4.6.1)
             if (this.context.getConfig().isPrintLog()) {
@@ -1402,56 +1440,6 @@ class QuicChannelAsync implements AsyncChannel {
             if (this.context.getConfig().isPrintLog()) {
                 logger.info("[QUIC] post-handshake CRYPTO type=0x" + Integer.toHexString(msgType));
             }
-        }
-    }
-
-    /**
-     * Processes a TLS KeyUpdate message (RFC 8446 §4.6.3), rotating peer read keys and, when
-     * requested, rotating local write keys as well.
-     */
-    private void handleKeyUpdate(byte[] data) {
-        // KeyUpdate: type(1) + length(3) + request_update(1) = 5 bytes total
-        if (data.length < 5) {
-            logger.error("KeyUpdate message too short: " + data.length);
-            return;
-        }
-        // Parse length from 3-byte big-endian
-        int msgLen = ((data[1] & 0xFF) << 16) | ((data[2] & 0xFF) << 8) | (data[3] & 0xFF);
-        if (msgLen < 1) {
-            logger.error("KeyUpdate message body too short: " + msgLen);
-            return;
-        }
-        int requestUpdate = data[4] & 0xFF;
-        if (this.context.getConfig().isPrintLog()) {
-            logger.info("[QUIC] KeyUpdate request_update=" + requestUpdate);
-        }
-
-        try {
-            // Rotate peer's read keys  (their write keys updated → our read keys must update)
-            this.handshake.rotateReadKeys();
-            if (this.context.getConfig().isPrintLog()) {
-                logger.info("[QUIC] read keys rotated after KeyUpdate");
-            }
-
-            if (requestUpdate == 1) {
-                // Peer requested us to update too — rotate our write keys and send KeyUpdate response
-                this.handshake.rotateWriteKeys();
-                if (this.context.getConfig().isPrintLog()) {
-                    logger.info("[QUIC] write keys rotated (peer requested)");
-                }
-                // Send our KeyUpdate with update_not_requested
-                byte[] kuResponse = new byte[] { 0x18,                         // HandshakeType: key_update
-                        0x00, 0x00, 0x01,             // Length: 1
-                        0x00                          // request_update: update_not_requested
-                };
-                byte[] cryptoFrame = QuicPacket.buildCryptoFrame(0, kuResponse);
-                this.sendDataFrame(ByteBuf.wrap(cryptoFrame), null);
-            }
-        } catch (Exception e) {
-            logger.error("Failed to perform key update: " + e.getMessage());
-            QuicException ex = new QuicException(QuicErrorCode.INTERNAL_ERROR, "KeyUpdate failed: " + e.getMessage());
-            notifyAllChannelsException(ex);
-            this.closeWithError(QuicErrorCode.INTERNAL_ERROR, "KeyUpdate failed", null);
         }
     }
 

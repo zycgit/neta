@@ -237,9 +237,9 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
                 }
 
                 // Token validation (RFC 9000 §8.1).
-                // Note: the Retry Integrity Tag (RFC 9001 §5.8) here uses a random tag rather than full AEAD.
-                // Standards-compliant QUIC clients such as Firefox will silently drop Retry packets with an invalid integrity tag.
-                // For address-validation purposes, however, the control flow here is still meaningful.
+                // The Retry Integrity Tag (RFC 9001 §5.8) is computed with AEAD_AES_128_GCM using
+                // the version-specific fixed key and nonce over the Retry Pseudo-Packet, so this path
+                // is interoperable with standards-compliant QUIC clients.
                 if (parsed.token != null && parsed.token.length > 0) {
                     // The client already carried a token, so validate it first.
                     if (!validateToken(parsed.token, remoteAddr, parsed.dcid)) {
@@ -435,6 +435,18 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
             SocketAddress remoteAddr, QuicListen listen) {
         // Build negotiated configuration data.
         QuicInitConfigData initData = handshake.buildInitConfigData(localAddr, remoteAddr);
+
+        // RFC 9000 §7.3 / §18.2: if the peer's transport parameters violated a MUST-level constraint,
+        // the handshake records the offending QUIC error code. Refuse promotion rather than serve a
+        // connection whose negotiated state is invalid.
+        long tpError = handshake.getPeerTransportParamError();
+        if (tpError != 0) {
+            logger.warn("[QUIC] transport parameter violation (0x" + Long.toHexString(tpError) //
+                    + "): " + handshake.getPeerTransportParamErrorReason() + "; rejecting connection from " + remoteAddr);
+            this.handshakeMap.values().removeIf(hs -> hs == handshake);
+            return;
+        }
+
         QuicSoConfig quicConfig = quicSoConfig();
 
         try {
@@ -629,6 +641,11 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
             }
 
             if (parsed == null || parsed.payload == null) {
+                // RFC 9000 §10.3.1: undecryptable short-header datagram whose trailing 16 bytes
+                // match a peer Stateless Reset Token causes a silent draining.
+                if (conn.matchesStatelessResetToken(rawData)) {
+                    conn.enterDrainingSilently("Stateless Reset received (RFC 9000 §10.3.1)");
+                }
                 return;
             }
 
@@ -752,10 +769,18 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
         System.arraycopy(retryToken, 0, packet, pos, retryToken.length);
         pos += retryToken.length;
 
-        // Retry Integrity Tag (16 bytes - simplified pseudo-tag).
-        // In a full implementation, this would be an AEAD computation.
-        byte[] integrityTag = new byte[16];
-        new SecureRandom().nextBytes(integrityTag);
+        // Retry Integrity Tag (RFC 9001 §5.8, RFC 9369 §3.3.3 for v2).
+        // The tag is AEAD_AES_128_GCM over the Retry Pseudo-Packet with a fixed per-version key
+        // and nonce. Without this, standards-compliant QUIC clients drop the Retry silently.
+        byte[] integrityTag;
+        try {
+            byte[] retryWithoutTag = new byte[pos];
+            System.arraycopy(packet, 0, retryWithoutTag, 0, pos);
+            integrityTag = QuicCrypto.computeRetryIntegrityTag(clientDcid, retryWithoutTag, version);
+        } catch (Exception e) {
+            logger.error("Failed to compute Retry Integrity Tag: " + e.getMessage());
+            return;
+        }
         System.arraycopy(integrityTag, 0, packet, pos, 16);
         pos += 16;
 
@@ -774,8 +799,8 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
      * Helper type used to wrap byte[] values as ConcurrentHashMap keys.
      */
     static final class CidKey {
-        final         byte[] cid;
-        private final int    hash;
+        final byte[]      cid;
+        private final int hash;
 
         CidKey(byte[] cid) {
             this.cid = cid;

@@ -58,27 +58,33 @@ public class QuicSimplyTlsClient implements Closeable {
 
     // ── 握手状态 ───────────────────────────────────────────────────────
     // ── 实例字段 ───────────────────────────────────────────────────────
-    private final byte[]               localCid;
-    private final AtomicLong           initialPn          = new AtomicLong(0);
-    private final AtomicLong           handshakePn        = new AtomicLong(0);
-    private final AtomicLong           appPn              = new AtomicLong(0);
-    private final DatagramSocket       socket;
-    private final InetSocketAddress    serverAddr;
+    private final byte[]            localCid;
+    private final AtomicLong        initialPn   = new AtomicLong(0);
+    private final AtomicLong        handshakePn = new AtomicLong(0);
+    private final AtomicLong        appPn       = new AtomicLong(0);
+    private final DatagramSocket    socket;
+    private final InetSocketAddress serverAddr;
     // TLS engine and keys
-    private final QuicTlsEngine        tlsEngine;
+    private final QuicTlsEngine tlsEngine;
     // 握手事件追踪
     private final List<HandshakeEvent> handshakeEvents    = new ArrayList<HandshakeEvent>();
-    private       byte[]               remoteCid;
-    private       byte[][]             clientInitialKeys;
-    private       byte[][]             serverInitialKeys;
-    private       byte[][]             clientHandshakeKeys;
-    private       byte[][]             serverHandshakeKeys;
-    private       byte[][]             clientAppKeys;
-    private       byte[][]             serverAppKeys;
-    private       long                 largestInitialPn   = -1;
-    private       long                 largestHandshakePn = -1;
-    private       long                 largestAppPn       = -1;
-    private       boolean              established        = false;
+    private byte[]                     remoteCid;
+    private byte[][]                   clientInitialKeys;
+    private byte[][]                   serverInitialKeys;
+    private byte[][]                   clientHandshakeKeys;
+    private byte[][]                   serverHandshakeKeys;
+    private byte[][]                   clientAppKeys;
+    private byte[][]                   serverAppKeys;
+    private long                       largestInitialPn   = -1;
+    private long                       largestHandshakePn = -1;
+    private long                       largestAppPn       = -1;
+    private boolean                    established        = false;
+    /**
+     * 可选：覆盖发送给服务端的 {@code initial_source_connection_id} transport parameter
+     * （RFC 9000 §7.3）。默认 {@code null} → 使用真实 {@link #localCid}。测试可通过
+     * {@link #setInitialSourceConnectionIdOverride(byte[])} 显式制造不匹配，验证服务端受端校验。
+     */
+    private byte[]                     iscidOverride      = null;
 
     /**
      * 创建一个 TLS 模式的 QUIC 客户端。
@@ -213,6 +219,8 @@ public class QuicSimplyTlsClient implements Closeable {
         this.serverInitialKeys = QuicCrypto.derivePacketKeys(initialSecrets[1], QuicVersion.V1);
 
         // ── Step 1: 生成 ClientHello，发加密 Initial 包 ────────────────
+        // RFC 9000 §7.3: 客户端必须在 transport parameters 中声明 initial_source_connection_id。
+        tlsEngine.setConnectionIds(iscidOverride != null ? iscidOverride : localCid, null);
         byte[] clientHello = tlsEngine.generateClientHello();
         byte[] cryptoFrame = QuicPacket.buildCryptoFrame(0, clientHello);
         long pn = initialPn.getAndIncrement();
@@ -441,6 +449,8 @@ public class QuicSimplyTlsClient implements Closeable {
         this.serverInitialKeys = QuicCrypto.derivePacketKeys(initialSecrets[1], QuicVersion.V1);
 
         // ── Step 1: 发送 ClientHello（加密 Initial 包）────────────────────
+        // RFC 9000 §7.3: 客户端必须在 transport parameters 中声明 initial_source_connection_id。
+        tlsEngine.setConnectionIds(localCid, null);
         byte[] clientHello = tlsEngine.generateClientHello();
         byte[] cryptoFrame = QuicPacket.buildCryptoFrame(0, clientHello);
         long pn = initialPn.getAndIncrement();
@@ -744,6 +754,15 @@ public class QuicSimplyTlsClient implements Closeable {
 
     public boolean isEstablished() {
         return established;
+    }
+
+    /**
+     * 覆盖发送给服务端的 {@code initial_source_connection_id} transport parameter（RFC 9000 §7.3）。
+     * <p>当传入与真实 SCID 不一致的值时，服务端应按 RFC 9000 §7.3 校验失败并拒绝握手。
+     * 仅用于负向测试；传入 {@code null} 恢复默认（使用真实 {@link #localCid}）。
+     */
+    public void setInitialSourceConnectionIdOverride(byte[] cid) {
+        this.iscidOverride = cid;
     }
 
     /**

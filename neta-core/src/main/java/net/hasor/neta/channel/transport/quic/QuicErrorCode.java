@@ -70,4 +70,16 @@ public interface QuicErrorCode {
 
     /** The current network path cannot carry QUIC, for example because the MTU is too small. */
     long NO_VIABLE_PATH = 0x10;
+
+    /**
+     * Base value of the CRYPTO_ERROR range (RFC 9000 §20.1). A TLS alert of value {@code N} maps
+     * to the QUIC error code {@code CRYPTO_ERROR_BASE + N}.
+     */
+    long CRYPTO_ERROR_BASE = 0x0100;
+
+    /**
+     * CRYPTO_ERROR carrying a TLS {@code unexpected_message} (alert 10) alert; sent, for example,
+     * when a peer receives a TLS KeyUpdate over QUIC (RFC 9001 §6).
+     */
+    long CRYPTO_ERROR_UNEXPECTED_MESSAGE = CRYPTO_ERROR_BASE + 10;
 }
