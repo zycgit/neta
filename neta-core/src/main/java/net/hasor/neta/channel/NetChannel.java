@@ -17,6 +17,8 @@ package net.hasor.neta.channel;
 import java.io.PrintStream;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.channels.ClosedChannelException;
+import java.nio.channels.ShutdownChannelGroupException;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Map;
@@ -562,19 +564,78 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
      */
     void flushForClose() {
         SoSndData sndData = null;
+        Object[] closeData = null;
         try {
+            if (!this.asyncChannel.isOpen()) {
+                return;
+            }
+
             ChainResult cr;
             synchronized (this) {
+                if (!this.asyncChannel.isOpen()) {
+                    return;
+                }
                 cr = this.protoStack.onSnd(this.protoCtx, null, null, null);
             }
-            sndData = toSoSndData(Futures.buildNoop(), cr.data);
+            closeData = cr.data;
+            if (!this.asyncChannel.isOpen()) {
+                releaseCloseData(closeData);
+                return;
+            }
+
+            sndData = toSoSndData(Futures.buildNoop(), closeData);
+            closeData = null;
+
+            if (!this.asyncChannel.isOpen()) {
+                sndData.failed(new SoCloseException("the channel is closed."));
+                return;
+            }
+
             appendSoSndTask(sndData);
         } catch (Throwable e) {
+            if (isExpectedCloseDuringFlush(e)) {
+                SoCloseException closeError = new SoCloseException("the channel is closed.", e);
+                if (sndData != null) {
+                    if (!this.wContext.isEmpty()) {
+                        this.wContext.purge(closeError);
+                    } else {
+                        sndData.failed(closeError);
+                    }
+                } else {
+                    releaseCloseData(closeData);
+                }
+                return;
+            }
+
             logger.error("snd(" + this.channelId + ") flushForClose failed, " + e.getMessage(), e);
             if (sndData != null) {
-                sndData.failed(e);
+                if (!this.wContext.isEmpty()) {
+                    this.wContext.purge(e);
+                } else {
+                    sndData.failed(e);
+                }
+            } else {
+                releaseCloseData(closeData);
             }
         }
+    }
+
+    private static void releaseCloseData(Object[] closeData) {
+        if (closeData == null) {
+            return;
+        }
+        for (Object item : closeData) {
+            SoUtils.release(item);
+        }
+    }
+
+    private static boolean isExpectedCloseDuringFlush(Throwable error) {
+        for (Throwable current = error; current != null; current = current.getCause()) {
+            if (current instanceof SoCloseException || current instanceof ClosedChannelException || current instanceof ShutdownChannelGroupException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

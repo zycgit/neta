@@ -89,7 +89,9 @@ class HttpRequestHandler implements ProtoHandler<HttpObject, Object> {
                 continue;
             }
 
-            if (obj instanceof HttpRequest && !(obj instanceof HttpHeaders)) {
+            if (obj instanceof FullHttpRequest) {
+                onFullRequest(ctx, (FullHttpRequest) obj);
+            } else if (obj instanceof HttpRequest && !(obj instanceof HttpHeaders)) {
                 // Start of a new request: save the request line, reset state
                 onRequestLine(obj);
             } else if (obj instanceof LastHttpHeaders) {
@@ -158,6 +160,44 @@ class HttpRequestHandler implements ProtoHandler<HttpObject, Object> {
             logger.warn("RequestDispatchCallback.onHttpRequest() threw an exception", e);
             closeBodyChannelIfPresent();
         }
+    }
+
+    /** Handles an aggregated request that already carries headers and terminal body content. */
+    private void onFullRequest(ProtoContext ctx, FullHttpRequest request) {
+        closeBodyChannelIfPresent();
+
+        this.receivedBodyBytes = request.content().readableBytes();
+        if (this.receivedBodyBytes > this.config.getMaxContentLength()) {
+            request.release();
+            sendErrorAndClose(ctx, 413, "Payload Too Large");
+            this.receivedBodyBytes = 0;
+            return;
+        }
+
+        NetChannel channel = (NetChannel) ctx.getChannel();
+        this.currentBodyChannel = new InternalBodyChannel(//
+                this.config.getBodyQueueCapacity(), //
+                this.config.getBackpressureStrategy(), //
+                channel);
+
+        ResponseSink sink = createResponseSink(ctx, request);
+        try {
+            this.callback.onHttpRequest(ctx, request, request, this.currentBodyChannel, sink, channel, this.secure);
+        } catch (Throwable e) {
+            logger.warn("RequestDispatchCallback.onHttpRequest() threw an exception", e);
+            closeBodyChannelIfPresent();
+            request.release();
+            this.receivedBodyBytes = 0;
+            return;
+        }
+
+        boolean accepted = this.currentBodyChannel.offer(request);
+        if (!accepted) {
+            sendErrorAndClose(ctx, 503, "Service Unavailable");
+        }
+
+        this.currentBodyChannel = null;
+        this.receivedBodyBytes = 0;
     }
 
     /** Feeds a body chunk into the active {@link InternalBodyChannel}. */

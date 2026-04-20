@@ -23,7 +23,13 @@ import net.hasor.neta.codec.http.cookie.Cookie;
 import net.hasor.neta.codec.http.multipart.FileUpload;
 
 /**
- * Servlet-like HTTP request interface. Wraps a FullHttpRequest from the neta HTTP codec.
+ * Servlet-like HTTP request interface for the nhttp streaming request model.
+ *
+ * <p>The runtime request path is normally built from request line, headers, and a streaming body
+ * channel rather than a pre-aggregated {@code FullHttpRequest}. Raw-body accessors may still
+ * materialize the complete body on demand. Multipart accessors may instead consume the streaming
+ * body incrementally and therefore do not guarantee that the original raw request body remains
+ * available afterwards.</p>
  * @author 赵永春 (zyc@hasor.net)
  */
 public interface ServletRequest {
@@ -103,10 +109,10 @@ public interface ServletRequest {
 
     // --- Body ---
 
-    /** Returns the request body as a ByteBuf */
+    /** Returns the request body as a ByteBuf. This may materialize the full raw body on demand. */
     ByteBuf getBody();
 
-    /** Returns the request body as an InputStream */
+    /** Returns the request body as an InputStream. This may materialize the full raw body on demand. */
     InputStream getBodyAsStream();
 
     /** Returns the request body as a String using UTF-8 */

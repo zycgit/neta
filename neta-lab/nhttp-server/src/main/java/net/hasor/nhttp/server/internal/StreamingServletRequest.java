@@ -43,11 +43,10 @@ import net.hasor.nhttp.server.connector.BackpressureStrategy;
 /**
  * {@link ServletRequest} implementation for the streaming HTTP model.
  *
- * <p>This class holds the request line and headers separately from the body. The body is read
- * on demand from an {@link InternalBodyChannel}: the first call to any body accessor method
- * ({@link #getBody()}, {@link #getBodyAsString()}, {@link #getParameterMap()} for form data,
- * {@link #getFileUploads()}) triggers a blocking drain of all pending body chunks on the
- * current (worker) thread. The drained bytes are cached for subsequent calls.</p>
+ * <p>This class holds the request line and headers separately from the body. Raw-body accessors
+ * such as {@link #getBody()} and {@link #getBodyAsString()} drain the {@link InternalBodyChannel}
+ * on demand and cache the aggregated bytes. Multipart accessors are different: they decode parts
+ * incrementally from the body channel and do not materialize the whole request body first.</p>
  *
  * <h3>Body-drain timeout</h3>
  * <p>Each chunk read attempt uses {@code chunkReadTimeoutMillis} as the per-chunk wait.
@@ -90,6 +89,7 @@ public class StreamingServletRequest implements ServletRequest {
     private boolean                   bodyDrained     = false;
     private List<FileUpload>          fileUploads;
     private boolean                   multipartParsed = false;
+    private boolean                   rawBodyUnavailableAfterMultipart = false;
     private boolean                   released        = false;
 
     // Async processing support
@@ -324,12 +324,23 @@ public class StreamingServletRequest implements ServletRequest {
             this.fileUploads = Collections.emptyList();
             return;
         }
-        ByteBuf buf = getBody();
-        if (buf == null || buf.readableBytes() == 0) {
-            this.fileUploads = Collections.emptyList();
+        if (this.bodyDrained) {
+            ByteBuf buf = this.body;
+            if (buf == null || buf.readableBytes() == 0) {
+                this.fileUploads = Collections.emptyList();
+                return;
+            }
+            this.fileUploads = MultipartDecoder.decode(buf, boundary);
             return;
         }
-        this.fileUploads = MultipartDecoder.decode(buf, boundary);
+
+        this.bodyDrained = true;
+        this.rawBodyUnavailableAfterMultipart = true;
+        this.body = null;
+        this.fileUploads = StreamingMultipartDecoder.decode(this.bodyChannel, boundary, this.chunkReadTimeoutMillis);
+        if (this.fileUploads == null || this.fileUploads.isEmpty()) {
+            this.fileUploads = Collections.emptyList();
+        }
     }
 
     // =========================================================================
@@ -346,6 +357,9 @@ public class StreamingServletRequest implements ServletRequest {
      */
     @Override
     public ByteBuf getBody() {
+        if (this.rawBodyUnavailableAfterMultipart && this.body == null) {
+            throw new IllegalStateException("Raw request body is unavailable after streaming multipart parsing. Call getBody() before multipart accessors if you need the full raw body.");
+        }
         drainBodyIfNeeded();
         return this.body;
     }

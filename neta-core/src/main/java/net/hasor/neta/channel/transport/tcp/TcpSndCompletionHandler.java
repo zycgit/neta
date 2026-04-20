@@ -157,6 +157,21 @@ class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext
 
         // Complete the current sndData inline after it has been fully sent.
         SoSndData sndData = wContext.peekData();
+        if (sndData == null) {
+            this.monitor.updateSndCounter(result);
+
+            if (this.sndSwapBuf.hasRemaining()) {
+                this.writing.set(false);
+            } else {
+                this.writing.set(false);
+                if (!wContext.isEmpty() && this.writing.compareAndSet(false, true)) {
+                    this.copyData(wContext);
+                    this.writeData(wContext);
+                }
+            }
+            return;
+        }
+
         if (!sndData.hasReadable()) {
             wContext.popData();
             sndData.completed();

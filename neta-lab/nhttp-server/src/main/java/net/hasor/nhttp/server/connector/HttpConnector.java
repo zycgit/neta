@@ -30,7 +30,7 @@ import net.hasor.nhttp.server.ServerConfig;
  * <p>When {@link ServerConfig#isHttp2Enabled()} is {@code true} the pipeline uses
  * {@code HttpAggregatorRoute} to detect the initial bytes and branches into:
  * <ul>
- *   <li>{@code BRANCH_H1} — HTTP/1.1 with h2c upgrade bridge</li>
+ *   <li>{@code BRANCH_H1} — regular HTTP/1.1 request flow</li>
  *   <li>{@code BRANCH_H2} — HTTP/2 prior-knowledge (PRI * HTTP/2.0)</li>
  *   <li>{@code BRANCH_H2C} — HTTP/1.1 Upgrade: h2c negotiation</li>
  * </ul>

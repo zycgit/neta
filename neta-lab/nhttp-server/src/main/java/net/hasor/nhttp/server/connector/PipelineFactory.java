@@ -51,9 +51,9 @@ import net.hasor.nhttp.server.ServerConfig;
  * <h3>Pipeline tree (plain HTTP with HTTP/2 enabled)</h3>
  * <pre>
  * [protocol-detect (HttpAggregatorRoute)]
- *   ├─ BRANCH_H1  → [HttpServerDuplexe] → [H2CUpgradeServerDuplexe] → [app-layer]
+ *   ├─ BRANCH_H1  → [HttpServerDuplexe] → [app-layer]
  *   ├─ BRANCH_H2  → [Http2FrameDuplexe] → [Http2ObjectDuplexe] → (per-stream) → [app-layer]
- *   └─ BRANCH_H2C → same as BRANCH_H1
+ *   └─ BRANCH_H2C → [HttpServerDuplexe] → [H2CUpgradeServerDuplexe]
  *
  * [app-layer]
  *   [ws-lifecycle (WebSocketLifecycleHandler)]
@@ -113,17 +113,31 @@ public final class PipelineFactory {
     /**
      * Creates an HTTP/1.1 branch pipeline.
      *
-     * <p>Adds the HTTP server codec, an h2c upgrade bridge (for HTTP/1.1 → HTTP/2
-     * cleartext upgrade), and then the application pipeline.</p>
-     *
-     * @param h2cRoutingControl the outer routing control used by the h2c upgrade
-     *                          bridge to switch the connection to the H2 branch
+     * <p>Adds the HTTP server codec, then the shared application pipeline.</p>
      */
-    static ProtoInitializer createHttp1BranchPipeline(ServerConfig config, RequestDispatchCallback callback, boolean secure, ProtoRoutingControl h2cRoutingControl, WebSocketHandshakeAuthorizer wsAuthorizer) {
+    static ProtoInitializer createHttp1BranchPipeline(ServerConfig config, RequestDispatchCallback callback, boolean secure, WebSocketHandshakeAuthorizer wsAuthorizer) {
         return ctx -> {
             ctx.addLast("http-codec", new HttpServerDuplexe(config.getMaxInitialLineLength(), config.getMaxHeaderSize(), config.getMaxChunkSize()));
-            ctx.addLast("h1-h2c-upgrade-bridge", new H2CUpgradeServerDuplexer(h2cRoutingControl));
             createApplicationPipeline(config, callback, secure, wsAuthorizer).config(ctx);
+        };
+    }
+
+    // =========================================================================
+    // H2C upgrade branch
+    // =========================================================================
+
+    /**
+     * Creates the dedicated cleartext h2c-upgrade branch.
+     *
+     * <p>This branch exists only for requests already classified by
+     * {@link HttpAggregatorRoute} as valid {@code Upgrade: h2c} exchanges. It must
+     * stop at {@link H2CUpgradeServerDuplexer}; after a successful upgrade, stream 1
+     * and all subsequent traffic are handled by the real HTTP/2 branch.</p>
+     */
+    static ProtoInitializer createH2cUpgradeBranchPipeline(ServerConfig config, ProtoRoutingControl routingControl) {
+        return ctx -> {
+            ctx.addLast("http-codec", new HttpServerDuplexe(config.getMaxInitialLineLength(), config.getMaxHeaderSize(), config.getMaxChunkSize()));
+            ctx.addLast("h2c-upgrade", new H2CUpgradeServerDuplexer(routingControl));
         };
     }
 
@@ -177,9 +191,9 @@ public final class PipelineFactory {
             ctx.addLastDecoder("connection-lifecycle", new ConnectionLifecycleHandler(callback));
             ProtoHelper.standard().nextRouteAsStatic("protocol-detect", new HttpAggregatorRoute(), routing -> {
                 ProtoRoutingControl routingControl = routing.control();
-                routing.branchByInitializer(HttpRouteKey.BRANCH_H1, createHttp1BranchPipeline(config, callback, secure, routingControl, wsAuthorizer));
+                routing.branchByInitializer(HttpRouteKey.BRANCH_H1, createHttp1BranchPipeline(config, callback, secure, wsAuthorizer));
                 routing.branchByInitializer(HttpRouteKey.BRANCH_H2, createHttp2BranchPipeline(config, callback, secure, routingControl, wsAuthorizer));
-                routing.branchByInitializer(HttpRouteKey.BRANCH_H2C, createHttp1BranchPipeline(config, callback, secure, routingControl, wsAuthorizer));
+                routing.branchByInitializer(HttpRouteKey.BRANCH_H2C, createH2cUpgradeBranchPipeline(config, routingControl));
             }).config(ctx);
         };
     }
@@ -221,7 +235,7 @@ public final class PipelineFactory {
             // ALPN routing: h2 | http/1.1
             ProtoHelper.standard().nextRouteAsStatic("alpn", new Http2OverTlsRoute(), routing -> {
                 ProtoRoutingControl routingControl = routing.control();
-                routing.branchByInitializer(HttpRouteKey.BRANCH_H1, createHttp1BranchPipeline(config, callback, true, routingControl, wsAuthorizer));
+                routing.branchByInitializer(HttpRouteKey.BRANCH_H1, createHttp1BranchPipeline(config, callback, true, wsAuthorizer));
                 routing.branchByInitializer(HttpRouteKey.BRANCH_H2, createHttp2BranchPipeline(config, callback, true, routingControl, wsAuthorizer));
             }).config(ctx);
         };

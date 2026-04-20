@@ -26,6 +26,7 @@ import net.hasor.neta.codec.ssl.SslConfig;
 import net.hasor.neta.codec.ssl.SslProtocol;
 import net.hasor.neta.codec.ssl.SslUtils;
 import net.hasor.nhttp.server.NetaHttpServer;
+import net.hasor.nhttp.server.connector.BackpressureStrategy;
 
 /**
  * HTTP server example based on the new {@link NetaHttpServer} API.
@@ -51,7 +52,8 @@ import net.hasor.nhttp.server.NetaHttpServer;
 public class HttpServerMain {
     private static final int    HTTP_PORT               = 8080;
     private static final int    HTTPS_PORT              = 8443;
-    private static final int    MAX_CONTENT_LENGTH      = 10 * 1024 * 1024;
+    private static final int    MAX_CONTENT_LENGTH      = 128 * 1024 * 1024;
+    private static final int    BODY_QUEUE_CAPACITY     = 64;
     private static final int    SESSION_TIMEOUT_SECONDS = 1800;
     private static final String SERVER_NAME             = "Neta-Example-HTTP-Server/2.0";
 
@@ -156,7 +158,7 @@ public class HttpServerMain {
 
     private static NetaHttpServer buildServer(CorsConfig corsConfig, SslConfig sslConfig) {
         NetaHttpServer server = new NetaHttpServer();
-        server.serverName(SERVER_NAME).cors(corsConfig).http2(true).maxContentLength(MAX_CONTENT_LENGTH).sessionTimeout(SESSION_TIMEOUT_SECONDS);
+        server.serverName(SERVER_NAME).cors(corsConfig).http2(true).maxContentLength(MAX_CONTENT_LENGTH).bodyQueueCapacity(BODY_QUEUE_CAPACITY).backpressureStrategy(BackpressureStrategy.limitedWait(250L)).sessionTimeout(SESSION_TIMEOUT_SECONDS);
 
         if (sslConfig != null) {
             server.ssl(sslConfig);

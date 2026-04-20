@@ -44,8 +44,7 @@ class Http1ResponseSink implements ResponseSink {
             headerBlock.setHeader(HttpHeaderNames.TRANSFER_ENCODING, HttpHeaderValues.CHUNKED);
             headerBlock.removeHeader(HttpHeaderNames.CONTENT_LENGTH);
         }
-        this.context.sendEncoded(response);
-        this.context.sendEncoded(headerBlock);
+        this.context.sendEncoded(new Object[] { response, headerBlock });
     }
 
     @Override

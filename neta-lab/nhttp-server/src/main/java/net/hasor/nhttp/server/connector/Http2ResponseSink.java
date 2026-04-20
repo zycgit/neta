@@ -45,8 +45,7 @@ class Http2ResponseSink implements ResponseSink {
         headerBlock.streamId(this.streamId);
         headerBlock.appendHeaders(headers);
         headerBlock.removeHeader(HttpHeaderNames.TRANSFER_ENCODING);
-        this.context.sendEncoded(response);
-        this.context.sendEncoded(headerBlock);
+        this.context.sendEncoded(new Object[] { response, headerBlock });
     }
 
     @Override

@@ -87,7 +87,7 @@ public class DefaultHttpRequest extends AbstractHttpObject<HttpRequest> implemen
      */
     @Override
     public HttpVersion protocolVersion() {
-        if (this.version == null) {
+        if (this.version == null && this.versionText != null) {
             this.version = HttpVersion.valueOf(this.versionText);
         }
         return version;
@@ -121,7 +121,7 @@ public class DefaultHttpRequest extends AbstractHttpObject<HttpRequest> implemen
      */
     @Override
     public HttpMethod method() {
-        if (this.method == null) {
+        if (this.method == null && this.methodText != null) {
             this.method = HttpMethod.valueOf(this.methodText);
         }
         return method;

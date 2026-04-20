@@ -18,6 +18,7 @@ package net.hasor.nhttp.server;
 import static org.junit.Assert.*;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +39,7 @@ import net.hasor.neta.channel.transport.virtual.VrtTransfer;
 import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.multipart.FileUpload;
 import net.hasor.neta.codec.http.multipart.MultipartEncoder;
+import net.hasor.nhttp.server.connector.BackpressureStrategy;
 import net.hasor.nhttp.server.internal.DefaultSessionManager;
 import net.hasor.nhttp.server.internal.StreamingServletRequest;
 
@@ -535,6 +537,39 @@ public class FormAndUploadTest {
         }
     }
 
+    @Test
+    public void test_multipart_streamingDecodeDoesNotMaterializeRawBody() throws Exception {
+        NetManager neta = new NetManager();
+        FullHttpRequest httpReq = null;
+        StreamingServletRequest req = null;
+        try {
+            VrtChannel channel = createMockChannel(neta);
+
+            MultipartEncoder encoder = new MultipartEncoder();
+            encoder.addField("description", "streaming");
+            encoder.addFile("file1", "hello.txt", "text/plain", "Hello World!".getBytes(StandardCharsets.UTF_8));
+
+            httpReq = buildMultipartRequest("/api/upload", encoder);
+            req = StreamingServletRequest.fromFullHttpRequest(httpReq, channel, false, SESSION_MANAGER);
+
+            assertEquals(2, req.getFileUploads().size());
+
+            Field bodyField = StreamingServletRequest.class.getDeclaredField("body");
+            bodyField.setAccessible(true);
+            assertNull("Multipart streaming decode should not cache a full raw body buffer", bodyField.get(req));
+
+            try {
+                req.getBody();
+                fail("Expected raw body access to be unavailable after streaming multipart parsing");
+            } catch (IllegalStateException expected) {
+                assertTrue(expected.getMessage().contains("Raw request body is unavailable"));
+            }
+        } finally {
+            releaseQuietly(req, httpReq);
+            neta.shutdown();
+        }
+    }
+
     // --- Empty multipart body ---
 
     @Test
@@ -723,12 +758,13 @@ public class FormAndUploadTest {
             byte[] body = encoder.encode();
             String headerPart = "POST /api/upload HTTP/1.1\r\n" + "Host: localhost\r\n" + "Content-Type: " + encoder.contentType() + "\r\n" + "Content-Length: " + body.length + "\r\n" + "\r\n";
 
-            byte[] headerBytes = headerPart.getBytes(StandardCharsets.US_ASCII);
-            byte[] combined = new byte[headerBytes.length + body.length];
-            System.arraycopy(headerBytes, 0, combined, 0, headerBytes.length);
-            System.arraycopy(body, 0, combined, headerBytes.length, body.length);
-
-            client.sendData(toByteBuf(combined)).get();
+            client.sendData(toByteBuf(headerPart)).get();
+            for (int offset = 0; offset < body.length; offset += 7) {
+                int len = Math.min(7, body.length - offset);
+                byte[] chunk = new byte[len];
+                System.arraycopy(body, offset, chunk, 0, len);
+                client.sendData(toByteBuf(chunk)).get();
+            }
             Thread.sleep(500);
 
             String response = collectStrings(clientRcv);
@@ -736,6 +772,75 @@ public class FormAndUploadTest {
             assertTrue("Response should contain files=2: " + response, response.contains("files=2"));
             assertTrue("Response should contain size=17: " + response, response.contains("size=17"));
             assertTrue("Response should contain desc=TestUpload: " + response, response.contains("desc=TestUpload"));
+        } finally {
+            neta.shutdown();
+        }
+    }
+
+    @Test
+    public void test_pipeline_largeUpload_slowConsumerDoesNot503() throws Throwable {
+        NetaHttpServer httpServer = new NetaHttpServer();
+        httpServer.maxContentLength(10 * 1024 * 1024);
+        httpServer.bodyQueueCapacity(2);
+        httpServer.backpressureStrategy(BackpressureStrategy.limitedWait(250L));
+        httpServer.addServlet("/api/upload", new HttpServlet() {
+            @Override
+            protected void doPost(ServletRequest req, ServletResponse resp) throws IOException {
+                try {
+                    Thread.sleep(120L);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException(e);
+                }
+
+                List<FileUpload> parts = req.getFileUploads();
+                FileUpload part = req.getFileUpload("bigfile");
+                resp.setContentType("text/plain");
+                resp.write("parts=" + parts.size() + ",size=" + (part != null ? part.content().readableBytes() : -1));
+            }
+        });
+        httpServer.initServletContext();
+
+        ProtoInitializer serverInit = httpServer.createHttpInitializer(false);
+
+        NetManager neta = new NetManager();
+        try {
+            VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), serverInit, VrtSoConfig.asServer());
+            VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+            }, VrtSoConfig.asClient());
+
+            VrtTransfer transfer = new VrtTransfer(neta);
+            transfer.linkTo(client, server, VrtTransfer.duplicate());
+            transfer.linkTo(server, client, VrtTransfer.duplicate());
+
+            Queue<String> clientRcv = subscribeAsString(client);
+
+            byte[] payload = new byte[256 * 1024];
+            for (int i = 0; i < payload.length; i++) {
+                payload[i] = (byte) (i & 0x7F);
+            }
+
+            MultipartEncoder encoder = new MultipartEncoder();
+            encoder.addField("description", "SlowUpload");
+            encoder.addFile("bigfile", "big.bin", "application/octet-stream", payload);
+
+            byte[] body = encoder.encode();
+            String headerPart = "POST /api/upload HTTP/1.1\r\n" + "Host: localhost\r\n" + "Content-Type: " + encoder.contentType() + "\r\n" + "Content-Length: " + body.length + "\r\n" + "\r\n";
+            client.sendData(toByteBuf(headerPart)).get();
+
+            for (int offset = 0; offset < body.length; offset += 1024) {
+                int len = Math.min(1024, body.length - offset);
+                byte[] chunk = new byte[len];
+                System.arraycopy(body, offset, chunk, 0, len);
+                client.sendData(toByteBuf(chunk)).get();
+            }
+
+            Thread.sleep(800L);
+
+            String response = collectStrings(clientRcv);
+            assertFalse("Response should not contain 503: " + response, response.contains("503 Service Unavailable"));
+            assertTrue("Response should contain 200: " + response, response.contains("200"));
+            assertTrue("Response should contain the uploaded size: " + response, response.contains("size=" + payload.length));
         } finally {
             neta.shutdown();
         }

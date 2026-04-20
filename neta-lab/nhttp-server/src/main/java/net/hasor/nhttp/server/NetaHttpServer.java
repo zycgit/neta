@@ -82,14 +82,14 @@ public class NetaHttpServer {
     private int                        maxInitialLineLength        = 4096;
     private int                        maxHeaderSize               = 8192;
     private int                        maxChunkSize                = 8192;
-    private final int                  bodyQueueCapacity           = 16;
+    private int                        bodyQueueCapacity           = 16;
     private final int                  maxConcurrentRequests       = 200;
     private final long                 requestTimeoutMillis        = 30_000L;
     private final int                  maxConnections              = 10_000;
     private final long                 connectionIdleTimeoutMillis = 60_000L;
     private final long                 gracefulShutdownMillis      = 30_000L;
     private ExecutorService            executor;
-    private final BackpressureStrategy backpressureStrategy        = BackpressureStrategy.FAST_FAIL;
+    private BackpressureStrategy       backpressureStrategy        = BackpressureStrategy.limitedWait(200L);
     private boolean                    http2Enabled                = true;
     private SslConfig                  sslConfig;
     private CorsConfig                 corsConfig;
@@ -172,6 +172,21 @@ public class NetaHttpServer {
     /** Sets the maximum HTTP content chunk size. */
     public NetaHttpServer maxChunkSize(int size) {
         this.maxChunkSize = size;
+        return this;
+    }
+
+    /** Sets the per-request streaming body queue capacity. */
+    public NetaHttpServer bodyQueueCapacity(int capacity) {
+        if (capacity <= 0) {
+            throw new IllegalArgumentException("capacity must be > 0");
+        }
+        this.bodyQueueCapacity = capacity;
+        return this;
+    }
+
+    /** Sets the backpressure strategy used when the request body queue is full. */
+    public NetaHttpServer backpressureStrategy(BackpressureStrategy strategy) {
+        this.backpressureStrategy = java.util.Objects.requireNonNull(strategy, "strategy");
         return this;
     }
 

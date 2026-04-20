@@ -175,7 +175,7 @@ public final class ServerConfig {
         private long                 connectionIdleTimeoutMillis = 60_000L;
         private long                 gracefulShutdownMillis      = 30_000L;
         private ExecutorService      executor                    = null;
-        private BackpressureStrategy backpressureStrategy        = BackpressureStrategy.FAST_FAIL;
+        private BackpressureStrategy backpressureStrategy        = BackpressureStrategy.limitedWait(200L);
         private boolean              http2Enabled                = true;
         private SslConfig            sslConfig                   = null;
         private CorsConfig           corsConfig                  = null;
@@ -215,6 +215,9 @@ public final class ServerConfig {
         }
 
         public Builder bodyQueueCapacity(int capacity) {
+            if (capacity <= 0) {
+                throw new IllegalArgumentException("capacity must be > 0");
+            }
             this.bodyQueueCapacity = capacity;
             return this;
         }
