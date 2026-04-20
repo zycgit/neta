@@ -80,7 +80,7 @@
             <dependency>
                 <groupId>net.hasor</groupId>
                 <artifactId>cobble-all</artifactId>
-                <version>4.8.6-SNAPSHOT</version>
+                <version>4.8.6</version>
             </dependency>
 
             <!-- for Test -->
