@@ -1,0 +1,10 @@
+{
+  "label": "数据处理",
+  "position": 4,
+  "className": "red",
+  "collapsed": true,
+  "link": {
+    "type": "doc",
+    "id": "about"
+  }
+}

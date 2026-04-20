@@ -47,7 +47,7 @@ Hasor 是一个类似 Spring 的项目，提供 IoC/Aop 和 Web 开发，它比 
 ```properties
 # 数据源使用 Druid
 dbvisitor.jdbc-ds=com.alibaba.druid.pool.DruidDataSource
-dbvisitor.jdbc-ds.url=jdbc:mysql://127.0.0.1:3306/devtester
+dbvisitor.jdbc-ds.httpUrl=jdbc:mysql://127.0.0.1:3306/devtester
 dbvisitor.jdbc-ds.driverClassName=com.mysql.cj.jdbc.Driver
 dbvisitor.jdbc-ds.username=root
 dbvisitor.jdbc-ds.password=123456
@@ -98,7 +98,7 @@ ServiceTest service = appContext.getInstance(ServiceTest.class);
 工具内置了一个用于测试的，简单 `DataSource` 实现。它不支持连接池，这意味着每次都会创建一个新的链接。配置方式如下：
 
 ```properties
-dbvisitor.jdbc-ds.url=jdbc:mysql://127.0.0.1:3306/devtester
+dbvisitor.jdbc-ds.httpUrl=jdbc:mysql://127.0.0.1:3306/devtester
 dbvisitor.jdbc-ds.driverClassName=com.mysql.cj.jdbc.Driver
 dbvisitor.jdbc-ds.username=root
 dbvisitor.jdbc-ds.password=123456
@@ -110,17 +110,17 @@ dbvisitor.jdbc-ds.password=123456
 # one,two,three 三个数据源
 dbvisitor.multiple-datasource=one,two,three
 # -- one
-dbvisitor.one.jdbc-ds.url=jdbc:mysql://127.0.0.1:3306/db1
+dbvisitor.one.jdbc-ds.httpUrl=jdbc:mysql://127.0.0.1:3306/db1
 dbvisitor.one.jdbc-ds.driverClassName=com.mysql.cj.jdbc.Driver
 dbvisitor.one.jdbc-ds.username=root
 dbvisitor.one.jdbc-ds.password=123456
 # -- two
-dbvisitor.two.jdbc-ds.url=jdbc:mysql://127.0.0.1:3306/db2
+dbvisitor.two.jdbc-ds.httpUrl=jdbc:mysql://127.0.0.1:3306/db2
 dbvisitor.two.jdbc-ds.driverClassName=com.mysql.cj.jdbc.Driver
 dbvisitor.two.jdbc-ds.username=root
 dbvisitor.two.jdbc-ds.password=123456
 # -- three
-dbvisitor.three.jdbc-ds.url=jdbc:mysql://127.0.0.1:3306/db3
+dbvisitor.three.jdbc-ds.httpUrl=jdbc:mysql://127.0.0.1:3306/db3
 dbvisitor.three.jdbc-ds.driverClassName=com.mysql.cj.jdbc.Driver
 dbvisitor.three.jdbc-ds.username=root
 dbvisitor.three.jdbc-ds.password=123456

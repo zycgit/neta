@@ -4,27 +4,6 @@ title: HTTP/2
 description: 说明 Neta 在 HTTP/2 上的四层对象模型、编解码、控制消息、duplexe 装配、h2c 升级路径和使用注意事项。
 ---
 
-本文是 Neta HTTP/2 支持的正式说明文档，面向两类读者：
-
-- 需要组装服务端、客户端、h2c 升级链路或做协议桥接的使用者
-- 需要定位 frame、message、HttpObject 四层行为边界，以及控制消息处理位置的维护者
-
-正文按“先边界、再装配、再机制、最后参考”的顺序展开：
-
-- 第 1 章说明 HTTP/2 在 Neta 中的整体定位
-- 第 2 章说明已支持能力、能力边界和当前限制
-- 第 3 章到第 4 章说明四层模型、推荐入口和典型装配方式
-- 第 5 章到第 6 章说明内部机制以及数据流、异常流、事件流
-- 第 7 章到第 8 章提供组件参考和实际使用注意事项
-
-阅读时可以直接按目标进入对应章节：
-
-- 关注当前是否支持某项 HTTP/2 能力，读取第 2 章
-- 关注四层模型和入口选型，读取第 3 章
-- 关注服务端、客户端和 h2c upgrade 如何装配，读取第 4 章
-- 关注协议控制消息、自动 ACK、流控和异常处理，读取第 5 章和第 6 章
-- 关注构造器、参数和对象生命周期边界，读取第 7 章和第 8 章
-
 ## 1. 简介
 
 Neta 在 neta-codec-http 模块中提供一套分层的 HTTP/2 codec 与适配器。当前实现保留了协议层的中间结构，底层调试、协议桥接和高层 HTTP 适配都落在同一组组件上。
@@ -50,6 +29,7 @@ Neta 在 neta-codec-http 模块中提供一套分层的 HTTP/2 codec 与适配�
 - 协议接入方式
   - h2 prior knowledge 明文链路
   - HTTP/1.1 -> h2c upgrade 服务端桥接
+  - TLS 握手完成后的 ALPN 路由分支接入
 - frame 层能力
   - 连接前言校验
   - 9 字节帧头编解码
@@ -65,15 +45,15 @@ Neta 在 neta-codec-http 模块中提供一套分层的 HTTP/2 codec 与适配�
   - HttpRequest 或 HttpResponse、HttpHeaders、HttpContent、LastHttpContent 的双向适配
   - FullHttpRequest、FullHttpResponse 的整对象适配
 - 双工入口
-  - Http2FrameDuplexe：ByteBuf <-> Http2Frame
-  - Http2ObjectDuplexe：Http2Frame <-> HttpObject
+  - Http2FrameDuplexe：ByteBuf &lt;-&gt; Http2Frame &gt;
+  - Http2ObjectDuplexe：Http2Frame &lt;-&gt; HttpObject
   - H2cUpgradeServerDuplexe：HTTP/1.1 与 HTTP/2 的服务端升级桥
 - 协议自动处理能力
   - 服务端首次收包时发送 server SETTINGS preface
   - 收到 SETTINGS 后自动排队 SETTINGS ACK
   - 收到 PING 后自动排队 PING ACK
   - 收到 DATA 后自动排队连接级和 stream 级 WINDOW_UPDATE
-  - 通过用户事件或编码错误路径发送 RST_STREAM
+  - 通过网络事件或编码错误路径发送 RST_STREAM
 
 ### 2.2 能力边界
 
@@ -180,6 +160,8 @@ Client / Server Socket
 | Http2ObjectDecoder / Http2ObjectEncoder | Http2Frame 和 HttpObject 之间的语义编解码 | 协议层调试、控制消息观测 |
 | Http2ObjectDuplexe | HTTP/2 语义层双工入口 | 直接处理 HttpObject，同时保留 HTTP/2 事件 |
 | H2cUpgradeServerDuplexe | HTTP/1.1 与 HTTP/2 的升级桥 | 服务端 h2c upgrade |
+| Http2OverTlsRoute | TLS 握手完成后按 ALPN 结果选择 H1 或 H2 分支 | 纯 ALPN 分流 |
+| HttpAggregatorOverTlsRoute | TLS 握手后汇聚 ALPN 与 HTTP 明文探测结果 | HTTPS 端口复用 |
 | Http2Context | 连接级 HTTP/2 状态视图 | 观测 readiness、窗口、stream 状态 |
 
 ### 3.5 选型结论
@@ -188,6 +170,7 @@ Client / Server Socket
 - 业务层只关心请求响应时，直接在 message 层后接 `HttpRequestAggregator`、`HttpResponseAggregator` 或 duplex aggregator
 - 需要保留协议层控制消息时，不要直接下沉到 HttpObject 层
 - 需要 h2c upgrade 时，优先使用 H2cUpgradeServerDuplexe，而不是自己手工桥接 HTTP/1.1 和 HTTP/2 状态切换
+- 需要 HTTPS 单端口同时承载 HTTP/1.1、HTTP/2 prior knowledge 和 h2c upgrade 时，优先使用 `SslDuplexer + HttpAggregatorOverTlsRoute`
 
 ## 4. 使用方式
 
@@ -245,18 +228,89 @@ ctx.addLast("app-handler", appHandler);
 推荐装配：
 
 ```java
-ctx.addLast("h2c-upgrade", new H2cUpgradeServerDuplexe());
-ctx.addLastDecoder("h2c-aggregator", new HttpRequestAggregator(1024 * 1024));
-ctx.addLastDecoder("h2c-handler", appHandler);
+ProtoRoutingBuilder<ByteBuf, ByteBuf> routing = ProtoHelper.typedRoutingAsStatic(new HttpAggregatorRoute());
+ProtoRoutingControl routingControl = routing.control();
+
+routing.branchByInitializer(HttpRouteKey.BRANCH_H1, branch -> {
+  branch.addLast("http-codec", new HttpServerDuplexe());
+  branch.addLast("h1-upgrade", new H2CUpgradeServerDuplexe(routingControl));
+  branch.addLastDecoder("http-aggregator", new HttpRequestAggregator(1024 * 1024));
+  branch.addLastDecoder("http-handler", httpHandler);
+});
+
+routing.branchByInitializer(HttpRouteKey.BRANCH_H2C, branch -> {
+  branch.addLast("http-codec", new HttpServerDuplexe());
+  branch.addLast("h2c-upgrade", new H2cUpgradeServerDuplexe(routingControl));
+});
+
+routing.branchByInitializer(HttpRouteKey.BRANCH_H2, branch -> {
+  branch.addLast("h2-frame", new Http2FrameDuplexe(true));
+  branch.addLast("h2-object", new Http2ObjectDuplexe(true, routingControl));
+  branch.addLastDecoder("h2-handler", appHandler);
+});
 ```
 
 关键点：
 
-- 升级前走 HTTP/1.1 codec 和 request aggregator
-- 收到合法 Upgrade: h2c 和 HTTP2-Settings 后，桥接器会发送 101，再切换到 `Http2FrameDuplexe -> Http2ObjectDuplexe` 路径
-- 切换后，原升级请求会被提升为 stream 1 的 HTTP/2 请求对象
+- 如果希望“同一连接先处理普通 HTTP/1.1，后续再发起 upgrade”，H1 分支里也要挂 `H2CUpgradeServerDuplexe`
+- 这里应继续使用静态路由，由 `H2CUpgradeServerDuplexe` 通过 `ProtoRoutingControl.switchRoute(...)` 完成从 H1 到 H2 的切换
+- 升级前只需要走 HTTP/1.1 codec，`H2cUpgradeServerDuplexe` 会在内部缓存 staged request parts 并完成升级判定
+- 收到合法 Upgrade: h2c 和 HTTP2-Settings 后，桥接器会发送 101，再通过默认 immediate 的 `switchRoute(target, seed)` 触发切换到 `Http2FrameDuplexe -> Http2ObjectDuplexe` 路径
+- immediate handoff 生效后，`h2` 分支会在同一个外层 RCV 调用里补跑一次空输入轮次，先发 server SETTINGS preface，再消费 route seed
+- 原升级请求会作为一次性 route seed 提升为 stream 1 的 HTTP/2 请求对象，并由 `h2` 分支里的 `Http2ObjectDuplexe` 立即接入正常处理链
+- 这个 route seed 只用于“刚才那条已经被 h2c 分支消费掉的 upgrade request”；后续客户端发来的 connection preface、client SETTINGS、SETTINGS ACK 都是切路由后的正常 HTTP/2 流量，不走 seed
 
-### 4.4 只做 frame 层调试
+### 4.4 服务端：TLS + ALPN 自动分支到 HTTP/2
+
+适用范围：
+
+- HTTPS 单端口同时承载 HTTP/1.1 和 HTTP/2
+- 需要在 TLS 握手完成后按 ALPN 自动分流到 H1 或 H2 分支
+
+推荐装配：
+
+```java
+ctx.addLast("https", ProtoHelper.standard()
+  .nextDuplex("ssl", new SslDuplexer(sslConfig))
+  .nextRouteAsStatic("alpn", new HttpAggregatorOverTlsRoute(), routing -> {
+      ProtoRoutingControl routingControl = routing.control();
+
+      routing.branch(HttpRouteKey.BRANCH_H1, branch -> branch
+        .nextDuplex("http-codec", new HttpServerDuplexe())
+        .nextDuplex("h1-h2c-upgrade-bridge", new H2CUpgradeServerDuplexe(routingControl))
+        .nextDecoder("http-aggregator", new HttpRequestAggregator(1024 * 1024))
+        .nextDecoder("http-handler", httpHandler));
+
+      routing.branch(HttpRouteKey.BRANCH_H2, branch -> branch
+        .nextDuplex("h2-frame", new Http2FrameDuplexe(true))
+        .nextDuplex("h2-message", new Http2ObjectDuplexe(true, routingControl))
+        .nextPartition("h2-stream", new Http2ObjectPartitionSelector(), partition -> {
+      Http2ObjectPartitionPolicy policy = new Http2ObjectPartitionPolicy();
+      ProtoPartitionControl control = partition.control();
+      partition.policy(policy)
+        .byDefault(partitionCtx -> partitionCtx.addLast("h2-control-lifecycle", new Http2ObjectStreamManager(control, policy)))
+        .byInitializer(partitionCtx -> {
+            partitionCtx.addLast("h2-aggregator", new HttpServerDuplexeAggregator(1024 * 1024));
+            partitionCtx.addLastDecoder("h2-handler", h2Handler);
+        }))
+      .branch(HttpRouteKey.BRANCH_H2C, branch -> branch
+        .nextDuplex("http-codec", new HttpServerDuplexe())
+        .nextDuplex("h2c-upgrade", new H2CUpgradeServerDuplexe(routingControl))
+        .nextDecoder("h2c-handler", h2cHandler));
+        }));
+  })
+  .build());
+```
+
+关键点：
+
+- `Http2OverTlsRoute` 本身不负责 TLS 建链，它在 `SslContext.isReady()` 后优先读取 ALPN 结果
+- ALPN 协商为 `h2` 时直接进入 HTTP/2 分支
+- 如果 ALPN 没有协商出 `h2`，但 TLS 解密后的应用层首包以 `PRI` 开头，仍会按 prior knowledge 进入 HTTP/2 分支
+- 如果首个分支落到 HTTP/1.1，且 H1 分支内部挂了 `H2CUpgradeServerDuplexe`，同一条 TLS 连接后续仍可经由 HTTP/1.x upgrade 桥切到 H2 分支
+- 客户端若只声明 `http/1.1`，同时也没有发送以 `PRI` 开头的首包或合法 upgrade 请求，最终才会稳定留在 H1 分支
+
+### 4.5 只做 frame 层调试
 
 适用范围：
 
@@ -274,7 +328,7 @@ ctx.addLast("h2-frame", new Http2FrameDuplexe(true));
 - 这一层不会给你 HEADERS 里的伪头字段，也不会帮你做 HPACK 解码
 - 它最适合做二进制协议层单测和问题定位
 
-### 4.5 只做 message 层调试
+### 4.6 只做 message 层调试
 
 适用范围：
 
@@ -298,23 +352,109 @@ ctx.addLast("h2-object", new Http2ObjectDuplexe(true));
 
 ### 5.1 帧、消息、事件的高层关系图
 
-这一节只给一张高层关系图，用来回答“不同角色之间交换的到底是 frame、message 还是 event”。它不展开内部状态，只定义角色边界和对象边界。
+这一节先给一张完整总览图，用来回答四个问题：
+
+- 网络侧数据先经过哪些 codec
+- HTTP/2 的 payload 和 control/event 在哪里分流
+- 分区子链里默认分区和一般分区分别有几个
+- 业务处理和响应回写从哪个位置重新进入编码路径
 
 ```text
-Decoder side:
-  Peer -> Frame Decoder -> Http2Frame -> Message Decoder -> App
-                                      -> HttpObject / Http2Event
-
-Encoder side:
-  App -> Message Encoder -> Http2Frame -> Frame Encoder -> Peer
-      -> HttpObject / Http2Event
+网络侧入站 ByteBuf
+  |
+    v
++-------------------------------------------+
+| Http2FrameDecoder / Http2FrameDuplexe     |
++-------------------------------------------+
+  |
+    v
++-------------------------------------------+
+| Http2ObjectDecoder / Http2ObjectDuplexe   |
++-------------------------------------------+
+  |
+    v
++-------------------------------------------+
+| Http2ObjectPartitionSelector              |
++-------------------------------------------+
+  |
+  +--> HTTP/2 控制事件 -----------------------------------------------------------+
+  |    GOAWAY / RST_STREAM / PRIORITY / PUSH_PROMISE / stream-half-close          |
+  |                                                                                v
+  |                                           +-----------------------------------------------+
+  |                                           | 默认分区 1 个                                  |
+  |                                           | Http2ObjectLifecycleDuplexer                  |
+  |                                           | 负责连接级与流级生命周期管理                  |
+  |                                           | 处理控制事件和 stream 结束事件               |
+  |                                           +-----------------------------------------------+
+  |                                                                                |
+  |                                                                                | 控制面回写
+  |                                                                                | RST_STREAM / GOAWAY 等
+  |                                                                                v
+  |
+  +--> HttpObject payload ---------------------------------------------------------+
+     HttpRequest / HttpResponse / HttpHeaders / HttpContent / LastHttpContent    |
+                                           v
+                       +---------------------------------------------------+
+                       | 一般分区 多个，按 streamId 建立                   |
+                       |                                                   |
+                       |  +---------------------+   +-------------------+  |
+                       |  | 分区 A              |   | 分区 B ... N      |  |
+                       |  | streamId = 1        |   | streamId = 3/5/7  |  |
+                       |  | 聚合器或流内处理节点 |   | 聚合器或流内处理节点 |  |
+                       |  | -> 业务 Handler     |   | -> 业务 Handler   |  |
+                       |  +---------------------+   +-------------------+  |
+                       +---------------------------------------------------+
+                                           |
+                                           v
+                                       业务响应 HttpObject
+                                           |
+                                           v
+                       +-------------------------------------------+
+                       | Http2ObjectEncoder / Http2ObjectDuplexe   |
+                       +-------------------------------------------+
+                                           |
+                                           v
+                       +-------------------------------------------+
+                       | Http2FrameEncoder / Http2FrameDuplexe     |
+                       +-------------------------------------------+
+                                           |
+                                           v
+                                       网络侧出站 ByteBuf
 ```
 
-这条主链路里有一个重要分工：
+这张图表达的是当前实现中的几个固定关系：
 
-- frame 层只负责把线上字节稳定还原为 frame，或者把 frame 稳定写回线上
-- message 层负责解释 frame 的协议语义，并决定哪些内容继续作为 payload 消息下传，哪些内容转成自动协议动作或事件
-- 应用层只观察 message 和 event，不直接处理 frame 编解码
+- 从网络进入后，永远先经过 frame 层，再进入 message 层
+- message 层已经把 payload 还原为 `HttpObject`，同时把控制面结果转成 `Http2Event`
+- 分区子链里默认分区只有 1 个，它不承载业务请求响应，只负责 HTTP/2 生命周期和控制事件
+- 一般分区有多个，它们按 `streamId` 动态建立，承载聚合器和业务 handler
+- 业务响应从一般分区回写后，不会直接下网，而是重新回到 HTTP/2 message encoder，再进入 frame encoder
+- 默认分区和一般分区都处在同一个 partition router 之后，但职责不同
+
+如果只看服务端普通请求的主路径，可以再把它压缩成一句话：
+
+- 入站 `ByteBuf -> Http2Frame -> HttpObject -> stream 分区 -> 业务处理`
+- 出站 `业务响应 HttpObject -> Http2Frame -> ByteBuf`
+- 控制面 `Http2Event -> 默认分区 -> 生命周期处理 -> 编码回写`
+
+### 5.1.1 默认分区和一般分区的关系
+
+默认分区和一般分区不是“主分区和子分区”的包含关系，而是同一层级下两类职责不同的分区实例：
+
+- 默认分区固定只有 1 个，它对应 `PartitionKey.defaultKey()`
+- 一般分区可以有多个，它们对应不同的 `streamId`
+- 默认分区处理的是 HTTP/2 连接控制面和 stream 生命周期信号
+- 一般分区处理的是某一个 stream 上的 `HttpObject` 消息流和业务逻辑
+
+可以把它理解成：
+
+- 默认分区负责“管协议”
+- 一般分区负责“跑业务”
+
+在当前实现里，这种分工有两个直接收益：
+
+- 业务 handler 不需要直接消费 GOAWAY、RST_STREAM、PRIORITY 这类控制事件
+- stream 结束、reset、goaway 这类生命周期动作可以统一由默认分区收口，而不是散落在每个 stream 子链里
 
 ### 5.2 frame 层职责和原理
 
@@ -357,7 +497,7 @@ message 层是 HTTP/2 在 Neta 中真正的协议边界。它不再只看 frame 
 - frame 层不得不理解 HPACK、stream state 和 control semantics，职责会失真
 - HttpObject 层不得不自己处理 GOAWAY、RST_STREAM、ACK 和流控，业务层边界会被破坏
 
-因此，message 层不是“frame 的简单包装”，而是 HTTP/2 真正的协议运行层。
+因此，message 层承担 HTTP/2 的协议运行职责。
 
 ### 5.4 message 层的公开边界
 
@@ -574,7 +714,7 @@ App                  Message Codec               Frame Codec                Peer
 - 一条结果面向 Peer：请求 encoder 回传 RST_STREAM 或 GOAWAY
 - 一条结果面向 App：发布本地 Http2ResetEvent 或 Http2GoawayEvent
 
-也就是说，错误路径不是“只回帧”或者“只发事件”，而是“协议动作”和“应用可观测性”同时成立。
+也就是说，错误路径同时包含协议动作和应用可观测性。
 
 ### 5.10 本地 stream error 的双输出时序
 
@@ -636,7 +776,15 @@ h2c upgrade 只是接入方式不同，不改变 message 层的职责。桥接�
 - 校验 Upgrade: h2c、Connection、HTTP2-Settings
 - 把 HTTP2-Settings 写入连接状态
 - 发送 101 Switching Protocols
-- 把升级请求提升为 stream 1 的 HTTP/2 请求
+- 把已经在 h2c 分支里消费掉的升级请求以 immediate route seed 方式提升为 stream 1 的 HTTP/2 请求
+
+这里最容易混淆的是 route seed 的用途：
+
+- route seed 只负责把“已消费的 HTTP/1.1 upgrade request”补投递到 `h2` 分支
+- h2c 当前直接使用默认 immediate 的 `switchRoute(target, seed)`，在切换生效后的同一外层 RCV 调用里让 seed 立刻可见
+- 这个 immediate handoff 让 `h2` 分支可以先发 server SETTINGS preface，再立即消费 stream 1 upgrade request
+- 客户端后续发来的 connection preface、client SETTINGS、SETTINGS ACK，不通过 seed 传递
+- 这些后续数据在切路由后会作为正常 HTTP/2 流量进入 `Http2FrameDuplexe -> Http2ObjectDuplexe`
 
 一旦切换完成，后续 HEADERS、DATA、ACK、PING、WINDOW_UPDATE、GOAWAY、RST_STREAM 全都仍由 message 层解释和维护。
 
@@ -673,7 +821,7 @@ HTTP/2 的异常应该按层定位，而不是一上来就盯业务对象：
 
 排错线索：
 
-- 自动 ACK 和 WINDOW_UPDATE 不是在 decoder 里直接发出，而是先进入 decoder state，再由 message duplexe 在发送周期取出
+- 自动 ACK 和 WINDOW_UPDATE 会先进入 decoder state，再由 message duplexe 在发送周期取出
 - 如果业务层没看到某个 ACK，不代表协议层没处理，它可能已经在 duplexe 内部被自动维护掉了
 - 如果业务层需要感知 ping/pong、GOAWAY 或 RST_STREAM，应该监听 HTTP/2 事件，而不是等待对应 Http2Message
 - 判断某个 reset 或 goaway 来自远端还是本地协议层时，应直接读取事件对象上的 isRemote 属性
@@ -702,7 +850,9 @@ HTTP/2 的异常应该按层定位，而不是一上来就盯业务对象：
   - 升级请求校验
   - HTTP2-Settings 解码
   - 101 响应发送
-  - 切换到 `Http2FrameDuplexe -> Http2ObjectDuplexe`
+- 以默认 immediate 的 `switchRoute(target, seed)` 做切换，把“已消费的升级请求”交给 `Http2FrameDuplexe -> Http2ObjectDuplexe`
+- immediate handoff 后，`h2` 分支会同轮发出 server SETTINGS preface，并立即消费 stream 1 seed
+- 前置要求：只需要放在 HTTP/1.1 codec 之后，不再要求上游先挂 `HttpRequestAggregator`
 - 何时使用：一个端口既要接 HTTP/1.1 又要接 h2c 时
 
 ## 8. 使用注意事项
@@ -710,8 +860,11 @@ HTTP/2 的异常应该按层定位，而不是一上来就盯业务对象：
 - 不要把 HTTP/2 语义层和 HttpObject 层误解成两套公开 payload 模型。当前公开 payload 边界就是 HttpObject。
 - 业务如果需要感知 ping/pong、RST_STREAM 或 GOAWAY，应监听 HTTP/2 事件。
 - PRIORITY 和 PUSH_PROMISE 不会继续变成公开 payload；如果业务需要感知它们，应监听 message 层发布的 HTTP/2 事件。
-- H2cUpgradeServerDuplexe 不是普通的 HTTP/2 server duplexe。它在升级前仍然依赖 HTTP/1.1 codec 和聚合器。
+- H2cUpgradeServerDuplexe 不是普通的 HTTP/2 server duplexe。它在升级前仍然依赖 HTTP/1.1 codec，但不要求上游先聚合成 `FullHttpRequest`。
+- 如果你看到 route seed，不要把它理解成 post-upgrade 的 HTTP/2 连接流量。seed 只对应 upgrade request 本身；client preface、client SETTINGS、SETTINGS ACK 都会在切路由后作为正常 HTTP/2 数据进入 h2 分支。
+- 当前 `switchRoute(...)` 默认就是 immediate handoff。只有明确需要“切换延后到下一次网络事件”时，才应该使用 `switchRouteNextTick(...)`。
+- 如果桥接场景没有 seed handoff，或者当前事务必须先在旧分支完整收尾，就应使用 `switchRouteNextTick(...)`。
 - Http2ObjectDuplexe 会自动发 ACK 和 WINDOW_UPDATE。看到自动输出的控制帧时，先判断是不是协议维护行为，而不是业务逻辑重复发送。
 - client 和 server 两侧的 stream id 语义不同。不要在客户端链路里手工写死新的请求 stream id，除非你明确要绕过默认分配策略。
 - 如果只想调 frame 头、flags 或 payload 边界，直接用 Http2FrameDuplexe；如果问题已经涉及伪头、HPACK 或控制消息，再上升到 Http2ObjectDuplexe。
-- 当前 HttpObject 已经由 Http2ObjectDuplexe 直接产出和消费，但对象生命周期判断仍然应遵守 [引用所有权](../principle/ownership.md) 中的原则，尤其是在 ByteBuf、HttpContent 和聚合对象同时存在时。
+- 当前 HttpObject 已经由 Http2ObjectDuplexe 直接产出和消费，但对象生命周期判断仍然应遵守 [引用所有权](../../principle/handler/ownership.md) 中的原则，尤其是在 ByteBuf、HttpContent 和聚合对象同时存在时。

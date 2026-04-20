@@ -1,0 +1,10 @@
+{
+  "label": "管线模型",
+  "position": 2,
+  "className": "red",
+  "collapsed": true,
+  "link": {
+    "type": "doc",
+    "id": "about"
+  }
+}

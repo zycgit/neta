@@ -1,0 +1,10 @@
+{
+  "label": "消息流",
+  "position": 3,
+  "className": "red",
+  "collapsed": true,
+  "link": {
+    "type": "doc",
+    "id": "about"
+  }
+}

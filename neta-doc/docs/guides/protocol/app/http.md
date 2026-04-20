@@ -144,6 +144,8 @@ HttpObject 片段流
 - 服务端完整消息 pipeline：HttpServerDuplexe + HttpServerDuplexeAggregator
 - 客户端流模式 pipeline：HttpClientDuplexe
 - 客户端完整消息 pipeline：HttpClientDuplexe + HttpClientDuplexeAggregator
+- 明文同端口混合入口中的 HTTP/1.x 分支：HttpAggregatorRoute + HttpServerDuplexe + HttpRequestAggregator
+- TLS 混合入口中的 HTTP/1.x 分支：SslDuplexer + HttpAggregatorOverTlsRoute + HttpServerDuplexe + HttpRequestAggregator
 
 只有在这些场景才建议直接挂底层部件：
 
@@ -278,7 +280,7 @@ ctx.addLast("next-protocol", nextProtocolHandler);
 切换方式：
 
 ```java
-channel.fireUserEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
+channel.fireEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
 ```
 
 关键点：
@@ -286,6 +288,106 @@ channel.fireUserEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
 - 开启后 decoder 输出 HttpByteBuf，而不是 HttpRequest 或 HttpResponse
 - 开启后 encoder 只接受 HttpByteBuf
 - 关闭 transparent mode 后，HTTP 状态机会被重置，再次恢复 HTTP 解析和编码
+
+### 4.6 明文同端口混合入口里的 HTTP/1.x 分支
+
+适用范围：
+
+- 同一端口既要接普通 HTTP/1.1，也要接 h2 prior knowledge 或 h2c upgrade
+- 需要保留静态路由，并允许连接先按 HTTP/1.1 处理，后续再切到 HTTP/2 分支
+
+推荐装配：
+
+```java
+ctx.addLast("protocol-detect", ProtoHelper.standard()
+  .nextRouteAsStatic("protocol-detect", new HttpAggregatorRoute(), routing -> {
+      ProtoRoutingControl routingControl = routing.control();
+
+      routing.branch(HttpRouteKey.BRANCH_H1, branch -> branch
+        .nextDuplex("http-codec", new HttpServerDuplexe())
+        .nextDuplex("h1-upgrade", new H2CUpgradeServerDuplexe(routingControl))
+        .nextDecoder("http-aggregator", new HttpRequestAggregator(1024 * 1024))
+        .nextDecoder("http-handler", appHandler));
+
+      routing.branch(HttpRouteKey.BRANCH_H2, branch -> branch
+        .nextDuplex("h2-frame", new Http2FrameDuplexe(true))
+        .nextDuplex("h2-message", new Http2ObjectDuplexe(true, routingControl))
+        .nextPartition("h2-stream", new Http2ObjectPartitionSelector(), partition -> {
+      Http2ObjectPartitionPolicy policy = new Http2ObjectPartitionPolicy();
+      ProtoPartitionControl control = partition.control();
+      partition.policy(policy)
+        .byDefault(partitionCtx -> partitionCtx.addLast("h2-control-lifecycle", new Http2ObjectStreamManager(control, policy)))
+        .byInitializer(partitionCtx -> {
+            partitionCtx.addLast("h2-aggregator", new HttpServerDuplexeAggregator(1024 * 1024));
+            partitionCtx.addLastDecoder("h2-handler", h2Handler);
+        });
+        }));
+
+      routing.branch(HttpRouteKey.BRANCH_H2C, branch -> branch
+        .nextDuplex("http-codec", new HttpServerDuplexe())
+        .nextDuplex("h2c-upgrade", new H2CUpgradeServerDuplexe(routingControl))
+        .nextDecoder("h2c-handler", h2cHandler));
+  })
+  .build());
+```
+
+关键点：
+
+- 这里的重点不是实时路由，而是静态路由加 `ProtoRoutingControl.switchRoute(...)`
+- `HttpAggregatorRoute` 负责首包判断是 H1、H2 还是 H2C
+- H1 分支里也挂 `H2CUpgradeServerDuplexe`，这样同一连接可以先处理普通 HTTP/1.1，再在后续请求上升级到 HTTP/2
+- 升级成功后，`H2CUpgradeServerDuplexe` 会通过默认 immediate 的 `switchRoute(target, seed)` 触发切换
+- 升级请求会作为 route seed 在同一外层 RCV 调用里立刻交给 H2 分支处理，server SETTINGS preface 也由 H2 分支同轮发出
+- 后续客户端 preface、SETTINGS、ACK 和业务帧仍按正常 HTTP/2 流程处理
+
+### 4.7 TLS + ALPN 混合入口里的 HTTP/1.x 分支
+
+适用范围：
+
+- HTTPS 端口同时承载 HTTP/1.1 和 HTTP/2
+- 需要把 HTTP/1.x 作为 ALPN 路由的一个稳定分支，而不是单独开端口
+
+推荐装配：
+
+```java
+ctx.addLast("https", ProtoHelper.standard()
+  .nextDuplex("ssl", new SslDuplexer(sslConfig))
+  .nextRouteAsStatic("alpn", new HttpAggregatorOverTlsRoute(), routing -> {
+      routing.branch(HttpRouteKey.BRANCH_H1, branch -> branch
+        .nextDuplex("http-codec", new HttpServerDuplexe())
+      .nextDuplex("h1-h2c-upgrade-bridge", new H2CUpgradeServerDuplexe(routing.control()))
+        .nextDecoder("http-aggregator", new HttpRequestAggregator(1024 * 1024))
+        .nextDecoder("http-handler", appHandler));
+
+      routing.branch(HttpRouteKey.BRANCH_H2, branch -> branch
+        .nextDuplex("h2-frame", new Http2FrameDuplexe(true))
+        .nextDuplex("h2-message", new Http2ObjectDuplexe(true, routing.control()))
+        .nextPartition("h2-stream", new Http2ObjectPartitionSelector(), partition -> {
+      Http2ObjectPartitionPolicy policy = new Http2ObjectPartitionPolicy();
+      ProtoPartitionControl control = partition.control();
+      partition.policy(policy)
+        .byDefault(partitionCtx -> partitionCtx.addLast("h2-control-lifecycle", new Http2ObjectStreamManager(control, policy)))
+        .byInitializer(partitionCtx -> {
+            partitionCtx.addLast("h2-aggregator", new HttpServerDuplexeAggregator(1024 * 1024));
+            partitionCtx.addLastDecoder("h2-handler", h2Handler);
+        });
+        }));
+  })
+  .build());
+```
+
+关键点：
+
+- HTTP/1.x 分支前面必须先完成 `SslDuplexer` 握手，`HttpAggregatorOverTlsRoute` 再综合 ALPN 与解密后的 HTTP 首包决定首个分支
+- 如果 ALPN 直接协商到 `h2`，HTTP/1.x 分支不会接手该连接
+- 如果 ALPN 没协商到 `h2`，但首包是普通 HTTP/1.x，请求仍走 H1 分支
+- 如果 ALPN 没协商到 `h2`，但首包是 `Upgrade: h2c`，或后续在 H1 分支内触发 upgrade，仍可以切到 H2 分支
+- TLS 证书、ALPN 列表和回落策略应统一放到 SSL/TLS 文档中的配置章节处理，这里只讨论 HTTP/1.x 分支的 pipeline 装配
+
+- HTTP/1.x 分支前面必须先完成 `SslDuplexer` 握手，`Http2OverTlsRoute` 再优先读取 `SslContext.getApplicationProtocol()` 决定首个分支
+- 当 ALPN 协商结果是 `h2` 时，连接直接进入 H2 分支；当 ALPN 不是 `h2` 但首个解密后的应用层数据以 `PRI` 开头时，也可以回退进入 H2 分支
+- 如果首个分支落到 HTTP/1.x，且该分支内部挂了 `H2CUpgradeServerDuplexe`，那么后续带 `Upgrade: h2c` 和 `HTTP2-Settings` 的请求仍可把同一 TLS 连接切到 HTTP/2
+- TLS 证书、ALPN 列表和回落策略应统一放到 SSL/TLS 文档中的配置章节处理，这里只讨论 HTTP/1.x 分支的 pipeline 装配
 
 ## 5. 内部工作机制
 
@@ -318,7 +420,7 @@ Peer                 HttpServerDuplexe        HttpRequestDecoder        App Hand
   |                        |--------------------------------------------------->|
 ```
 
-这条链路的重点不是“一次收齐一条消息”，而是 decoder 可以按解析进度持续吐出片段对象。
+这条链路会按解析进度持续吐出片段对象。
 
 请求和响应的标准输出序列分别是：
 

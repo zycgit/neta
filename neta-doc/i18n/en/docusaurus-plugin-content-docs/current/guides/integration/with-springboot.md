@@ -25,7 +25,7 @@ Spring Boot 工程需要引入如下依赖包：
 
 ```properties
 # Spring JDBC 数据源配置
-spring.datasource.url=jdbc:mysql://127.0.0.1:3306/devtester
+spring.datasource.httpUrl=jdbc:mysql://127.0.0.1:3306/devtester
 spring.datasource.username=root
 spring.datasource.password=123456
 # 必选

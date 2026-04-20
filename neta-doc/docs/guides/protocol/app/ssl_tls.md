@@ -4,26 +4,6 @@ title: SSL/TLS
 description: 说明 Neta 的 SSL/TLS 装配入口、证书配置、ALPN 与 SNI、握手事件、close_notify 行为边界和 HTTPS 集成方式。
 ---
 
-本文是 Neta SSL/TLS 支持的正式说明文档，面向两类读者：
-
-- 需要在 TCP 或 HTTPS 场景中接入 TLS 的使用者
-- 需要确认握手事件、ALPN 路由、证书装配和关闭语义的维护者
-
-正文按“先边界、再装配、再机制、最后参考”的顺序展开：
-
-- 第 1 章说明 SSL/TLS 在 Neta 中的整体定位
-- 第 2 章说明已支持能力、能力边界和当前限制
-- 第 3 章到第 4 章说明组件分层、推荐入口和典型装配方式
-- 第 5 章到第 6 章说明内部机制以及数据流、事件流、关闭流
-- 第 7 章到第 8 章提供组件参考和实际使用注意事项
-
-阅读时可以直接按目标进入对应章节：
-
-- 关注当前支持哪些 TLS 配置能力，读取第 2 章
-- 关注 pipeline 应该怎么挂 SSL，读取第 3 章和第 4 章
-- 关注 ALPN、SNI、握手完成和 close_notify 行为，读取第 5 章和第 6 章
-- 关注配置项和误用点，读取第 7 章和第 8 章
-
 ## 1. 简介
 
 Neta 在 neta-core 模块中提供基于 SSLEngine 的 SSL/TLS codec，核心入口是 SslDuplexer。它位于传输层和上层协议之间，负责把网络侧的 TLS 密文字节还原成明文 ByteBuf，再把上层输出的明文重新封装为 TLS 记录。
@@ -64,7 +44,7 @@ Neta 在 neta-core 模块中提供基于 SSLEngine 的 SSL/TLS codec，核心入
   - 通过 SslContext.isReady() 观察握手是否完成
   - 通过 SslContext.getApplicationProtocol() 读取 ALPN 结果
   - 通过 SslContext.getSniHostName() 读取 SNI 信息
-  - 通过用户事件接收 SslHandshakeEvent 与 SslCloseNotifyEvent
+  - 通过网络事件接收 SslHandshakeEvent 与 SslCloseNotifyEvent
 - 关闭与半关闭能力
   - channel.close() 会先发送 TLS close_notify，再关闭底层连接
   - channel.closeNow() 直接关闭连接，不发送 close_notify
@@ -81,7 +61,7 @@ Neta 在 neta-core 模块中提供基于 SSLEngine 的 SSL/TLS codec，核心入
 - TLS 握手和数据收发
 - 证书材料解析与 SSLEngine 配置
 - ALPN 协商、SNI 配置、客户端认证设置
-- 把握手完成和 close_notify 作为用户事件暴露给上层
+- 把握手完成和 close_notify 作为网络事件暴露给上层
 - 为 HTTP/2 over TLS、HTTPS 等上层协议提供安全传输基础
 
 这一套 SSL/TLS 组件不负责：
@@ -122,7 +102,7 @@ ProtoContext
   -> SslContext
   -> handshake / ALPN / SNI / peer 信息
 
-SoUserEvent
+SoEvent
   -> SslHandshakeEvent / SslCloseNotifyEvent
 ```
 
@@ -365,7 +345,7 @@ upper handlers
 ```text
 握手完成
   -> SslHandle 更新状态
-  -> fireUserEvent(SslHandshakeEvent)
+  -> fireEvent(SslHandshakeEvent)
   -> 上层 handler 读取 SslContext
   -> 决定是否继续做 ALPN 路由或业务初始化
 ```

@@ -1,7 +1,7 @@
 ---
-id: handler
-sidebar_position: 2
-title: 数据处理
+id: about
+sidebar_position: 1
+title: 处理器模型
 description: 本文将会介绍 Neta 中 ProtoStack 的数据处理流程。
 ---
 
@@ -11,62 +11,11 @@ description: 本文将会介绍 Neta 中 ProtoStack 的数据处理流程。
 - 根据事件的传播方向可以分为上行数据和下行数据，分别对应接收和发送。即：RCV、SND。
 - Handler 依据能够同时处理数据方向的能力被分为：单工器 和 双工器。
 
-## 单工器
-
-常规的 Handler 在处理上行数据和下行数据时只能承担一种角色这就是单工模式，在协议数据处理并不复杂的情况下是非常好的实践方法。
-
-一个单工器只有两个节点 UP、DOWN，它的工作方式就是不断的消费 UP 数据并将产生的新数据放入 DOWN。
-一个单工器的基本定义代码如下：
-
-```java
-public class DemoProtoHandler implements ProtoHandler<ByteBuf, ByteBuf> {
-    @Override
-    public ProtoStatus onMessage(ProtoContext context, 
-            ProtoRcvQueue<ByteBuf> up, ProtoSndQueue<String> down) {
-        // process Event from up to down
-        return ProtoStatus.Next;
-    }
-}
-```
-
-## 双工器
-
-双工器特点在于它使用同一个方法来处理上行/下行事件。这意味着无论事件的触发方向是什么，都可以同时处理 RCV、SND 两端数据，这在实现一些复杂的协议中可以带来非常大的便利性。
-
-一个双工器结构中包含四个端点分别是：RCV_UP、RCV_DOWN、SND_DOWN、SND_UP。
-
-- RCV_UP：是 Handler 的上行传入事件，它是在处理上行数据时，用于获取来自当前 Handler 的上游 Handler 的传出事件。
-- RCV_DOWN：是当前 Handler 的上行传出事件，它会向下游 Handler 输送传入事件。
-- SND_UP：是 Handler 的下行传入事件，它是在处理下行数据时，用于获取来自当前 Handler 的上游 Handler 的传出事件。
-- SND_DOWN：是当前 Handler 的下行传出事件，它会向下游 Handler 输送传入事件。
-
-通过下面这张图可以充分理解双工器端点之间的关系
-
-![双工器四个端点之间的关系图](../../../static/docs/duplex_endpoints.png)
-
-一个双工器的基本定义代码如下：
-
-```java
-public class DemoProtoDuplex implements ProtoDuplex<ByteBuf, ByteBuf, ByteBuf, ByteBuf> {
-    @Override
-    public ProtoStatus onMessage(ProtoContext context, boolean isRcv,
-          ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown,
-          ProtoRcvQueue<ByteBuf> sndUp, ProtoSndQueue<ByteBuf> sndDown) {
-        if (isRcv) {
-            // process Event from rcvUp to rcvDown
-        } else {
-            // process Event from sndUp to sndDown
-        }
-        return ProtoStatus.Next;
-    }
-}
-```
-
 ## 生命周期
 
 无论使用的是单工器还是双工器，它们都遵循相同的生命周期：
 
-![Handler 生命周期示意图](../../../static/docs/handler_lifecycle.png)
+![Handler 生命周期示意图](../../../../static/docs/handler_lifecycle.png)
 
 - `onInit`：每个 Socket 链接在建立之初都会触发，此时 Channel 刚刚被创建出来链接建立还在进行中并不一定可以用来发送和接收数据。
 - `onActive`：当 Channel 可用时触发，在此阶段可以向远程机器发送数据但不能接收数据。
@@ -75,21 +24,23 @@ public class DemoProtoDuplex implements ProtoDuplex<ByteBuf, ByteBuf, ByteBuf, B
   在下一个 Handler 执行时候会自动跳过 onMessage 进入 onError 继续传递异常。直到通过 ProtoExceptionHolder 清除异常标记后才会回归正常。
 - `onClose`：Channel 在被正式 close 之前触发。在这个阶段链接被关闭已经无法挽回，不应该做任何发送数据的动作。正确的用法是作为清理程序。
 
-## 用户事件
+## 网络事件
 
-除了数据本身，Handler 之间还可以通过 `ProtoContext` 发送 user event。
+除了数据本身，Handler 之间还可以通过 `ProtoContext` 发送 network event。
 
-- `context.fireUserEvent(...)`：沿当前数据传播方向继续发送。
-- `context.fireUserEventReverse(...)`：沿当前数据传播方向的反方向发送。
-- `context.fireUserEventRcv(...)`：强制按 RCV 方向发送。
-- `context.fireUserEventSnd(...)`：强制按 SND 方向发送。
+更完整的对象模型、传播路径和分支穿透规则，见 [网络事件](../flow/network_event.md)。
+
+- `context.fireEvent(...)`：沿当前数据传播方向继续发送。
+- `context.fireEventReverse(...)`：沿当前数据传播方向的反方向发送。
+- `context.fireEventRcv(...)`：强制按 RCV 方向发送。
+- `context.fireEventSnd(...)`：强制按 SND 方向发送。
 
 方向规则如下：
 
-- 当前处于 `RCV` 时，`fireUserEvent(...)` 走 head -> tail，`fireUserEventReverse(...)` 走 tail -> head。
-- 当前处于 `SND` 时，`fireUserEvent(...)` 走 tail -> head，`fireUserEventReverse(...)` 走 head -> tail。
-- `fireUserEventRcv(...)` 与当前阶段无关，总是走 head -> tail。
-- `fireUserEventSnd(...)` 与当前阶段无关，总是走 tail -> head。
+- 当前处于 `RCV` 时，`fireEvent(...)` 走 head -> tail，`fireEventReverse(...)` 走 tail -> head。
+- 当前处于 `SND` 时，`fireEvent(...)` 走 tail -> head，`fireEventReverse(...)` 走 head -> tail。
+- `fireEventRcv(...)` 与当前阶段无关，总是走 head -> tail。
+- `fireEventSnd(...)` 与当前阶段无关，总是走 tail -> head。
 
 如果当前 Handler 位于路由分支中，那么事件在到达分支边界后还会继续跨回父 Pipeline，而不是停在分支内部。
 
