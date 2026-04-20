@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.List;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
@@ -130,6 +129,7 @@ public class HttpRequestEncoder implements ProtoHandler<HttpObject, ByteBuf> {
                     continue;
                 }
                 dst.offerMessage(outputs);
+                outputs.clear();
                 outputs = null;
                 hasAny = true;
             } finally {
@@ -153,7 +153,8 @@ public class HttpRequestEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     //
 
     private List<ByteBuf> encodeMessage(HttpContext.EncodeState reqCtx, ProtoContext context, HttpObject msg, boolean transparentMode) {
-        List<ByteBuf> outputs = new ArrayList<>(4);
+        List<ByteBuf> outputs = reqCtx.prepareOutputs();
+        boolean mergedInitialMetadata = msg instanceof HttpRequest && msg instanceof HttpHeaders && !(msg instanceof TrailerHttpHeaders);
 
         if (transparentMode) {
             if (!(msg instanceof HttpByteBuf)) {
@@ -164,9 +165,13 @@ public class HttpRequestEncoder implements ProtoHandler<HttpObject, ByteBuf> {
         }
 
         if (msg instanceof HttpRequest) {
-            this.handleRequestLinePart(reqCtx, context, (HttpRequest) msg, outputs);
+            if (mergedInitialMetadata) {
+                this.handleRequestMetadataPart(reqCtx, context, (HttpRequest) msg, (HttpHeaders) msg, outputs);
+            } else {
+                this.handleRequestLinePart(reqCtx, context, (HttpRequest) msg, outputs);
+            }
         }
-        if (msg instanceof HttpHeaders) {
+        if (msg instanceof HttpHeaders && !mergedInitialMetadata) {
             this.handleHeadersPart(reqCtx, context, (HttpHeaders) msg, outputs);
         }
         if (msg instanceof HttpContent) {
@@ -186,6 +191,7 @@ public class HttpRequestEncoder implements ProtoHandler<HttpObject, ByteBuf> {
         int requiredSlots = 0;
         boolean chunkedEncoding = reqCtx.chunkedEncoding;
         boolean trailerStarted = reqCtx.trailerStarted;
+        boolean mergedInitialMetadata = msg instanceof HttpRequest && msg instanceof HttpHeaders && !(msg instanceof TrailerHttpHeaders);
 
         if (msg instanceof HttpRequest) {
             requiredSlots++;
@@ -199,10 +205,10 @@ public class HttpRequestEncoder implements ProtoHandler<HttpObject, ByteBuf> {
                 if (!trailerStarted) {
                     trailerStarted = true;
                 }
-            } else {
+            } else if (!mergedInitialMetadata) {
                 requiredSlots++;
-                chunkedEncoding = chunkedEncoding || isChunked((HttpHeaders) msg);
             }
+            chunkedEncoding = chunkedEncoding || isChunked((HttpHeaders) msg);
         }
         if (msg instanceof HttpContent) {
             ByteBuf body = ((HttpContent) msg).content();
@@ -224,7 +230,26 @@ public class HttpRequestEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     private void handleRequestLinePart(HttpContext.EncodeState reqCtx, ProtoContext context, HttpRequest request, List<ByteBuf> outputs) {
         reqCtx.reset();
         ByteBuf buf = context.byteBufAllocator().buffer(128);
+        this.writeRequestLine(buf, request);
+        buf.markWriter();
+        outputs.add(buf);
+    }
 
+    private void handleRequestMetadataPart(HttpContext.EncodeState reqCtx, ProtoContext context, HttpRequest request, HttpHeaders headers, List<ByteBuf> outputs) {
+        reqCtx.reset();
+        reqCtx.chunkedEncoding = isChunked(headers);
+        ByteBuf buf = context.byteBufAllocator().buffer(256);
+
+        this.writeRequestLine(buf, request);
+        this.writeHeaders(buf, headers);
+        if (headers instanceof LastHttpHeaders) {
+            buf.writeBytes(CRLF, 0, CRLF.length);
+        }
+        buf.markWriter();
+        outputs.add(buf);
+    }
+
+    private void writeRequestLine(ByteBuf buf, HttpRequest request) {
         byte[] scratch = SCRATCH_BUF.get();
         int pos = 0;
         byte[] methodBytes = request.method().nameBytes();
@@ -255,9 +280,6 @@ public class HttpRequestEncoder implements ProtoHandler<HttpObject, ByteBuf> {
             scratch[off++] = '\n';
             buf.writeBytes(scratch, 0, off);
         }
-
-        buf.markWriter();
-        outputs.add(buf);
     }
 
     // header
@@ -299,39 +321,54 @@ public class HttpRequestEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     }
 
     private void writeHeaders(ByteBuf buf, HttpHeaders headers) {
-        if (headers == null || headers.headerNames().isEmpty()) {
+        if (headers == null || headers.headerSize() == 0) {
             return;
         }
-        byte[] scratch = SCRATCH_BUF.get();
+        DefaultHttpHeaders defaultHeaders = unwrapDefaultHeaders(headers);
+        if (defaultHeaders != null) {
+            this.writeHeaderEntries(buf, defaultHeaders.headerEntries());
+            return;
+        }
         for (String name : headers.headerNames()) {
             for (String value : headers.getValues(name)) {
-                int nameLen = name.length();
-                int valueLen = value.length();
-                int totalLen = nameLen + 2 + valueLen + 2;
-                if (totalLen <= SCRATCH_SIZE) {
-                    int pos = 0;
-                    for (int i = 0; i < nameLen; i++) {
-                        scratch[pos++] = (byte) name.charAt(i);
-                    }
-                    scratch[pos++] = ':';
-                    scratch[pos++] = ' ';
-                    for (int i = 0; i < valueLen; i++) {
-                        scratch[pos++] = (byte) value.charAt(i);
-                    }
-                    scratch[pos++] = '\r';
-                    scratch[pos++] = '\n';
-                    buf.writeBytes(scratch, 0, pos);
-                } else {
-                    writeAscii(buf, name);
-                    scratch[0] = ':';
-                    scratch[1] = ' ';
-                    buf.writeBytes(scratch, 0, 2);
-                    writeAscii(buf, value);
-                    scratch[0] = '\r';
-                    scratch[1] = '\n';
-                    buf.writeBytes(scratch, 0, 2);
-                }
+                this.writeHeaderEntry(buf, name, value);
             }
+        }
+    }
+
+    private void writeHeaderEntries(ByteBuf buf, List<DefaultHttpHeaderEntry> entries) {
+        for (DefaultHttpHeaderEntry entry : entries) {
+            this.writeHeaderEntry(buf, entry.getName(), entry.getValue());
+        }
+    }
+
+    private void writeHeaderEntry(ByteBuf buf, String name, String value) {
+        byte[] scratch = SCRATCH_BUF.get();
+        int nameLen = name.length();
+        int valueLen = value.length();
+        int totalLen = nameLen + 2 + valueLen + 2;
+        if (totalLen <= SCRATCH_SIZE) {
+            int pos = 0;
+            for (int i = 0; i < nameLen; i++) {
+                scratch[pos++] = (byte) name.charAt(i);
+            }
+            scratch[pos++] = ':';
+            scratch[pos++] = ' ';
+            for (int i = 0; i < valueLen; i++) {
+                scratch[pos++] = (byte) value.charAt(i);
+            }
+            scratch[pos++] = '\r';
+            scratch[pos++] = '\n';
+            buf.writeBytes(scratch, 0, pos);
+        } else {
+            writeAscii(buf, name);
+            scratch[0] = ':';
+            scratch[1] = ' ';
+            buf.writeBytes(scratch, 0, 2);
+            writeAscii(buf, value);
+            scratch[0] = '\r';
+            scratch[1] = '\n';
+            buf.writeBytes(scratch, 0, 2);
         }
     }
 
@@ -457,8 +494,19 @@ public class HttpRequestEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     }
 
     private static boolean isChunked(HttpHeaders headers) {
-        String value = headers != null ? headers.getString(HttpHeaderNames.TRANSFER_ENCODING) : null;
+        DefaultHttpHeaders defaultHeaders = unwrapDefaultHeaders(headers);
+        String value = defaultHeaders != null ? defaultHeaders.getString(HttpHeaderNames.TRANSFER_ENCODING) : headers != null ? headers.getString(HttpHeaderNames.TRANSFER_ENCODING) : null;
         return StringUtils.containsIgnoreCase(value, HttpHeaderValues.CHUNKED);
+    }
+
+    private static DefaultHttpHeaders unwrapDefaultHeaders(HttpHeaders headers) {
+        if (headers instanceof DefaultHttpHeaders) {
+            return (DefaultHttpHeaders) headers;
+        }
+        if (headers instanceof DefaultFullHttpRequest) {
+            return ((DefaultFullHttpRequest) headers).headerBlock();
+        }
+        return null;
     }
 
     private static int directContentSlots(ByteBuf body) {

@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
+import java.util.ArrayList;
+import java.util.List;
+import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.ProtoContext;
 /**
  * Mutable per-connection state shared by all HTTP/1.x handlers.
@@ -63,8 +67,8 @@ class HttpContext {
         this.transparentStreamId = streamId;
         this.req.releaseAndReset();
         this.resp.releaseAndReset();
-        this.reqEnc.reset();
-        this.respEnc.reset();
+        this.reqEnc.releaseAndReset();
+        this.respEnc.releaseAndReset();
         this.inboundErrorType = null;
         return changed;
     }
@@ -196,6 +200,12 @@ class HttpContext {
     public static class EncodeState {
         boolean chunkedEncoding = false;
         boolean trailerStarted  = false;
+        final List<ByteBuf> outputs = new ArrayList<>(4);
+
+        List<ByteBuf> prepareOutputs() {
+            this.outputs.clear();
+            return this.outputs;
+        }
 
         void reset() {
             this.chunkedEncoding = false;
@@ -203,6 +213,8 @@ class HttpContext {
         }
 
         void releaseAndReset() {
+            ByteBufUtils.releaseAll(this.outputs);
+            this.outputs.clear();
             this.reset();
         }
     }

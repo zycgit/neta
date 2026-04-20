@@ -66,7 +66,7 @@ public class HttpResponseEncoderTest extends AbstractHttpTest {
             response.addHeader(HttpHeaderNames.CONTENT_LENGTH, "4");
 
             List<ByteBuf> parts = sendAndOutBound(pipe, response);
-            assertEquals(3, parts.size());
+            assertEquals(2, parts.size());
             assertEquals("HTTP/1.1 200 OK\r\ncontent-length: 4\r\n\r\nWiki", text(parts));
         });
     }
@@ -82,7 +82,7 @@ public class HttpResponseEncoderTest extends AbstractHttpTest {
             response.addHeader(HttpHeaderNames.TRANSFER_ENCODING, HttpHeaderValues.CHUNKED);
 
             List<ByteBuf> parts = sendAndOutBound(pipe, response);
-            assertEquals(6, parts.size());
+            assertEquals(5, parts.size());
             assertEquals("HTTP/1.1 200 OK\r\ntransfer-encoding: chunked\r\n\r\n4\r\nWiki\r\n0\r\n\r\n", text(parts));
         });
     }

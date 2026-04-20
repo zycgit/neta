@@ -27,9 +27,9 @@ public class DefaultHttpRequest extends AbstractHttpObject<HttpRequest> implemen
     private HttpVersion version;
     private HttpMethod  method;
     private String      uri;
-    private String      versionText;
-    private String      methodText;
-    private String      uriText;
+    private CharSequence versionText;
+    private CharSequence methodText;
+    private CharSequence uriText;
 
     /**
      * Create a request start-line object.
@@ -38,6 +38,10 @@ public class DefaultHttpRequest extends AbstractHttpObject<HttpRequest> implemen
      * @param uri request target
      */
     public DefaultHttpRequest(HttpVersion version, HttpMethod method, String uri) {
+        this(version, method, (CharSequence) uri);
+    }
+
+    public DefaultHttpRequest(HttpVersion version, HttpMethod method, CharSequence uri) {
         if (version == null) {
             throw new IllegalArgumentException("version must not be null");
         }
@@ -50,7 +54,7 @@ public class DefaultHttpRequest extends AbstractHttpObject<HttpRequest> implemen
 
         this.version = version;
         this.method = method;
-        this.uri = uri;
+        this.uri = uri instanceof String ? (String) uri : null;
         this.versionText = version.text();
         this.methodText = method.name();
         this.uriText = uri;
@@ -63,6 +67,10 @@ public class DefaultHttpRequest extends AbstractHttpObject<HttpRequest> implemen
      * @param uri raw request target text
      */
     public DefaultHttpRequest(String version, String method, String uri) {
+        this((CharSequence) version, (CharSequence) method, (CharSequence) uri);
+    }
+
+    public DefaultHttpRequest(CharSequence version, CharSequence method, CharSequence uri) {
         if (version == null || version.isEmpty()) {
             throw new IllegalArgumentException("version must not be empty");
         }
@@ -88,7 +96,10 @@ public class DefaultHttpRequest extends AbstractHttpObject<HttpRequest> implemen
     @Override
     public HttpVersion protocolVersion() {
         if (this.version == null && this.versionText != null) {
-            this.version = HttpVersion.valueOf(this.versionText);
+            CharSequence rawVersion = this.versionText;
+            this.version = HttpVersion.valueOf(rawVersion);
+            this.versionText = this.version.text();
+            HttpCharSequences.release(rawVersion);
         }
         return version;
     }
@@ -98,7 +109,13 @@ public class DefaultHttpRequest extends AbstractHttpObject<HttpRequest> implemen
      * @return raw protocol version text
      */
     public String protocolVersionText() {
-        return this.versionText;
+        if (this.version != null) {
+            this.versionText = this.version.text();
+            return (String) this.versionText;
+        }
+        String resolved = HttpCharSequences.materialize(this.versionText);
+        this.versionText = resolved;
+        return resolved;
     }
 
     /**
@@ -111,6 +128,7 @@ public class DefaultHttpRequest extends AbstractHttpObject<HttpRequest> implemen
         if (version == null) {
             throw new IllegalArgumentException("version must not be null");
         }
+        HttpCharSequences.release(this.versionText);
         this.version = version;
         this.versionText = version.text();
         return this;
@@ -122,7 +140,10 @@ public class DefaultHttpRequest extends AbstractHttpObject<HttpRequest> implemen
     @Override
     public HttpMethod method() {
         if (this.method == null && this.methodText != null) {
-            this.method = HttpMethod.valueOf(this.methodText);
+            CharSequence rawMethod = this.methodText;
+            this.method = HttpMethod.valueOf(rawMethod);
+            this.methodText = this.method.name();
+            HttpCharSequences.release(rawMethod);
         }
         return method;
     }
@@ -132,7 +153,13 @@ public class DefaultHttpRequest extends AbstractHttpObject<HttpRequest> implemen
      * @return raw request method text
      */
     public String methodText() {
-        return this.methodText;
+        if (this.method != null) {
+            this.methodText = this.method.name();
+            return (String) this.methodText;
+        }
+        String resolved = HttpCharSequences.materialize(this.methodText);
+        this.methodText = resolved;
+        return resolved;
     }
 
     /**
@@ -145,6 +172,7 @@ public class DefaultHttpRequest extends AbstractHttpObject<HttpRequest> implemen
         if (method == null) {
             throw new IllegalArgumentException("method must not be null");
         }
+        HttpCharSequences.release(this.methodText);
         this.method = method;
         this.methodText = method.name();
         return this;
@@ -156,7 +184,8 @@ public class DefaultHttpRequest extends AbstractHttpObject<HttpRequest> implemen
     @Override
     public String uri() {
         if (this.uri == null) {
-            this.uri = this.uriText;
+            this.uri = HttpCharSequences.materialize(this.uriText);
+            this.uriText = this.uri;
         }
         return uri;
     }
@@ -171,6 +200,7 @@ public class DefaultHttpRequest extends AbstractHttpObject<HttpRequest> implemen
         if (uri == null) {
             throw new IllegalArgumentException("uri must not be null");
         }
+        HttpCharSequences.release(this.uriText);
         this.uri = uri;
         this.uriText = uri;
         return this;
@@ -187,6 +217,9 @@ public class DefaultHttpRequest extends AbstractHttpObject<HttpRequest> implemen
     @Override
     public void release() {
         this.resetHttpObjectState();
+        HttpCharSequences.release(this.versionText);
+        HttpCharSequences.release(this.methodText);
+        HttpCharSequences.release(this.uriText);
         this.version = null;
         this.method = null;
         this.uri = null;

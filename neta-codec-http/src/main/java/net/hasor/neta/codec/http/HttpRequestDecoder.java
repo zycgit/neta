@@ -21,6 +21,7 @@ import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
+import net.hasor.neta.bytebuf.StringView;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
@@ -372,13 +373,24 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                     throw new HttpBadRequestException("invalid request line");
                 }
 
-                String methodText = line.getString(0, firstSpace, StandardCharsets.US_ASCII);
-                String uriText = line.getString(firstSpace + 1, secondSpace - firstSpace - 1, StandardCharsets.US_ASCII);
-                String versionText = line.getString(secondSpace + 1, lineLength - secondSpace - 1, StandardCharsets.US_ASCII);
+                StringView methodView = StringView.request(line, 0, firstSpace);
+                StringView uriView = StringView.request(line, firstSpace + 1, secondSpace - firstSpace - 1);
+                StringView versionView = StringView.request(line, secondSpace + 1, lineLength - secondSpace - 1);
+                try {
+                    HttpMethod method = HttpMethod.valueOf(methodView);
+                    HttpVersion version = HttpVersion.valueOf(versionView);
 
-                accumulator.markReader();
-                reqCtx.currentMessage = new DefaultHttpRequest(versionText, methodText, uriText);
-                return reqCtx.currentMessage;
+                    accumulator.markReader();
+                    reqCtx.currentMessage = new DefaultHttpRequest(version, method, uriView);
+                    uriView = null;
+                    return reqCtx.currentMessage;
+                } finally {
+                    methodView.release();
+                    if (uriView != null) {
+                        uriView.release();
+                    }
+                    versionView.release();
+                }
             } finally {
                 line.free();
             }
@@ -433,9 +445,20 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                     headerEntries = new ArrayList<>();
                 }
 
-                String name = line.getString(nameStart, nameEnd - nameStart, StandardCharsets.US_ASCII);
-                String value = line.getString(valueStart, valueEnd - valueStart, StandardCharsets.US_ASCII);
-                headerEntries.add(new DefaultHttpHeaderEntry(name, value));
+                StringView name = StringView.request(line, nameStart, nameEnd - nameStart);
+                StringView value = StringView.request(line, valueStart, valueEnd - valueStart);
+                try {
+                    headerEntries.add(new DefaultHttpHeaderEntry(name, value));
+                    name = null;
+                    value = null;
+                } finally {
+                    if (name != null) {
+                        name.release();
+                    }
+                    if (value != null) {
+                        value.release();
+                    }
+                }
                 accumulator.markReader();
             } finally {
                 line.free();
@@ -455,6 +478,35 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
     }
 
     private void updateRequestTransferMode(HttpHeaders headers, HttpContext.RequestDecodeState reqCtx) {
+        if (headers instanceof DefaultHttpHeaders) {
+            boolean needsContentLength = reqCtx.contentLength < 0;
+            for (DefaultHttpHeaderEntry entry : ((DefaultHttpHeaders) headers).headerEntries()) {
+                if (!reqCtx.chunked && entry.matchesName(HttpHeaderNames.TRANSFER_ENCODING)) {
+                    if (HttpCharSequences.containsIgnoreCase(entry.valueText(), HttpHeaderValues.CHUNKED)) {
+                        reqCtx.chunked = true;
+                        reqCtx.contentLength = -1;
+                        needsContentLength = false;
+                    }
+                    continue;
+                }
+                if (needsContentLength && !reqCtx.chunked && entry.matchesName(HttpHeaderNames.CONTENT_LENGTH)) {
+                    CharSequence cl = entry.valueText();
+                    if (!HttpCharSequences.isBlank(cl)) {
+                        try {
+                            reqCtx.contentLength = HttpCharSequences.parseLong(cl);
+                            if (reqCtx.contentLength < 0) {
+                                throw new HttpContentTooLargeException("negative Content-Length: " + reqCtx.contentLength);
+                            }
+                            needsContentLength = false;
+                        } catch (NumberFormatException e) {
+                            throw new HttpBadRequestException("invalid Content-Length: " + cl, e);
+                        }
+                    }
+                }
+            }
+            return;
+        }
+
         if (headers.containsHeader(HttpHeaderNames.TRANSFER_ENCODING)) {
             String te = headers.getString(HttpHeaderNames.TRANSFER_ENCODING);
             if (StringUtils.containsIgnoreCase(te, HttpHeaderValues.CHUNKED)) {
@@ -649,9 +701,20 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                     valueEnd--;
                 }
 
-                String name = line.getString(nameStart, nameEnd - nameStart, StandardCharsets.US_ASCII);
-                String value = line.getString(valueStart, valueEnd - valueStart, StandardCharsets.US_ASCII);
-                reqCtx.currentHeaders.addHeader(name, value);
+                StringView name = StringView.request(line, nameStart, nameEnd - nameStart);
+                StringView value = StringView.request(line, valueStart, valueEnd - valueStart);
+                try {
+                    ((DefaultHttpHeaders) reqCtx.currentHeaders).addHeaderEntry(new DefaultHttpHeaderEntry(name, value));
+                    name = null;
+                    value = null;
+                } finally {
+                    if (name != null) {
+                        name.release();
+                    }
+                    if (value != null) {
+                        value.release();
+                    }
+                }
                 accumulator.markReader();
             } finally {
                 line.free();

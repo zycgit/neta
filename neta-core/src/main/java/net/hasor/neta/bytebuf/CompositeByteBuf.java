@@ -502,7 +502,6 @@ public class CompositeByteBuf extends AbstractByteBuf {
             absoluteSplit = this.markedWriterIndex;
         }
 
-        // Copy front data into a new ByteBuf
         int frontLen = absoluteSplit - this.markedReaderIndex;
         if (frontLen <= 0) {
             return ByteBuf.EMPTY;

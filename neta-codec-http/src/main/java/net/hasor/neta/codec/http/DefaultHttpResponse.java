@@ -28,9 +28,9 @@ import net.hasor.neta.bytebuf.ByteBuf;
 public class DefaultHttpResponse extends AbstractHttpObject<HttpResponse> implements HttpResponse {
     private HttpVersion version;
     private HttpStatus  status;
-    private String      reasonText;
-    private String      versionText;
-    private String      statusText;
+    private CharSequence reasonText;
+    private CharSequence versionText;
+    private CharSequence statusText;
 
     /**
      * Create a response status-line object.
@@ -59,6 +59,10 @@ public class DefaultHttpResponse extends AbstractHttpObject<HttpResponse> implem
      * @param reason raw reason phrase text
      */
     public DefaultHttpResponse(String version, String status, String reason) {
+        this((CharSequence) version, (CharSequence) status, (CharSequence) reason);
+    }
+
+    public DefaultHttpResponse(CharSequence version, CharSequence status, CharSequence reason) {
         if (version == null || version.isEmpty()) {
             throw new IllegalArgumentException("version must not be empty");
         }
@@ -119,7 +123,10 @@ public class DefaultHttpResponse extends AbstractHttpObject<HttpResponse> implem
     @Override
     public HttpVersion protocolVersion() {
         if (this.version == null) {
-            this.version = HttpVersion.valueOf(this.versionText);
+            CharSequence rawVersion = this.versionText;
+            this.version = HttpVersion.valueOf(rawVersion);
+            this.versionText = this.version.text();
+            HttpCharSequences.release(rawVersion);
         }
         return version;
     }
@@ -134,6 +141,7 @@ public class DefaultHttpResponse extends AbstractHttpObject<HttpResponse> implem
         if (version == null) {
             throw new IllegalArgumentException("version must not be null");
         }
+        HttpCharSequences.release(this.versionText);
         this.version = version;
         this.versionText = version.text();
         return this;
@@ -144,7 +152,13 @@ public class DefaultHttpResponse extends AbstractHttpObject<HttpResponse> implem
      * @return raw protocol version text
      */
     public String protocolVersionText() {
-        return this.versionText;
+        if (this.version != null) {
+            this.versionText = this.version.text();
+            return (String) this.versionText;
+        }
+        String resolved = HttpCharSequences.materialize(this.versionText);
+        this.versionText = resolved;
+        return resolved;
     }
 
     /**
@@ -153,7 +167,13 @@ public class DefaultHttpResponse extends AbstractHttpObject<HttpResponse> implem
     @Override
     public HttpStatus status() {
         if (this.status == null) {
-            this.status = HttpStatus.valueOf(this.statusText, this.reasonText);
+            CharSequence rawStatus = this.statusText;
+            CharSequence rawReason = this.reasonText;
+            this.status = HttpStatus.valueOf(rawStatus, rawReason);
+            this.statusText = this.status.codeAsString();
+            this.reasonText = this.status.reasonPhrase();
+            HttpCharSequences.release(rawStatus);
+            HttpCharSequences.release(rawReason);
         }
         return status;
     }
@@ -168,6 +188,8 @@ public class DefaultHttpResponse extends AbstractHttpObject<HttpResponse> implem
         if (status == null) {
             throw new IllegalArgumentException("status must not be null");
         }
+        HttpCharSequences.release(this.statusText);
+        HttpCharSequences.release(this.reasonText);
         this.status = status;
         this.statusText = status.codeAsString();
         this.reasonText = status.reasonPhrase();
@@ -179,7 +201,13 @@ public class DefaultHttpResponse extends AbstractHttpObject<HttpResponse> implem
      */
     @Override
     public String statusText() {
-        return this.statusText;
+        if (this.status != null) {
+            this.statusText = this.status.codeAsString();
+            return (String) this.statusText;
+        }
+        String resolved = HttpCharSequences.materialize(this.statusText);
+        this.statusText = resolved;
+        return resolved;
     }
 
     /**
@@ -189,6 +217,7 @@ public class DefaultHttpResponse extends AbstractHttpObject<HttpResponse> implem
      */
     @Override
     public HttpResponse reasonText(String reason) {
+        HttpCharSequences.release(this.reasonText);
         this.reasonText = reason;
         return this;
     }
@@ -198,7 +227,13 @@ public class DefaultHttpResponse extends AbstractHttpObject<HttpResponse> implem
      */
     @Override
     public String reasonText() {
-        return this.reasonText;
+        if (this.status != null) {
+            this.reasonText = this.status.reasonPhrase();
+            return (String) this.reasonText;
+        }
+        String resolved = HttpCharSequences.materialize(this.reasonText);
+        this.reasonText = resolved;
+        return resolved;
     }
 
     @Override
@@ -212,6 +247,9 @@ public class DefaultHttpResponse extends AbstractHttpObject<HttpResponse> implem
     @Override
     public void release() {
         this.resetHttpObjectState();
+        HttpCharSequences.release(this.versionText);
+        HttpCharSequences.release(this.statusText);
+        HttpCharSequences.release(this.reasonText);
         this.version = null;
         this.status = null;
         this.versionText = null;

@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
-import net.hasor.cobble.StringUtils;
+import net.hasor.cobble.function.Release;
 /**
  * Default implementation of a single HTTP header entry.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-10
  */
-public class DefaultHttpHeaderEntry {
-    private final String name;
-    private final String value;
+public class DefaultHttpHeaderEntry implements Release {
+    private CharSequence name;
+    private CharSequence value;
 
     /**
      * Create a header entry.
@@ -30,7 +30,11 @@ public class DefaultHttpHeaderEntry {
      * @param value header value
      */
     public DefaultHttpHeaderEntry(String name, String value) {
-        if (StringUtils.isBlank(name)) {
+        this((CharSequence) name, (CharSequence) value);
+    }
+
+    public DefaultHttpHeaderEntry(CharSequence name, CharSequence value) {
+        if (HttpCharSequences.isBlank(name)) {
             throw new IllegalArgumentException("name must not be empty");
         }
         if (value == null) {
@@ -46,7 +50,9 @@ public class DefaultHttpHeaderEntry {
      * @return header name
      */
     public String getName() {
-        return this.name;
+        String resolved = HttpCharSequences.materialize(this.name);
+        this.name = resolved;
+        return resolved;
     }
 
     /**
@@ -54,6 +60,32 @@ public class DefaultHttpHeaderEntry {
      * @return header value
      */
     public String getValue() {
+        String resolved = HttpCharSequences.materialize(this.value);
+        this.value = resolved;
+        return resolved;
+    }
+
+    boolean matchesName(CharSequence headerName) {
+        return HttpCharSequences.equalsIgnoreCase(this.name, headerName);
+    }
+
+    CharSequence valueText() {
         return this.value;
+    }
+
+    DefaultHttpHeaderEntry materializeCopy() {
+        return new DefaultHttpHeaderEntry(this.getName(), this.getValue());
+    }
+
+    boolean requiresRelease() {
+        return HttpCharSequences.isOwned(this.name) || HttpCharSequences.isOwned(this.value);
+    }
+
+    @Override
+    public void release() {
+        HttpCharSequences.release(this.name);
+        HttpCharSequences.release(this.value);
+        this.name = null;
+        this.value = null;
     }
 }

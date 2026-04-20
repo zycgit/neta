@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http;
 import java.util.*;
-import net.hasor.cobble.StringUtils;
 /**
  * Default implementation of {@link HttpHeaders} backed by plain string header entries.
  * @author 赵永春 (zyc@hasor.net)
@@ -23,6 +22,7 @@ import net.hasor.cobble.StringUtils;
  */
 public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implements HttpHeaders {
     private final List<DefaultHttpHeaderEntry> entries;
+    private boolean                            releasableEntries;
 
     /**
      * Create an empty header block.
@@ -41,13 +41,23 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
      */
     @Override
     public void release() {
+        if (this.releasableEntries) {
+            for (DefaultHttpHeaderEntry entry : this.entries) {
+                entry.release();
+            }
+        }
         this.entries.clear();
+        this.releasableEntries = false;
         this.resetHttpObjectState();
     }
 
     // write
 
     public DefaultHttpHeaders addHeader(String name, String value) {
+        return this.addHeader((CharSequence) name, (CharSequence) value);
+    }
+
+    public DefaultHttpHeaders addHeader(CharSequence name, CharSequence value) {
         if (name == null || name.isEmpty()) {
             throw new IllegalArgumentException("name must not be empty");
         }
@@ -55,13 +65,16 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
             throw new IllegalArgumentException("value must not be null");
         }
 
-        this.entries.add(new DefaultHttpHeaderEntry(name, value));
+        DefaultHttpHeaderEntry entry = new DefaultHttpHeaderEntry(name, value);
+        this.entries.add(entry);
+        this.releasableEntries = this.releasableEntries || entry.requiresRelease();
         return this;
     }
 
     public void addHeaderEntry(DefaultHttpHeaderEntry header) {
         if (header != null) {
             this.entries.add(header);
+            this.releasableEntries = this.releasableEntries || header.requiresRelease();
         }
     }
 
@@ -72,7 +85,17 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
 
         if (headers instanceof DefaultHttpHeaders) {
             DefaultHttpHeaders source = (DefaultHttpHeaders) headers;
-            this.entries.addAll(source.entries);
+            if (source == this) {
+                List<DefaultHttpHeaderEntry> copies = new ArrayList<>(source.entries.size());
+                for (DefaultHttpHeaderEntry entry : source.entries) {
+                    copies.add(entry.materializeCopy());
+                }
+                this.entries.addAll(copies);
+            } else {
+                for (DefaultHttpHeaderEntry entry : source.entries) {
+                    this.entries.add(entry.materializeCopy());
+                }
+            }
         } else {
             for (String name : headers.headerNames()) {
                 for (String value : headers.getValues(name)) {
@@ -98,7 +121,6 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
 
     public DefaultHttpHeaders clearHeader() {
         this.release();
-        this.entries.clear();
         return this;
     }
 
@@ -109,9 +131,15 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
 
         for (int i = this.entries.size() - 1; i >= 0; i--) {
             DefaultHttpHeaderEntry entry = this.entries.get(i);
-            if (StringUtils.equalsIgnoreCase(entry.getName(), name)) {
+            if (entry.matchesName(name)) {
+                if (this.releasableEntries) {
+                    entry.release();
+                }
                 this.entries.remove(i);
             }
+        }
+        if (this.entries.isEmpty()) {
+            this.releasableEntries = false;
         }
         return this;
     }
@@ -126,7 +154,7 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
 
         List<String> result = new ArrayList<>();
         for (DefaultHttpHeaderEntry entry : this.entries) {
-            if (StringUtils.equalsIgnoreCase(entry.getName(), name)) {
+            if (entry.matchesName(name)) {
                 result.add(entry.getValue());
             }
         }
@@ -195,12 +223,16 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
         }
 
         for (DefaultHttpHeaderEntry entry : this.entries) {
-            if (StringUtils.equalsIgnoreCase(entry.getName(), name)) {
+            if (entry.matchesName(name)) {
                 return entry.getValue();
             }
         }
 
         return null;
+    }
+
+    List<DefaultHttpHeaderEntry> headerEntries() {
+        return this.entries;
     }
 
     @Override

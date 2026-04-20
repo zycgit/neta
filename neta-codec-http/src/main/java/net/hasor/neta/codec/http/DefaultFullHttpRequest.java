@@ -229,6 +229,10 @@ public class DefaultFullHttpRequest extends AbstractHttpObject<FullHttpRequest> 
         return this.headers.headerSize();
     }
 
+    DefaultHttpHeaders headerBlock() {
+        return (DefaultHttpHeaders) this.headers;
+    }
+
     //
 
     @Override

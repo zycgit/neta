@@ -71,7 +71,7 @@ public class HttpRequestEncoderTest extends AbstractHttpTest {
             request.addHeader(HttpHeaderNames.CONTENT_LENGTH, "4");
 
             List<ByteBuf> parts = sendAndOutBound(pipe, request);
-            assertEquals(3, parts.size());
+            assertEquals(2, parts.size());
             assertEquals("POST /upload HTTP/1.1\r\nhost: example.com\r\ncontent-length: 4\r\n\r\nWiki", text(parts));
         });
     }
@@ -87,7 +87,7 @@ public class HttpRequestEncoderTest extends AbstractHttpTest {
             request.addHeader(HttpHeaderNames.TRANSFER_ENCODING, HttpHeaderValues.CHUNKED);
 
             List<ByteBuf> parts = sendAndOutBound(pipe, request);
-            assertEquals(6, parts.size());
+            assertEquals(5, parts.size());
             assertEquals("POST /upload HTTP/1.1\r\ntransfer-encoding: chunked\r\n\r\n4\r\nWiki\r\n0\r\n\r\n", text(parts));
         });
     }
@@ -303,7 +303,7 @@ public class HttpRequestEncoderTest extends AbstractHttpTest {
         try {
             ProtoStatus status = encoder.onMessage(context, src, dst);
             assertEquals(ProtoStatus.Next, status);
-            assertEquals(3, dst.offered.size());
+            assertEquals(2, dst.offered.size());
         } finally {
             for (ByteBuf out : dst.offered) {
                 out.release();

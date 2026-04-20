@@ -195,8 +195,31 @@ public final class HttpStatus {
             }
             code = code * 10 + (ch - '0');
         }
+
+        if (code >= 100 && code < STATUS_LOOKUP.length) {
+            HttpStatus known = STATUS_LOOKUP[code];
+            if (known != null && reasonEquals(known.reasonPhrase, reasonPhrase)) {
+                return known;
+            }
+        }
+
         String reason = reasonPhrase == null ? "" : reasonPhrase.toString();
-        return valueOf(code, reason);
+        return new HttpStatus(code, reason);
+    }
+
+    private static boolean reasonEquals(String knownReason, CharSequence candidate) {
+        if (candidate == null) {
+            return knownReason.isEmpty();
+        }
+        if (knownReason.length() != candidate.length()) {
+            return false;
+        }
+        for (int i = 0; i < knownReason.length(); i++) {
+            if (knownReason.charAt(i) != candidate.charAt(i)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

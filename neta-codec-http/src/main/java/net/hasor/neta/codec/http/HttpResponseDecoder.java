@@ -21,6 +21,7 @@ import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
+import net.hasor.neta.bytebuf.StringView;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
@@ -410,13 +411,23 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                     throw new HttpBadRequestException("invalid status code: " + statusCode);
                 }
 
-                String versionText = line.getString(0, firstSpace, StandardCharsets.US_ASCII);
-                String statusText = line.getString(statusStart, statusEnd - statusStart, StandardCharsets.US_ASCII);
-                String reasonText = secondSpace < 0 || secondSpace + 1 >= lineLength ? "" : line.getString(secondSpace + 1, lineLength - secondSpace - 1, StandardCharsets.US_ASCII);
+                StringView versionView = StringView.request(line, 0, firstSpace);
+                StringView statusView = StringView.request(line, statusStart, statusEnd - statusStart);
+                StringView reasonView = secondSpace < 0 || secondSpace + 1 >= lineLength ? null : StringView.request(line, secondSpace + 1, lineLength - secondSpace - 1);
+                try {
+                    HttpVersion version = HttpVersion.valueOf(versionView);
+                    HttpStatus status = HttpStatus.valueOf(statusView, reasonView == null ? "" : reasonView);
 
-                accumulator.markReader();
-                respCtx.currentMessage = new DefaultHttpResponse(versionText, statusText, reasonText);
-                return respCtx.currentMessage;
+                    accumulator.markReader();
+                    respCtx.currentMessage = new DefaultHttpResponse(version, status);
+                    return respCtx.currentMessage;
+                } finally {
+                    versionView.release();
+                    statusView.release();
+                    if (reasonView != null) {
+                        reasonView.release();
+                    }
+                }
             } finally {
                 line.free();
             }
@@ -474,9 +485,20 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                     headerEntries = new ArrayList<>();
                 }
 
-                String name = line.getString(nameStart, nameEnd - nameStart, StandardCharsets.US_ASCII);
-                String value = line.getString(valueStart, valueEnd - valueStart, StandardCharsets.US_ASCII);
-                headerEntries.add(new DefaultHttpHeaderEntry(name, value));
+                StringView name = StringView.request(line, nameStart, nameEnd - nameStart);
+                StringView value = StringView.request(line, valueStart, valueEnd - valueStart);
+                try {
+                    headerEntries.add(new DefaultHttpHeaderEntry(name, value));
+                    name = null;
+                    value = null;
+                } finally {
+                    if (name != null) {
+                        name.release();
+                    }
+                    if (value != null) {
+                        value.release();
+                    }
+                }
                 accumulator.markReader();
             } finally {
                 line.free();
@@ -499,6 +521,49 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
     }
 
     private void updateResponseTransferMode(HttpHeaders headers, HttpContext.ResponseDecodeState respCtx) {
+        if (headers instanceof DefaultHttpHeaders) {
+            if (respCtx.currentMessage != null && HttpVersion.HTTP_1_0.equals(respCtx.currentMessage.protocolVersion())) {
+                respCtx.connectionClose = true;
+            }
+
+            boolean needsContentLength = respCtx.contentLength < 0;
+            boolean needsConnectionHeader = !respCtx.connectionClose;
+            for (DefaultHttpHeaderEntry entry : ((DefaultHttpHeaders) headers).headerEntries()) {
+                if (!respCtx.chunked && entry.matchesName(HttpHeaderNames.TRANSFER_ENCODING)) {
+                    if (HttpCharSequences.containsIgnoreCase(entry.valueText(), HttpHeaderValues.CHUNKED)) {
+                        respCtx.chunked = true;
+                        respCtx.contentLength = -1;
+                        needsContentLength = false;
+                    }
+                    continue;
+                }
+
+                if (needsContentLength && !respCtx.chunked && entry.matchesName(HttpHeaderNames.CONTENT_LENGTH)) {
+                    CharSequence cl = entry.valueText();
+                    if (!HttpCharSequences.isBlank(cl)) {
+                        try {
+                            respCtx.contentLength = HttpCharSequences.parseLong(cl);
+                            if (respCtx.contentLength < 0) {
+                                throw new HttpContentTooLargeException("negative Content-Length: " + respCtx.contentLength);
+                            }
+                            needsContentLength = false;
+                        } catch (NumberFormatException e) {
+                            throw new HttpBadRequestException("invalid Content-Length: " + cl, e);
+                        }
+                    }
+                    continue;
+                }
+
+                if (needsConnectionHeader && entry.matchesName(HttpHeaderNames.CONNECTION)) {
+                    if (HttpCharSequences.containsIgnoreCase(entry.valueText(), HttpHeaderValues.CLOSE)) {
+                        respCtx.connectionClose = true;
+                        needsConnectionHeader = false;
+                    }
+                }
+            }
+            return;
+        }
+
         if (headers.containsHeader(HttpHeaderNames.TRANSFER_ENCODING)) {
             String te = headers.getString(HttpHeaderNames.TRANSFER_ENCODING);
             if (StringUtils.containsIgnoreCase(te, HttpHeaderValues.CHUNKED)) {
@@ -666,9 +731,20 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                     valueEnd--;
                 }
 
-                String name = line.getString(nameStart, nameEnd - nameStart, StandardCharsets.US_ASCII);
-                String value = line.getString(valueStart, valueEnd - valueStart, StandardCharsets.US_ASCII);
-                respCtx.currentHeaders.addHeader(name, value);
+                StringView name = StringView.request(line, nameStart, nameEnd - nameStart);
+                StringView value = StringView.request(line, valueStart, valueEnd - valueStart);
+                try {
+                    ((DefaultHttpHeaders) respCtx.currentHeaders).addHeaderEntry(new DefaultHttpHeaderEntry(name, value));
+                    name = null;
+                    value = null;
+                } finally {
+                    if (name != null) {
+                        name.release();
+                    }
+                    if (value != null) {
+                        value.release();
+                    }
+                }
                 accumulator.markReader();
             } finally {
                 line.free();

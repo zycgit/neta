@@ -230,6 +230,10 @@ public class DefaultFullHttpResponse extends AbstractHttpObject<FullHttpResponse
         return this.headers.headerSize();
     }
 
+    DefaultHttpHeaders headerBlock() {
+        return (DefaultHttpHeaders) this.headers;
+    }
+
     //
 
     @Override
