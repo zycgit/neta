@@ -87,7 +87,7 @@ public final class ServerConfig {
         return contextPath;
     }
 
-    /** Maximum allowed request body size in bytes. Requests exceeding this limit get a 413 response. */
+    /** Maximum allowed request body size in bytes. {@code <= 0} means unlimited. */
     public int getMaxContentLength() {
         return maxContentLength;
     }
@@ -164,7 +164,7 @@ public final class ServerConfig {
     public static final class Builder {
         private String               serverName                  = "Neta-HTTP";
         private String               contextPath                 = "";
-        private int                  maxContentLength            = 1048576;   // 1 MB
+        private int                  maxContentLength            = 0;         // 0 = unlimited
         private int                  maxInitialLineLength        = 4096;
         private int                  maxHeaderSize               = 8192;
         private int                  maxChunkSize                = 8192;
@@ -194,6 +194,7 @@ public final class ServerConfig {
             return this;
         }
 
+        /** Sets the maximum request body size in bytes. {@code <= 0} disables transport-level size enforcement. */
         public Builder maxContentLength(int bytes) {
             this.maxContentLength = bytes;
             return this;

@@ -47,9 +47,10 @@ import net.hasor.nhttp.server.internal.InternalBodyChannel;
  * (steps 4–5) are fed into the {@link InternalBodyChannel}.</p>
  *
  * <h3>maxContentLength guard</h3>
- * <p>Running byte count is tracked across all {@link HttpContent} chunks. When the total
- * exceeds {@link ServerConfig#getMaxContentLength()}, the body channel is closed and a 413
- * response is sent immediately.</p>
+ * <p>When {@link ServerConfig#getMaxContentLength()} is positive, running byte count is tracked
+ * across all {@link HttpContent} chunks. If the total exceeds that limit, the body channel is
+ * closed and a 413 response is sent immediately. Non-positive values disable transport-level
+ * request body size enforcement.</p>
  *
  * <h3>HTTP/2 support</h3>
  * <p>For HTTP/2, neta's per-stream partition ensures one instance per stream. Stream close
@@ -69,6 +70,9 @@ class HttpRequestHandler implements ProtoHandler<HttpObject, Object> {
     private HttpRequest         pendingRequestLine;
     private DefaultHttpHeaders  accumulatedHeaders;
     private InternalBodyChannel currentBodyChannel;
+    private HttpVersion         activeProtocolVersion;
+    private long                activeStreamId     = -1;
+    private boolean             requestTerminated  = false;
     private long                receivedBodyBytes = 0;
 
     HttpRequestHandler(boolean secure, ServerConfig config, RequestDispatchCallback callback) {
@@ -116,7 +120,9 @@ class HttpRequestHandler implements ProtoHandler<HttpObject, Object> {
     private void onRequestLine(HttpObject obj) {
         this.pendingRequestLine = (HttpRequest) obj;
         this.accumulatedHeaders = new DefaultHttpHeaders();
-        this.receivedBodyBytes = 0;
+        resetRequestState();
+        this.activeProtocolVersion = this.pendingRequestLine.protocolVersion();
+        this.activeStreamId = this.pendingRequestLine.streamId();
         closeBodyChannelIfPresent(); // safety: previous channel should already be closed
     }
 
@@ -145,6 +151,13 @@ class HttpRequestHandler implements ProtoHandler<HttpObject, Object> {
         HttpHeaders headers = this.accumulatedHeaders;
         this.pendingRequestLine = null;
         this.accumulatedHeaders = null;
+        this.activeProtocolVersion = line.protocolVersion();
+        this.activeStreamId = line.streamId();
+        this.requestTerminated = false;
+
+        if (rejectAtHeadersIfNeeded(ctx, line, headers)) {
+            return;
+        }
 
         NetChannel channel = (NetChannel) ctx.getChannel();
         this.currentBodyChannel = new InternalBodyChannel(//
@@ -166,11 +179,14 @@ class HttpRequestHandler implements ProtoHandler<HttpObject, Object> {
     private void onFullRequest(ProtoContext ctx, FullHttpRequest request) {
         closeBodyChannelIfPresent();
 
+        this.activeProtocolVersion = request.protocolVersion();
+        this.activeStreamId = request.streamId();
+        this.requestTerminated = false;
         this.receivedBodyBytes = request.content().readableBytes();
-        if (this.receivedBodyBytes > this.config.getMaxContentLength()) {
+        if (isContentLengthLimited() && this.receivedBodyBytes > this.config.getMaxContentLength()) {
             request.release();
             sendErrorAndClose(ctx, 413, "Payload Too Large");
-            this.receivedBodyBytes = 0;
+            resetRequestState();
             return;
         }
 
@@ -197,17 +213,31 @@ class HttpRequestHandler implements ProtoHandler<HttpObject, Object> {
         }
 
         this.currentBodyChannel = null;
-        this.receivedBodyBytes = 0;
+        resetRequestState();
     }
 
     /** Feeds a body chunk into the active {@link InternalBodyChannel}. */
     private void onBodyChunk(ProtoContext ctx, HttpContent content) {
+        if (this.requestTerminated) {
+            boolean lastChunk = content instanceof LastHttpContent;
+            content.release();
+            if (lastChunk) {
+                resetRequestState();
+            }
+            return;
+        }
+
         // ① maxContentLength guard
         this.receivedBodyBytes += content.content().readableBytes();
-        if (this.receivedBodyBytes > this.config.getMaxContentLength()) {
+        if (isContentLengthLimited() && this.receivedBodyBytes > this.config.getMaxContentLength()) {
             closeBodyChannelIfPresent();
+            this.requestTerminated = true;
+            boolean lastChunk = content instanceof LastHttpContent;
             content.release();
             sendErrorAndClose(ctx, 413, "Payload Too Large");
+            if (lastChunk) {
+                resetRequestState();
+            }
             return;
         }
 
@@ -215,6 +245,7 @@ class HttpRequestHandler implements ProtoHandler<HttpObject, Object> {
             boolean accepted = this.currentBodyChannel.offer(content);
             if (!accepted) {
                 // Back-pressure strategy gave up — send 503
+                this.requestTerminated = true;
                 sendErrorAndClose(ctx, 503, "Service Unavailable");
                 this.currentBodyChannel = null;
                 return;
@@ -222,7 +253,7 @@ class HttpRequestHandler implements ProtoHandler<HttpObject, Object> {
             if (content instanceof LastHttpContent) {
                 // Body complete; worker thread now drains the channel
                 this.currentBodyChannel = null;
-                this.receivedBodyBytes = 0;
+                resetRequestState();
             }
         } else {
             content.release();
@@ -289,18 +320,85 @@ class HttpRequestHandler implements ProtoHandler<HttpObject, Object> {
         }
     }
 
+    private boolean rejectAtHeadersIfNeeded(ProtoContext ctx, HttpRequest line, HttpHeaders headers) {
+        long contentLength = headers != null ? headers.getLong(HttpHeaderNames.CONTENT_LENGTH, -1) : -1;
+        String expect = headers != null ? headers.getString(HttpHeaderNames.EXPECT) : null;
+        HttpVersion version = line != null ? line.protocolVersion() : this.activeProtocolVersion;
+        long streamId = line != null ? line.streamId() : this.activeStreamId;
+        boolean contentLengthLimited = isContentLengthLimited();
+
+        if (expect != null) {
+            String expectValue = expect.trim();
+            if (!expectValue.isEmpty()) {
+                if (!HttpHeaderValues.CONTINUE.equalsIgnoreCase(expectValue)) {
+                    this.requestTerminated = true;
+                    sendErrorAndClose(ctx, 417, "Expectation Failed");
+                    return true;
+                }
+                if (contentLengthLimited && contentLength >= 0 && contentLength > this.config.getMaxContentLength()) {
+                    this.requestTerminated = true;
+                    sendErrorAndClose(ctx, 413, "Payload Too Large");
+                    return true;
+                }
+                sendContinueResponse(ctx, version, streamId);
+            }
+        }
+
+        if (contentLengthLimited && contentLength >= 0 && contentLength > this.config.getMaxContentLength()) {
+            this.requestTerminated = true;
+            sendErrorAndClose(ctx, 413, "Payload Too Large");
+            return true;
+        }
+
+        return false;
+    }
+
+    private boolean isContentLengthLimited() {
+        return this.config.getMaxContentLength() > 0;
+    }
+
+    private void sendContinueResponse(ProtoContext ctx, HttpVersion version, long streamId) {
+        try {
+            DefaultFullHttpResponse response = new DefaultFullHttpResponse(version != null ? version : HttpVersion.HTTP_1_1, HttpStatus.CONTINUE, ByteBuf.EMPTY);
+            response.setHeader(HttpHeaderNames.CONTENT_LENGTH, HttpHeaderValues.ZERO);
+            if (streamId > 0) {
+                response.streamId(streamId);
+            }
+            ctx.sendEncoded(response);
+        } catch (Throwable t) {
+            logger.warn("Failed to send 100-continue response", t);
+            ctx.getChannel().closeNow();
+        }
+    }
+
+    private void resetRequestState() {
+        this.receivedBodyBytes = 0;
+        this.requestTerminated = false;
+        this.activeProtocolVersion = null;
+        this.activeStreamId = -1;
+    }
+
     private void sendErrorAndClose(ProtoContext ctx, int code, String message) {
         try {
             String body = "<html><body><h1>" + code + " " + htmlEscape(message) + "</h1></body></html>";
             ByteBuf content = ByteBuf.wrap(body.getBytes(StandardCharsets.UTF_8));
-            DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.valueOf(code), content);
+            HttpVersion version = this.activeProtocolVersion != null ? this.activeProtocolVersion : HttpVersion.HTTP_1_1;
+            DefaultFullHttpResponse response = new DefaultFullHttpResponse(version, HttpStatus.valueOf(code), content);
+            if (this.activeStreamId > 0) {
+                response.streamId(this.activeStreamId);
+            }
             response.setHeader(HttpHeaderNames.CONTENT_TYPE, HttpHeaderValues.TEXT_HTML + "; charset=UTF-8");
             response.setHeader(HttpHeaderNames.CONTENT_LENGTH, String.valueOf(content.readableBytes()));
-            response.setHeader(HttpHeaderNames.CONNECTION, "close");
-            ctx.sendEncoded(response).onFinal(f -> ctx.getChannel().close());
+            if (version.majorVersion() < 2) {
+                response.setHeader(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
+                ctx.sendEncoded(response).onFinal(f -> ctx.getChannel().closeNow());
+            } else {
+                response.removeHeader(HttpHeaderNames.CONNECTION);
+                ctx.sendEncoded(response);
+            }
         } catch (Throwable t) {
             logger.warn("Failed to send error response", t);
-            ctx.getChannel().close();
+            ctx.getChannel().closeNow();
         }
     }
 

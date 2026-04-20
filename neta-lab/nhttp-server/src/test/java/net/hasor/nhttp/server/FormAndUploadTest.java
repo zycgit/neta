@@ -24,6 +24,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.junit.Test;
 
@@ -841,6 +843,76 @@ public class FormAndUploadTest {
             assertFalse("Response should not contain 503: " + response, response.contains("503 Service Unavailable"));
             assertTrue("Response should contain 200: " + response, response.contains("200"));
             assertTrue("Response should contain the uploaded size: " + response, response.contains("size=" + payload.length));
+        } finally {
+            neta.shutdown();
+        }
+    }
+
+    @Test
+    public void test_pipeline_oversizedUpload_returnsSingle413() throws Throwable {
+        NetaHttpServer httpServer = new NetaHttpServer();
+        httpServer.maxContentLength(64 * 1024);
+        httpServer.addServlet("/api/upload", new HttpServlet() {
+            @Override
+            protected void doPost(ServletRequest req, ServletResponse resp) throws IOException {
+                try {
+                    Thread.sleep(200L);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                req.getFileUploads();
+                resp.setStatus(200);
+                resp.write("unexpected");
+            }
+        });
+        httpServer.initServletContext();
+
+        ProtoInitializer serverInit = httpServer.createHttpInitializer(false);
+
+        NetManager neta = new NetManager();
+        try {
+            VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), serverInit, VrtSoConfig.asServer());
+            VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+            }, VrtSoConfig.asClient());
+
+            VrtTransfer transfer = new VrtTransfer(neta);
+            transfer.linkTo(client, server, VrtTransfer.duplicate());
+            transfer.linkTo(server, client, VrtTransfer.duplicate());
+
+            Queue<String> clientRcv = subscribeAsString(client);
+
+            byte[] payload = new byte[128 * 1024];
+            for (int i = 0; i < payload.length; i++) {
+                payload[i] = (byte) (i & 0x7F);
+            }
+
+            MultipartEncoder encoder = new MultipartEncoder();
+            encoder.addField("description", "TooLarge");
+            encoder.addFile("bigfile", "big.bin", "application/octet-stream", payload);
+
+            byte[] body = encoder.encode();
+            String headerPart = "POST /api/upload HTTP/1.1\r\n" + "Host: localhost\r\n" + "Content-Type: " + encoder.contentType() + "\r\n" + "Content-Length: " + body.length + "\r\n" + "\r\n";
+            client.sendData(toByteBuf(headerPart)).get();
+
+            for (int offset = 0; offset < body.length; offset += 1024) {
+                int len = Math.min(1024, body.length - offset);
+                byte[] chunk = new byte[len];
+                System.arraycopy(body, offset, chunk, 0, len);
+                client.sendData(toByteBuf(chunk)).get();
+            }
+
+            Thread.sleep(800L);
+
+            String response = collectStrings(clientRcv);
+            assertTrue("Response should contain 413: " + response, response.contains("413 Payload Too Large"));
+            assertFalse("Response should not contain servlet success body: " + response, response.contains("unexpected"));
+
+            Matcher matcher = Pattern.compile("413 Payload Too Large").matcher(response);
+            int count = 0;
+            while (matcher.find()) {
+                count++;
+            }
+            assertEquals("Oversized upload should emit exactly one 413 response", 1, count);
         } finally {
             neta.shutdown();
         }

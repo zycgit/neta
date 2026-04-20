@@ -17,6 +17,7 @@ package net.hasor.nhttp.server;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -126,11 +127,16 @@ public class Http2OverTlsUploadTest {
     * Pipeline: tls-detect → [tls branch: ssl → alpn-router → [h2 branch: h2-codec → h2-aggregator → h2-handler]]
      */
     private void startHttpsServer(HttpServlet... servlets) throws Exception {
+        startHttpsServer(1024 * 1024, servlets);
+    }
+
+    private void startHttpsServer(int maxContentLength, HttpServlet... servlets) throws Exception {
         port = findFreePort();
 
         NetaHttpServer httpServer = new NetaHttpServer();
         httpServer.ssl(serverSslConfig());
         httpServer.http2(true);
+        httpServer.maxContentLength(maxContentLength);
 
         for (HttpServlet servlet : servlets) {
             httpServer.addServlet("/upload", servlet);
@@ -218,6 +224,38 @@ public class Http2OverTlsUploadTest {
         String responseBody = response.body().string();
         assertEquals("received:204800", responseBody);
         assertEquals(Protocol.HTTP_2, response.protocol());
+    }
+
+    @Test
+    public void testH2Tls_OversizedUpload_Returns413() throws Exception {
+        startHttpsServer(64 * 1024, new HttpServlet() {
+            @Override
+            protected void doPost(ServletRequest req, ServletResponse resp) throws IOException {
+                try {
+                    Thread.sleep(200L);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                req.getBody();
+                resp.setContentType("text/plain");
+                resp.write("unexpected");
+            }
+        });
+
+        byte[] body = new byte[256 * 1024];
+        Arrays.fill(body, (byte) 'D');
+
+        Request request = new Request.Builder()//
+                .url("https://127.0.0.1:" + port + "/upload")//
+                .post(RequestBody.create(body, MediaType.parse("application/octet-stream")))//
+                .build();
+
+        Response response = h2TlsClient.newCall(request).execute();
+        assertEquals(413, response.code());
+        assertEquals(Protocol.HTTP_2, response.protocol());
+        assertNotNull(response.body());
+        String responseBody = response.body().string();
+        assertTrue(responseBody.contains("413 Payload Too Large"));
     }
 
     // ========================= Test: GET over h2-TLS (sanity check) =========================

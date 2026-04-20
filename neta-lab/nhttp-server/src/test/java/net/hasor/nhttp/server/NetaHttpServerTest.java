@@ -75,6 +75,12 @@ public class NetaHttpServerTest {
         return sb.toString();
     }
 
+    private static String repeat(char ch, int count) {
+        char[] chars = new char[count];
+        java.util.Arrays.fill(chars, ch);
+        return new String(chars);
+    }
+
     /** Subscribe helper: reads ByteBuf data immediately before it is released */
     private static Queue<String> subscribeAsString(VrtChannel channel) {
         Queue<String> queue = new java.util.concurrent.ConcurrentLinkedQueue<>();
@@ -197,6 +203,47 @@ public class NetaHttpServerTest {
             String response = collectStrings(clientRcv);
             assertTrue("Response should contain 200 OK: " + response, response.contains("200 OK"));
             assertTrue("Response should contain echoed body: " + response, response.contains("echo:test-data-123"));
+        } finally {
+            neta.shutdown();
+        }
+    }
+
+    @Test
+    public void test_plainHttp_defaultUnlimitedBodyDoesNot413() throws Throwable {
+        NetaHttpServer httpServer = new NetaHttpServer();
+        httpServer.addServlet("/echo", new HttpServlet() {
+            @Override
+            protected void doPost(ServletRequest req, ServletResponse resp) throws IOException {
+                resp.setContentType("text/plain");
+                resp.write("len=" + req.getBodyAsString().length());
+            }
+        });
+        httpServer.initServletContext();
+
+        ProtoInitializer serverInit = httpServer.createHttpInitializer(false);
+
+        NetManager neta = new NetManager();
+        try {
+            VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), serverInit, VrtSoConfig.asServer());
+            VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+            }, VrtSoConfig.asClient());
+
+            VrtTransfer transfer = new VrtTransfer(neta);
+            transfer.linkTo(client, server, VrtTransfer.duplicate());
+            transfer.linkTo(server, client, VrtTransfer.duplicate());
+
+            Queue<String> clientRcv = subscribeAsString(client);
+
+            int bodySize = 1024 * 1024 + 256;
+            String body = repeat('a', bodySize);
+            String request = "POST /echo HTTP/1.1\r\n" + "Host: localhost\r\n" + "Content-Type: text/plain\r\n" + "Content-Length: " + body.length() + "\r\n" + "\r\n" + body;
+            client.sendData(toByteBuf(request)).get();
+            Thread.sleep(500);
+
+            String response = collectStrings(clientRcv);
+            assertTrue("Response should contain 200 OK: " + response, response.contains("200 OK"));
+            assertTrue("Response should contain echoed length: " + response, response.contains("len=" + bodySize));
+            assertFalse("Default configuration should not emit 413: " + response, response.contains("413 Payload Too Large"));
         } finally {
             neta.shutdown();
         }

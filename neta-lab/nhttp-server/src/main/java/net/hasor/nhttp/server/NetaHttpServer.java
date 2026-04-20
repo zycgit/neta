@@ -78,7 +78,7 @@ public class NetaHttpServer {
 
     private String                     serverName                  = "Neta-HTTP";
     private String                     contextPath                 = "";
-    private int                        maxContentLength            = 1048576;   // 1 MB
+    private int                        maxContentLength            = 0;         // 0 = unlimited
     private int                        maxInitialLineLength        = 4096;
     private int                        maxHeaderSize               = 8192;
     private int                        maxChunkSize                = 8192;
@@ -151,7 +151,7 @@ public class NetaHttpServer {
         return this;
     }
 
-    /** Sets the maximum request body size in bytes (default: 1 MB). */
+    /** Sets the maximum request body size in bytes. Use {@code 0} or a negative value for no transport-level limit. */
     public NetaHttpServer maxContentLength(int bytes) {
         this.maxContentLength = bytes;
         return this;
@@ -789,10 +789,10 @@ public class NetaHttpServer {
             response.setHeader(HttpHeaderNames.CONTENT_TYPE, HttpHeaderValues.TEXT_HTML + "; charset=UTF-8");
             response.setHeader(HttpHeaderNames.CONTENT_LENGTH, String.valueOf(content.readableBytes()));
             response.setHeader(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
-            ctx.sendEncoded(response).onFinal(f -> ctx.getChannel().close());
+            ctx.sendEncoded(response).onFinal(f -> ctx.getChannel().closeNow());
         } catch (Throwable t) {
             logger.warn("Failed to send IO-thread error response", t);
-            ctx.getChannel().close();
+            ctx.getChannel().closeNow();
         }
     }
 
