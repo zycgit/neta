@@ -13,16 +13,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.nhttp.server.internal;
+package net.hasor.neta.http.client;
+
+import java.io.Closeable;
+import java.io.IOException;
+import java.net.URI;
 
 /**
- * @deprecated Replaced by {@link InternalServletResponse}, which writes through a
- *             {@link net.hasor.nhttp.server.connector.ResponseSink} and supports
- *             both buffered and streaming response modes.
- *             This stub is kept only as a placeholder; do not use it.
+ * Active client websocket session.
+ * @author 赵永春 (zyc@hasor.net)
  */
-@Deprecated
-public final class DefaultServletResponse {
-    private DefaultServletResponse() {
-    }
+public interface WebSocketClientSession extends Closeable {
+    URI uri();
+
+    long streamId();
+
+    String subProtocol();
+
+    boolean isOpen();
+
+    void sendText(String message) throws IOException;
+
+    void sendBinary(byte[] data) throws IOException;
+
+    void sendPing(byte[] data) throws IOException;
+
+    void sendPong(byte[] data) throws IOException;
+
+    void close(int statusCode, String reason) throws IOException;
 }

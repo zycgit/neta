@@ -38,6 +38,7 @@ import net.hasor.neta.codec.http.cookie.DefaultCookie;
 import net.hasor.neta.codec.http.multipart.FileUpload;
 import net.hasor.neta.codec.http.multipart.MultipartDecoder;
 import net.hasor.nhttp.server.*;
+import net.hasor.nhttp.server.connector.BackpressureStrategy;
 
 /**
  * {@link ServletRequest} implementation for the streaming HTTP model.
@@ -57,6 +58,17 @@ import net.hasor.nhttp.server.*;
  */
 public class StreamingServletRequest implements ServletRequest {
     private static final Logger logger = Logger.getLogger(StreamingServletRequest.class);
+
+    public static StreamingServletRequest fromFullHttpRequest(FullHttpRequest httpRequest, NetChannel channel, boolean secure, SessionManager sessionManager) {
+        return fromFullHttpRequest(httpRequest, channel, secure, sessionManager, 30_000L);
+    }
+
+    public static StreamingServletRequest fromFullHttpRequest(FullHttpRequest httpRequest, NetChannel channel, boolean secure, SessionManager sessionManager, long chunkReadTimeoutMillis) {
+        InternalBodyChannel bodyChannel = new InternalBodyChannel(1, BackpressureStrategy.FAST_FAIL, channel);
+        ByteBuf body = httpRequest.content();
+        bodyChannel.offer(new DefaultLastHttpContent(body != null ? body.copy() : ByteBuf.EMPTY));
+        return new StreamingServletRequest(httpRequest, httpRequest, bodyChannel, channel, secure, sessionManager, chunkReadTimeoutMillis);
+    }
 
     private final HttpRequest         requestLine;
     private final HttpHeaders         requestHeaders;

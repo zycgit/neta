@@ -38,13 +38,13 @@ import net.hasor.neta.channel.transport.virtual.VrtTransfer;
 import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.multipart.FileUpload;
 import net.hasor.neta.codec.http.multipart.MultipartEncoder;
-import net.hasor.nhttp.server.internal.DefaultServletRequest;
 import net.hasor.nhttp.server.internal.DefaultSessionManager;
+import net.hasor.nhttp.server.internal.StreamingServletRequest;
 
 /**
  * Tests for form submission and file upload functionality in the nhttp module.
  * <p>
- * <b>Layer 1</b>: Unit tests operating directly on {@link DefaultServletRequest} with
+ * <b>Layer 1</b>: Unit tests operating directly on {@link StreamingServletRequest} with
  * constructed {@link FullHttpRequest} objects. Uses VrtChannel only as the required
  * {@link net.hasor.neta.channel.NetChannel} parameter — no network I/O, pure parsing logic.
  * <p>
@@ -59,7 +59,7 @@ public class FormAndUploadTest {
     //  Shared Helpers
     // =====================================================================
 
-    /** Creates a minimal VrtChannel (used only to satisfy DefaultServletRequest constructor). */
+    /** Creates a minimal VrtChannel used to create request adapters without real network I/O. */
     private static VrtChannel createMockChannel(NetManager neta) throws IOException {
         return (VrtChannel) neta.connectSync(new VrtSocketAddress(99), ctx -> {
         }, VrtSoConfig.asServer());
@@ -87,7 +87,7 @@ public class FormAndUploadTest {
         return request;
     }
 
-    private static void releaseQuietly(DefaultServletRequest request, FullHttpRequest httpRequest) {
+    private static void releaseQuietly(StreamingServletRequest request, FullHttpRequest httpRequest) {
         if (request != null) {
             request.release();
         }
@@ -139,7 +139,7 @@ public class FormAndUploadTest {
     }
 
     // =========================================================================
-    //  Layer 1: Unit Tests — DefaultServletRequest parsing (no network I/O)
+    //  Layer 1: Unit Tests — StreamingServletRequest parsing (no network I/O)
     // =========================================================================
 
     // --- URL-encoded form parameter tests ---
@@ -148,12 +148,12 @@ public class FormAndUploadTest {
     public void test_urlEncoded_basicFormParams() throws Exception {
         NetManager neta = new NetManager();
         FullHttpRequest httpReq = null;
-        DefaultServletRequest req = null;
+        StreamingServletRequest req = null;
         try {
             VrtChannel channel = createMockChannel(neta);
             httpReq = buildFormRequest("/api/form", "username=alice&email=alice%40example.com&message=Hello+World");
 
-            req = new DefaultServletRequest(httpReq, channel, false, SESSION_MANAGER);
+            req = StreamingServletRequest.fromFullHttpRequest(httpReq, channel, false, SESSION_MANAGER);
 
             assertFalse("url-encoded should not be multipart", req.isMultipart());
             assertEquals("alice", req.getParameter("username"));
@@ -169,12 +169,12 @@ public class FormAndUploadTest {
     public void test_urlEncoded_multipleValues() throws Exception {
         NetManager neta = new NetManager();
         FullHttpRequest httpReq = null;
-        DefaultServletRequest req = null;
+        StreamingServletRequest req = null;
         try {
             VrtChannel channel = createMockChannel(neta);
             httpReq = buildFormRequest("/api/form", "color=red&color=green&color=blue");
 
-            req = new DefaultServletRequest(httpReq, channel, false, SESSION_MANAGER);
+            req = StreamingServletRequest.fromFullHttpRequest(httpReq, channel, false, SESSION_MANAGER);
 
             List<String> colors = req.getParameterValues("color");
             assertNotNull(colors);
@@ -192,7 +192,7 @@ public class FormAndUploadTest {
     public void test_urlEncoded_queryAndBodyMerged() throws Exception {
         NetManager neta = new NetManager();
         DefaultFullHttpRequest httpReq = null;
-        DefaultServletRequest req = null;
+        StreamingServletRequest req = null;
         try {
             VrtChannel channel = createMockChannel(neta);
             String formBody = "body_param=from_body";
@@ -202,7 +202,7 @@ public class FormAndUploadTest {
             httpReq.setHeader(HttpHeaderNames.CONTENT_LENGTH, String.valueOf(bodyBytes.length));
             httpReq.setHeader(HttpHeaderNames.HOST, "localhost");
 
-            req = new DefaultServletRequest(httpReq, channel, false, SESSION_MANAGER);
+            req = StreamingServletRequest.fromFullHttpRequest(httpReq, channel, false, SESSION_MANAGER);
 
             Map<String, List<String>> params = req.getParameterMap();
             assertEquals("from_query", params.get("query_param").get(0));
@@ -217,13 +217,13 @@ public class FormAndUploadTest {
     public void test_urlEncoded_specialCharacters() throws Exception {
         NetManager neta = new NetManager();
         FullHttpRequest httpReq = null;
-        DefaultServletRequest req = null;
+        StreamingServletRequest req = null;
         try {
             VrtChannel channel = createMockChannel(neta);
             // name=张三, msg=hello & world = 你好世界!
             httpReq = buildFormRequest("/api/form", "name=%E5%BC%A0%E4%B8%89&msg=hello+%26+world+%3D+%E4%BD%A0%E5%A5%BD%E4%B8%96%E7%95%8C%21");
 
-            req = new DefaultServletRequest(httpReq, channel, false, SESSION_MANAGER);
+            req = StreamingServletRequest.fromFullHttpRequest(httpReq, channel, false, SESSION_MANAGER);
 
             assertEquals("张三", req.getParameter("name"));
             assertEquals("hello & world = 你好世界!", req.getParameter("msg"));
@@ -237,14 +237,14 @@ public class FormAndUploadTest {
     public void test_urlEncoded_emptyBody() throws Exception {
         NetManager neta = new NetManager();
         DefaultFullHttpRequest httpReq = null;
-        DefaultServletRequest req = null;
+        StreamingServletRequest req = null;
         try {
             VrtChannel channel = createMockChannel(neta);
             httpReq = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/api/form");
             httpReq.setHeader(HttpHeaderNames.CONTENT_TYPE, HttpHeaderValues.APPLICATION_X_WWW_FORM_URLENCODED);
             httpReq.setHeader(HttpHeaderNames.HOST, "localhost");
 
-            req = new DefaultServletRequest(httpReq, channel, false, SESSION_MANAGER);
+            req = StreamingServletRequest.fromFullHttpRequest(httpReq, channel, false, SESSION_MANAGER);
 
             assertTrue("Empty body should have empty param map", req.getParameterMap().isEmpty());
         } finally {
@@ -259,11 +259,11 @@ public class FormAndUploadTest {
     public void test_multipart_detection() throws Exception {
         NetManager neta = new NetManager();
         FullHttpRequest multiReq = null;
-        DefaultServletRequest req1 = null;
+        StreamingServletRequest req1 = null;
         DefaultFullHttpRequest jsonReq = null;
-        DefaultServletRequest req2 = null;
+        StreamingServletRequest req2 = null;
         DefaultFullHttpRequest getReq = null;
-        DefaultServletRequest req3 = null;
+        StreamingServletRequest req3 = null;
         try {
             VrtChannel channel = createMockChannel(neta);
 
@@ -271,20 +271,20 @@ public class FormAndUploadTest {
             MultipartEncoder enc = new MultipartEncoder();
             enc.addField("name", "test");
             multiReq = buildMultipartRequest("/api/upload", enc);
-            req1 = new DefaultServletRequest(multiReq, channel, false, SESSION_MANAGER);
+            req1 = StreamingServletRequest.fromFullHttpRequest(multiReq, channel, false, SESSION_MANAGER);
             assertTrue("multipart/form-data should be multipart", req1.isMultipart());
 
             // ② application/json → false
             jsonReq = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/api/data");
             jsonReq.setHeader(HttpHeaderNames.CONTENT_TYPE, "application/json");
             jsonReq.setHeader(HttpHeaderNames.HOST, "localhost");
-            req2 = new DefaultServletRequest(jsonReq, channel, false, SESSION_MANAGER);
+            req2 = StreamingServletRequest.fromFullHttpRequest(jsonReq, channel, false, SESSION_MANAGER);
             assertFalse("JSON should not be multipart", req2.isMultipart());
 
             // ③ GET (no content-type) → false
             getReq = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
             getReq.setHeader(HttpHeaderNames.HOST, "localhost");
-            req3 = new DefaultServletRequest(getReq, channel, false, SESSION_MANAGER);
+            req3 = StreamingServletRequest.fromFullHttpRequest(getReq, channel, false, SESSION_MANAGER);
             assertFalse("GET should not be multipart", req3.isMultipart());
         } finally {
             releaseQuietly(req1, multiReq);
@@ -300,7 +300,7 @@ public class FormAndUploadTest {
     public void test_multipart_singleFile() throws Exception {
         NetManager neta = new NetManager();
         FullHttpRequest httpReq = null;
-        DefaultServletRequest req = null;
+        StreamingServletRequest req = null;
         try {
             VrtChannel channel = createMockChannel(neta);
 
@@ -309,7 +309,7 @@ public class FormAndUploadTest {
             encoder.addFile("file1", "test.txt", "text/plain", fileContent);
 
             httpReq = buildMultipartRequest("/api/upload", encoder);
-            req = new DefaultServletRequest(httpReq, channel, false, SESSION_MANAGER);
+            req = StreamingServletRequest.fromFullHttpRequest(httpReq, channel, false, SESSION_MANAGER);
 
             assertTrue(req.isMultipart());
 
@@ -337,7 +337,7 @@ public class FormAndUploadTest {
     public void test_multipart_multipleFilesAndFields() throws Exception {
         NetManager neta = new NetManager();
         FullHttpRequest httpReq = null;
-        DefaultServletRequest req = null;
+        StreamingServletRequest req = null;
         try {
             VrtChannel channel = createMockChannel(neta);
 
@@ -350,7 +350,7 @@ public class FormAndUploadTest {
             encoder.addFile("file2", "data.bin", "application/octet-stream", file2);
 
             httpReq = buildMultipartRequest("/api/upload", encoder);
-            req = new DefaultServletRequest(httpReq, channel, false, SESSION_MANAGER);
+            req = StreamingServletRequest.fromFullHttpRequest(httpReq, channel, false, SESSION_MANAGER);
 
             assertTrue(req.isMultipart());
 
@@ -390,7 +390,7 @@ public class FormAndUploadTest {
     public void test_multipart_getFileUploadByName() throws Exception {
         NetManager neta = new NetManager();
         FullHttpRequest httpReq = null;
-        DefaultServletRequest req = null;
+        StreamingServletRequest req = null;
         try {
             VrtChannel channel = createMockChannel(neta);
 
@@ -399,7 +399,7 @@ public class FormAndUploadTest {
             encoder.addField("extra", "value");
 
             httpReq = buildMultipartRequest("/api/upload", encoder);
-            req = new DefaultServletRequest(httpReq, channel, false, SESSION_MANAGER);
+            req = StreamingServletRequest.fromFullHttpRequest(httpReq, channel, false, SESSION_MANAGER);
 
             // find file by field name
             FileUpload found = req.getFileUpload("myfile");
@@ -425,7 +425,7 @@ public class FormAndUploadTest {
     public void test_multipart_fieldsOnlyNoFiles() throws Exception {
         NetManager neta = new NetManager();
         FullHttpRequest httpReq = null;
-        DefaultServletRequest req = null;
+        StreamingServletRequest req = null;
         try {
             VrtChannel channel = createMockChannel(neta);
 
@@ -434,7 +434,7 @@ public class FormAndUploadTest {
             encoder.addField("age", "30");
 
             httpReq = buildMultipartRequest("/api/upload", encoder);
-            req = new DefaultServletRequest(httpReq, channel, false, SESSION_MANAGER);
+            req = StreamingServletRequest.fromFullHttpRequest(httpReq, channel, false, SESSION_MANAGER);
 
             assertTrue(req.isMultipart());
             assertEquals("Bob", req.getParameter("name"));
@@ -458,7 +458,7 @@ public class FormAndUploadTest {
     public void test_multipart_largeFile() throws Exception {
         NetManager neta = new NetManager();
         FullHttpRequest httpReq = null;
-        DefaultServletRequest req = null;
+        StreamingServletRequest req = null;
         try {
             VrtChannel channel = createMockChannel(neta);
 
@@ -471,7 +471,7 @@ public class FormAndUploadTest {
             encoder.addFile("bigfile", "large.dat", "application/octet-stream", bigContent);
 
             httpReq = buildMultipartRequest("/api/upload", encoder);
-            req = new DefaultServletRequest(httpReq, channel, false, SESSION_MANAGER);
+            req = StreamingServletRequest.fromFullHttpRequest(httpReq, channel, false, SESSION_MANAGER);
 
             FileUpload part = req.getFileUpload("bigfile");
             assertNotNull(part);
@@ -490,7 +490,7 @@ public class FormAndUploadTest {
     public void test_notMultipart_plainTextPost() throws Exception {
         NetManager neta = new NetManager();
         DefaultFullHttpRequest httpReq = null;
-        DefaultServletRequest req = null;
+        StreamingServletRequest req = null;
         try {
             VrtChannel channel = createMockChannel(neta);
 
@@ -500,7 +500,7 @@ public class FormAndUploadTest {
             httpReq.setHeader(HttpHeaderNames.CONTENT_LENGTH, String.valueOf(bodyBytes.length));
             httpReq.setHeader(HttpHeaderNames.HOST, "localhost");
 
-            req = new DefaultServletRequest(httpReq, channel, false, SESSION_MANAGER);
+            req = StreamingServletRequest.fromFullHttpRequest(httpReq, channel, false, SESSION_MANAGER);
 
             assertFalse(req.isMultipart());
             assertTrue(req.getFileUploads().isEmpty());
@@ -516,7 +516,7 @@ public class FormAndUploadTest {
     public void test_multipart_cachingBehavior() throws Exception {
         NetManager neta = new NetManager();
         FullHttpRequest httpReq = null;
-        DefaultServletRequest req = null;
+        StreamingServletRequest req = null;
         try {
             VrtChannel channel = createMockChannel(neta);
 
@@ -524,7 +524,7 @@ public class FormAndUploadTest {
             encoder.addFile("f", "a.txt", "text/plain", "data".getBytes(StandardCharsets.UTF_8));
 
             httpReq = buildMultipartRequest("/api/upload", encoder);
-            req = new DefaultServletRequest(httpReq, channel, false, SESSION_MANAGER);
+            req = StreamingServletRequest.fromFullHttpRequest(httpReq, channel, false, SESSION_MANAGER);
 
             List<FileUpload> first = req.getFileUploads();
             List<FileUpload> second = req.getFileUploads();
@@ -541,7 +541,7 @@ public class FormAndUploadTest {
     public void test_multipart_emptyBody() throws Exception {
         NetManager neta = new NetManager();
         DefaultFullHttpRequest httpReq = null;
-        DefaultServletRequest req = null;
+        StreamingServletRequest req = null;
         try {
             VrtChannel channel = createMockChannel(neta);
 
@@ -549,7 +549,7 @@ public class FormAndUploadTest {
             httpReq.setHeader(HttpHeaderNames.CONTENT_TYPE, "multipart/form-data; boundary=----TestBoundary123");
             httpReq.setHeader(HttpHeaderNames.HOST, "localhost");
 
-            req = new DefaultServletRequest(httpReq, channel, false, SESSION_MANAGER);
+            req = StreamingServletRequest.fromFullHttpRequest(httpReq, channel, false, SESSION_MANAGER);
 
             assertTrue(req.isMultipart());
             assertTrue("Empty body should yield empty parts", req.getFileUploads().isEmpty());
@@ -565,7 +565,7 @@ public class FormAndUploadTest {
     public void test_multipart_parameterMapIncludesFieldsOnly() throws Exception {
         NetManager neta = new NetManager();
         FullHttpRequest httpReq = null;
-        DefaultServletRequest req = null;
+        StreamingServletRequest req = null;
         try {
             VrtChannel channel = createMockChannel(neta);
 
@@ -575,7 +575,7 @@ public class FormAndUploadTest {
             encoder.addFile("avatar", "photo.jpg", "image/jpeg", new byte[] { 1, 2, 3 });
 
             httpReq = buildMultipartRequest("/api/upload", encoder);
-            req = new DefaultServletRequest(httpReq, channel, false, SESSION_MANAGER);
+            req = StreamingServletRequest.fromFullHttpRequest(httpReq, channel, false, SESSION_MANAGER);
 
             Map<String, List<String>> params = req.getParameterMap();
             assertNotNull(params.get("username"));
@@ -594,7 +594,7 @@ public class FormAndUploadTest {
     public void test_requestReleaseReclaimsMultipartBuffers() throws Exception {
         NetManager neta = new NetManager();
         FullHttpRequest httpReq = null;
-        DefaultServletRequest req = null;
+        StreamingServletRequest req = null;
         ByteBufAllocatorMetric metric = ByteBufAllocator.DEFAULT.metric();
         long activeCountBefore = metric.totalActiveAllocations();
         long activeBytesBefore = metric.totalActiveBytes();
@@ -607,7 +607,7 @@ public class FormAndUploadTest {
             encoder.addFile("avatar", "photo.jpg", "image/jpeg", new byte[] { 1, 2, 3, 4, 5, 6 });
 
             httpReq = buildMultipartRequest("/api/upload", encoder);
-            req = new DefaultServletRequest(httpReq, channel, false, SESSION_MANAGER);
+            req = StreamingServletRequest.fromFullHttpRequest(httpReq, channel, false, SESSION_MANAGER);
 
             assertEquals(3, req.getFileUploads().size());
             assertEquals("charlie", req.getParameter("username"));

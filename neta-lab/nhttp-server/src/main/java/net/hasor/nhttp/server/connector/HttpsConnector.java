@@ -33,7 +33,7 @@ import net.hasor.nhttp.server.ServerConfig;
  * <p>Listens on a single TCP port and handles two connection types detected by
  * examining the first byte of the stream:
  * <ul>
- *   <li><b>TLS</b> (first byte 0x14–0x17) — SslDuplexer → ALPN-negotiate h2 / http/1.1</li>
+ *   <li><b>TLS</b> (first byte 0x14–0x17) — SslDuplexer → ALPN-route h2 / http/1.1</li>
  *   <li><b>Plaintext HTTP</b> (first byte 0x41–0x5A, uppercase letter) — HttpServerDuplexe →
  *       {@link HttpsRedirectHandler} (301 redirect to https://…)</li>
  *   <li><b>Unknown</b> — connection is closed immediately</li>

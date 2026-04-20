@@ -30,7 +30,7 @@ import net.hasor.neta.codec.http.h3.Http3FrameDuplexe;
 import net.hasor.neta.codec.http.h3.Http3ObjectDuplexe;
 import net.hasor.neta.codec.http.h3.Http3Settings;
 import net.hasor.neta.codec.http.routing.H2CUpgradeServerDuplexer;
-import net.hasor.neta.codec.http.routing.HttpAggregatorOverTlsRoute;
+import net.hasor.neta.codec.http.routing.Http2OverTlsRoute;
 import net.hasor.neta.codec.http.routing.HttpAggregatorRoute;
 import net.hasor.neta.codec.http.routing.HttpRouteKey;
 import net.hasor.neta.codec.http.websocket.WebSocketFrameDuplexer;
@@ -203,9 +203,9 @@ public final class PipelineFactory {
     /**
      * Creates the TLS branch pipeline used after TLS detection on the HTTPS port.
      *
-     * <p>Adds {@link SslDuplexer}, then ALPN-negotiates h2 vs http/1.1 when HTTP/2
-     * is enabled. When HTTP/2 is disabled the pipeline falls directly into
-     * HTTP/1.1.</p>
+     * <p>Adds {@link SslDuplexer}, then routes by the negotiated ALPN protocol when
+     * HTTP/2 is enabled. When HTTP/2 is disabled the pipeline falls directly into
+     * HTTP/1.1 over TLS.</p>
      */
     static ProtoInitializer createHttpsTlsBranchPipeline(ServerConfig config, RequestDispatchCallback callback, WebSocketHandshakeAuthorizer wsAuthorizer) {
         return ctx -> {
@@ -218,12 +218,11 @@ public final class PipelineFactory {
                 return;
             }
 
-            // ALPN routing: h2 | http/1.1 | h2c
-            ProtoHelper.standard().nextRouteAsStatic("alpn", new HttpAggregatorOverTlsRoute(), routing -> {
+            // ALPN routing: h2 | http/1.1
+            ProtoHelper.standard().nextRouteAsStatic("alpn", new Http2OverTlsRoute(), routing -> {
                 ProtoRoutingControl routingControl = routing.control();
                 routing.branchByInitializer(HttpRouteKey.BRANCH_H1, createHttp1BranchPipeline(config, callback, true, routingControl, wsAuthorizer));
                 routing.branchByInitializer(HttpRouteKey.BRANCH_H2, createHttp2BranchPipeline(config, callback, true, routingControl, wsAuthorizer));
-                routing.branchByInitializer(HttpRouteKey.BRANCH_H2C, createHttp1BranchPipeline(config, callback, true, routingControl, wsAuthorizer));
             }).config(ctx);
         };
     }

@@ -23,6 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Test;
 
+import net.hasor.nhttp.server.container.ServletDispatcher;
 import net.hasor.nhttp.server.*;
 
 /**

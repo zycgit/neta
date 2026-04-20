@@ -13,11 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.nhttp.server.internal;
+package net.hasor.nhttp.client;
 
 /**
- * Compatibility alias for the relocated dispatcher implementation.
+ * HTTP version policy used by {@link HttpClient} when selecting the outbound protocol pipeline.
+ * @author 赵永春 (zyc@hasor.net)
  */
-@Deprecated
-public class ServletDispatcher extends net.hasor.nhttp.server.container.ServletDispatcher {
+public enum HttpVersionPolicy {
+    AUTO,
+    HTTP_1_1,
+    HTTP_2
 }

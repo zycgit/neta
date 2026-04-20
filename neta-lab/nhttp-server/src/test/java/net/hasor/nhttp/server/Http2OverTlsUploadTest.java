@@ -123,7 +123,7 @@ public class Http2OverTlsUploadTest {
 
     /**
      * Starts an HTTPS server with full ALPN-based h2 pipeline via NetaHttpServer.
-     * Pipeline: tls-detect → [tls branch: ssl → alpn-router → [h2 branch: h2-codec → h2-aggregator → h2-handler]]
+    * Pipeline: tls-detect → [tls branch: ssl → alpn-router → [h2 branch: h2-codec → h2-aggregator → h2-handler]]
      */
     private void startHttpsServer(HttpServlet... servlets) throws Exception {
         port = findFreePort();

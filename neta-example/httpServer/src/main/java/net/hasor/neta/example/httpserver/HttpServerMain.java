@@ -15,17 +15,17 @@
  */
 package net.hasor.neta.example.httpserver;
 
-import java.io.FileInputStream;
 import java.io.InputStream;
+import java.nio.file.Files;
 import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 
-import net.hasor.nhttp.server.NetaHttpServer;
 import net.hasor.neta.codec.http.cors.CorsConfig;
 import net.hasor.neta.codec.ssl.SslConfig;
 import net.hasor.neta.codec.ssl.SslProtocol;
 import net.hasor.neta.codec.ssl.SslUtils;
+import net.hasor.nhttp.server.NetaHttpServer;
 
 /**
  * HTTP server example based on the new {@link NetaHttpServer} API.
@@ -49,11 +49,11 @@ import net.hasor.neta.codec.ssl.SslUtils;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class HttpServerMain {
-    private static final int HTTP_PORT  = 8080;
-    private static final int HTTPS_PORT = 8443;
-    private static final int MAX_CONTENT_LENGTH = 10 * 1024 * 1024;
-    private static final int SESSION_TIMEOUT_SECONDS = 1800;
-    private static final String SERVER_NAME = "Neta-Example-HTTP-Server/2.0";
+    private static final int    HTTP_PORT               = 8080;
+    private static final int    HTTPS_PORT              = 8443;
+    private static final int    MAX_CONTENT_LENGTH      = 10 * 1024 * 1024;
+    private static final int    SESSION_TIMEOUT_SECONDS = 1800;
+    private static final String SERVER_NAME             = "Neta-Example-HTTP-Server/2.0";
 
     public static void main(String[] args) throws Exception {
         System.out.println("==========================================================");
@@ -90,10 +90,10 @@ public class HttpServerMain {
         // Load cert chain and private key directly from src/main/resources/ssl/
         X509Certificate[] certChain;
         PrivateKey privateKey;
-        try (InputStream in = new FileInputStream(certs.certFile)) {
+        try (InputStream in = Files.newInputStream(certs.certFile.toPath())) {
             certChain = SslUtils.toX509Certificates(in);
         }
-        try (InputStream in = new FileInputStream(certs.keyFile)) {
+        try (InputStream in = Files.newInputStream(certs.keyFile.toPath())) {
             privateKey = SslUtils.toPrivateKey(in, null);
         }
 
@@ -156,11 +156,7 @@ public class HttpServerMain {
 
     private static NetaHttpServer buildServer(CorsConfig corsConfig, SslConfig sslConfig) {
         NetaHttpServer server = new NetaHttpServer();
-        server.serverName(SERVER_NAME)
-                .cors(corsConfig)
-                .http2(true)
-                .maxContentLength(MAX_CONTENT_LENGTH)
-                .sessionTimeout(SESSION_TIMEOUT_SECONDS);
+        server.serverName(SERVER_NAME).cors(corsConfig).http2(true).maxContentLength(MAX_CONTENT_LENGTH).sessionTimeout(SESSION_TIMEOUT_SECONDS);
 
         if (sslConfig != null) {
             server.ssl(sslConfig);

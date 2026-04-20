@@ -17,8 +17,8 @@ import net.hasor.neta.codec.http.HttpMethod;
 import net.hasor.neta.codec.http.HttpVersion;
 import net.hasor.neta.codec.http.multipart.MultipartEncoder;
 import net.hasor.neta.leak.LeakMetricSnapshot;
-import net.hasor.nhttp.server.internal.DefaultServletRequest;
 import net.hasor.nhttp.server.internal.DefaultSessionManager;
+import net.hasor.nhttp.server.internal.StreamingServletRequest;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -80,9 +80,9 @@ public class NHttpServerLeakBenchmark {
         encoder.addFile("avatar", "photo.jpg", "image/jpeg", new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 });
 
         FullHttpRequest request = buildMultipartRequest("/api/upload", encoder);
-        DefaultServletRequest servletRequest = null;
+        StreamingServletRequest servletRequest = null;
         try {
-            servletRequest = new DefaultServletRequest(request, this.channel, false, this.sessionManager);
+            servletRequest = StreamingServletRequest.fromFullHttpRequest(request, this.channel, false, this.sessionManager);
             return servletRequest.getFileUploads().size() + servletRequest.getParameterMap().size();
         } finally {
             if (servletRequest != null) {
@@ -95,9 +95,9 @@ public class NHttpServerLeakBenchmark {
     @Benchmark
     public int discardUnreadBodyLifecycle() {
         FullHttpRequest request = buildFormRequest("/api/form", "username=alice&email=alice%40example.com&comment=body-not-read");
-        DefaultServletRequest servletRequest = null;
+        StreamingServletRequest servletRequest = null;
         try {
-            servletRequest = new DefaultServletRequest(request, this.channel, false, this.sessionManager);
+            servletRequest = StreamingServletRequest.fromFullHttpRequest(request, this.channel, false, this.sessionManager);
             servletRequest.discardUnreadBody();
             return (int) servletRequest.getContentLength();
         } finally {
