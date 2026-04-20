@@ -67,11 +67,11 @@
                 <artifactId>neta-codec-http</artifactId>
                 <version>${project.version}</version>
             </dependency>
-            <dependency>
-                <groupId>net.hasor</groupId>
-                <artifactId>neta-codec-mail</artifactId>
-                <version>${project.version}</version>
-            </dependency>
+            <!--            <dependency>-->
+            <!--                <groupId>net.hasor</groupId>-->
+            <!--                <artifactId>neta-codec-mail</artifactId>-->
+            <!--                <version>${project.version}</version>-->
+            <!--            </dependency>-->
             <dependency>
                 <groupId>net.hasor</groupId>
                 <artifactId>neta-codec-net</artifactId>
