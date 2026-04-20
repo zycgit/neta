@@ -19,7 +19,6 @@ import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.channel.routing.ProtoRoutingDataSelector;
-
 /**
  * HTTPS aggregate route selector.
  * <p>

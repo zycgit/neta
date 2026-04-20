@@ -20,7 +20,6 @@ import java.net.StandardSocketOptions;
 import java.nio.channels.NetworkChannel;
 import java.util.Objects;
 import net.hasor.cobble.logging.Logger;
-
 /**
  * Apply settings from {@link UdpSoConfig} to {@link java.nio.channels.DatagramChannel}.
  * @author 赵永春 (zyc@hasor.net)

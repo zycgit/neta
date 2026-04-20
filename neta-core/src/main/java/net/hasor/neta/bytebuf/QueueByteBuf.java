@@ -19,7 +19,6 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
-
 /**
  * A read-only {@link ByteBuf} view over a {@link ProtoRcvQueue ProtoRcvQueue&lt;ByteBuf&gt;},
  * presenting all queued ByteBuf messages as a single contiguous readable buffer.

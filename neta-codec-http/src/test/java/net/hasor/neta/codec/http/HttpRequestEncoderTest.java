@@ -14,17 +14,20 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
+
+import static org.junit.Assert.*;
+
 import java.lang.reflect.Proxy;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
+
+import org.junit.Test;
+
 import net.hasor.cobble.ref.Tuple;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.bytebuf.ByteBufAllocatorMetric;
 import net.hasor.neta.channel.NetConfig;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoStatus;
@@ -33,8 +36,6 @@ import net.hasor.neta.channel.data.ProtoRcvQueueView;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.channel.data.ProtoSndQueueView;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
-import org.junit.Test;
-import static org.junit.Assert.*;
 
 public class HttpRequestEncoderTest extends AbstractHttpTest {
     @Test
@@ -139,18 +140,18 @@ public class HttpRequestEncoderTest extends AbstractHttpTest {
                 ctx.addLastEncoder("req-encoder", new HttpRequestEncoder());
             }, VrtSoConfig.asClient());
 
-                ByteBuf body = ascii("Wiki");
-                DefaultHttpContent content = new DefaultHttpContent(body);
+            ByteBuf body = ascii("Wiki");
+            DefaultHttpContent content = new DefaultHttpContent(body);
             List<ByteBuf> outbound = sendAndOutBound(pipe,//
                     new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/upload"), //
                     new DefaultLastHttpHeaders()//
                             .addHeader(HttpHeaderNames.TRANSFER_ENCODING, HttpHeaderValues.CHUNKED), //
                     content,//
                     new DefaultLastHttpContent(ByteBuf.EMPTY));
-                assertSame(body, outbound.get(3));
-                assertNull(content.content());
-                assertEquals(1, body.refCnt());
-                    assertEquals("POST /upload HTTP/1.1\r\ntransfer-encoding: chunked\r\n\r\n4\r\nWiki\r\n0\r\n\r\n", text(outbound));
+            assertSame(body, outbound.get(3));
+            assertNull(content.content());
+            assertEquals(1, body.refCnt());
+            assertEquals("POST /upload HTTP/1.1\r\ntransfer-encoding: chunked\r\n\r\n4\r\nWiki\r\n0\r\n\r\n", text(outbound));
         });
     }
 
@@ -277,6 +278,42 @@ public class HttpRequestEncoderTest extends AbstractHttpTest {
         assertTrue(dst.offered.isEmpty());
     }
 
+    @Test
+    public void testRequestEncoderReleasesAllTransferredBuffers() throws Throwable {
+        ByteBufAllocatorMetric metric = ByteBufAllocator.DEFAULT.metric();
+        long activeCountBefore = metric.totalActiveAllocations();
+        long activeBytesBefore = metric.totalActiveBytes();
+
+        HttpRequestEncoder encoder = new HttpRequestEncoder();
+        ProtoContext context = mockContext(ByteBufAllocator.DEFAULT);
+        encoder.onInit("req-encoder", 1, context);
+
+        ByteBuf body = ByteBufAllocator.DEFAULT.buffer(4);
+        body.writeBytes(new byte[] { 'W', 'i', 'k', 'i' }, 0, 4);
+        body.markWriter();
+
+        DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/upload", body);
+        request.addHeader(HttpHeaderNames.HOST, "example.com");
+        request.addHeader(HttpHeaderNames.CONTENT_LENGTH, "4");
+
+        SimpleProtoRcvQueue<HttpObject> src = new SimpleProtoRcvQueue<>();
+        src.add(request);
+        AdjustableProtoSndQueue<ByteBuf> dst = new AdjustableProtoSndQueue<>(8);
+
+        try {
+            ProtoStatus status = encoder.onMessage(context, src, dst);
+            assertEquals(ProtoStatus.Next, status);
+            assertEquals(3, dst.offered.size());
+        } finally {
+            for (ByteBuf out : dst.offered) {
+                out.release();
+            }
+        }
+
+        assertEquals(activeCountBefore, metric.totalActiveAllocations());
+        assertEquals(activeBytesBefore, metric.totalActiveBytes());
+    }
+
     private static ProtoContext mockContext(ByteBufAllocator allocator) {
         Map<Class<?>, Object> contextMap = new ConcurrentHashMap<>();
         NetConfig config = new NetConfig();
@@ -304,7 +341,7 @@ public class HttpRequestEncoderTest extends AbstractHttpTest {
 
     private static class TrackingByteBufAllocator {
         private final ByteBufAllocator delegate;
-        private final List<ByteBuf>   allocated = new ArrayList<>();
+        private final List<ByteBuf>    allocated = new ArrayList<>();
 
         private TrackingByteBufAllocator(ByteBufAllocator delegate) {
             this.delegate = delegate;
@@ -322,7 +359,7 @@ public class HttpRequestEncoderTest extends AbstractHttpTest {
     }
 
     private static class AdjustableProtoSndQueue<T> implements ProtoSndQueue<T> {
-        private final List<T> offered  = new ArrayList<>();
+        private final List<T> offered = new ArrayList<>();
         private int           capacity;
 
         private AdjustableProtoSndQueue(int capacity) {

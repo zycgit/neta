@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.channel.transport.quic;
 import net.hasor.neta.channel.SoException;
-
 /**
  * Base class for QUIC protocol exceptions, carrying a QUIC error code.
  * <p>Corresponds to RFC 9000 Section 20 and serves as a unified exception entry point for connection-level or stream-level protocol errors.

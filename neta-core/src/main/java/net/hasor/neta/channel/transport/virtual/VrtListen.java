@@ -18,7 +18,6 @@ import net.hasor.neta.channel.NetListen;
 import net.hasor.neta.channel.ProtoInitializer;
 import net.hasor.neta.channel.SoConfig;
 import net.hasor.neta.channel.SoContextService;
-
 /**
  * Active listening endpoint for the virtual transport.
  * <p>This type extends {@link net.hasor.neta.channel.NetListen} and additionally holds a

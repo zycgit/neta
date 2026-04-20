@@ -19,7 +19,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.SoChannel;
 import net.hasor.neta.channel.routing.PartitionKey;
-
 /**
  * Registry that stores websocket contexts by endpoint key.
  * <p>

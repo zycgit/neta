@@ -14,8 +14,13 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.routing;
+
 import java.util.ArrayList;
 import java.util.List;
+
+import org.junit.Assert;
+import org.junit.Test;
+
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
@@ -23,8 +28,6 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.channel.transport.virtual.VrtChannel;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.channel.transport.virtual.VrtSocketAddress;
-import org.junit.Assert;
-import org.junit.Test;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -537,7 +540,7 @@ public class ProtoRoutingModeTest {
     private static class RecordHandler implements ProtoHandler<Integer, Integer> {
         private static final java.util.Map<String, Integer> ACTIVE_COUNTS  = new java.util.HashMap<>();
         private static final java.util.Map<String, Integer> MESSAGE_COUNTS = new java.util.HashMap<>();
-        private final        String                         name;
+        private final String                                name;
 
         private RecordHandler(String name) {
             this.name = name;
@@ -571,11 +574,11 @@ public class ProtoRoutingModeTest {
 
     private static class SwitchHandler implements ProtoHandler<Integer, Integer> {
         private static final java.util.Map<String, Integer> ACTIVE_COUNTS = new java.util.HashMap<>();
-        private final        String                         name;
-        private final        int                            triggerValue;
-        private final        String                         targetRoute;
-        private final        ProtoRoutingControl            routingControl;
-        private final        List<String>                   routeEvents;
+        private final String                                name;
+        private final int                                   triggerValue;
+        private final String                                targetRoute;
+        private final ProtoRoutingControl                   routingControl;
+        private final List<String>                          routeEvents;
 
         private SwitchHandler(String name, int triggerValue, String targetRoute, ProtoRoutingControl routingControl, List<String> routeEvents) {
             this.name = name;

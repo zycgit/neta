@@ -36,9 +36,9 @@ class PageChunk implements PageRange {
     private final int           fromPage;
     private final int           toPage;
     private final PageChunkPool ownerPool;
-    PageChunk parent;
-    PageChunk prev;
-    PageChunk next;
+    PageChunk                   parent;
+    PageChunk                   prev;
+    PageChunk                   next;
 
     public PageChunk(PageChunkPool ownerPool, int fromPage, int toPage, PageChunk prev, PageChunk parent) {
         this.ownerPool = ownerPool;

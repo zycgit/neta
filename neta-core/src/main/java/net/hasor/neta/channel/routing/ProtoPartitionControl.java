@@ -17,7 +17,6 @@ package net.hasor.neta.channel.routing;
 import java.util.Collection;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoPartitionDuplexer;
-
 /**
  * Partition control interface exposed by {@link ProtoPartitionBuilder} and backed by
  * {@link ProtoPartitionDuplexer}.

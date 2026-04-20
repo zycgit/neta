@@ -17,7 +17,6 @@ package net.hasor.neta.bytebuf;
 import java.nio.ByteBuffer;
 import net.hasor.cobble.ObjectUtils;
 import net.hasor.cobble.ref.RecycleObjectPool;
-
 /**
  * Fixed-capacity circular {@link ByteBuf} backed by a heap {@code byte[]}.
  * <p>The physical storage is indexed as a ring, while the logical read/write
@@ -48,19 +47,20 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * @see AutoArrayByteBuf
  */
 final class RingArrayByteBuf extends AbstractByteBuf {
-    static final int                                            RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    static       RecycleObjectPool.ObjHandler<RingArrayByteBuf> RECYCLE_HANDLER = new RecycleObjectPool.ObjHandler<RingArrayByteBuf>() {
-        public RingArrayByteBuf create() {
-            return new RingArrayByteBuf();
-        }
+    static final int                                      RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    static RecycleObjectPool.ObjHandler<RingArrayByteBuf> RECYCLE_HANDLER = //
+            new RecycleObjectPool.ObjHandler<RingArrayByteBuf>() {
+                public RingArrayByteBuf create() {
+                    return new RingArrayByteBuf();
+                }
 
-        @Override
-        public void free(RingArrayByteBuf tar) {
-            RecycleObjectPool.free(RECYCLE_INDEX, tar);
-        }
-    };
-    byte[] target;
-    private int capacityMask;
+                @Override
+                public void free(RingArrayByteBuf tar) {
+                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
+                }
+            };
+    byte[]                                                target;
+    private int                                           capacityMask;
 
     private RingArrayByteBuf() {
     }

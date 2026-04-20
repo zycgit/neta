@@ -16,7 +16,6 @@
 package net.hasor.neta.channel.transport.virtual;
 import java.net.SocketAddress;
 import net.hasor.cobble.ObjectUtils;
-
 /**
  * Address object used by the virtual transport.
  * <p>This address is not an IP/port tuple. It is a simple integer endpoint identifier.

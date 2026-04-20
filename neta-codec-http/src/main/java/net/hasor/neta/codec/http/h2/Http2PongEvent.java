@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http.h2;
 import net.hasor.neta.bytebuf.ByteBuf;
-
 /**
  * Network event representing an inbound HTTP/2 PING ACK.
  * <p>

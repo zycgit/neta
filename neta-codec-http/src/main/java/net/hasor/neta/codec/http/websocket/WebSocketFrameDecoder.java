@@ -28,7 +28,6 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.codec.http.HttpByteBuf;
 import net.hasor.neta.codec.http.HttpContent;
 import net.hasor.neta.codec.http.HttpObject;
-
 /**
  * Decode upgraded HTTP payloads into {@link WebSocketFrame} objects.
  * <p>

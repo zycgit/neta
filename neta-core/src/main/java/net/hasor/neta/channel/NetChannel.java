@@ -31,7 +31,6 @@ import net.hasor.cobble.concurrent.timer.Timeout;
 import net.hasor.cobble.concurrent.timer.TimerTask;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
-
 /**
  * Connected socket channel bound to an application-layer protocol stack.
  * Supports asynchronous {@link #sendData} and {@link #flush} operations, as well as waiting for

@@ -19,7 +19,6 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import net.hasor.cobble.ObjectUtils;
 import net.hasor.cobble.ref.RecycleObjectPool;
-
 /**
  * Buddy-tree allocator for one contiguous chunk of pages.
  * <p>A {@code PageChunkPool} owns {@code 2^treeHeight} pages and keeps two
@@ -46,16 +45,16 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * @see BufferArena
  */
 class PageChunkPool {
-    protected final  byte[]                  chunksMap;
-    private final    int                     memAddress;
-    private final    int                     pageSize;
-    private final    int                     pageCount;
-    private final    int                     capacity;
-    private final    int                     height;
-    private final    PageChunk[]             chunksHeads;
-    private final    ReentrantLock[]         chunksLock;
+    protected final byte[]        chunksMap;
+    private final int             memAddress;
+    private final int             pageSize;
+    private final int             pageCount;
+    private final int             capacity;
+    private final int             height;
+    private final PageChunk[]     chunksHeads;
+    private final ReentrantLock[] chunksLock;
     //
-    private final    AtomicInteger           used;
+    private final AtomicInteger used;
     //
     private volatile Object                  owner;
     private volatile Consumer<PageChunkPool> notify;

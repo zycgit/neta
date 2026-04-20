@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.channel.transport.quic;
 import java.util.Arrays;
-
 /**
  * QUIC protocol version definition.
  * <p>Encapsulates the version-specific initial salt, key label prefix, and packet-type encoding mappings.
@@ -24,12 +23,12 @@ import java.util.Arrays;
 public final class QuicVersion {
     // ── Wire protocol version numbers ─────────────────────────────────
     /** Wire protocol version number for QUIC v1. */
-    public static final int         VERSION_1 = 0x00000001;
+    public static final int VERSION_1 = 0x00000001;
     /** Wire protocol version number for QUIC v2. */
-    public static final int         VERSION_2 = 0x6b3343cf;
+    public static final int VERSION_2 = 0x6b3343cf;
     // ── Predefined version instances ──────────────────────────────────
     /** QUIC v1 version instance. */
-    public static final QuicVersion V1        = new QuicVersion(        //
+    public static final QuicVersion V1 = new QuicVersion(        //
             VERSION_1,                                                  //
             new byte[] {                                                //
                     (byte) 0x38, (byte) 0x76, (byte) 0x2c, (byte) 0xf7, //
@@ -42,7 +41,7 @@ public final class QuicVersion {
             new int[] { 0x00, 0x01, 0x02, 0x03 }                        // Initial, 0-RTT, Handshake, Retry
     );
     /** QUIC v2 version instance using the wire version and packet-type mapping defined in RFC 9369. */
-    public static final QuicVersion V2        = new QuicVersion(        //
+    public static final QuicVersion V2 = new QuicVersion(        //
             VERSION_2,                                                  //
             new byte[] {                                                //
                     (byte) 0x0d, (byte) 0xed, (byte) 0xe3, (byte) 0xde, //

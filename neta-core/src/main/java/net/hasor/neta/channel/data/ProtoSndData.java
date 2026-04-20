@@ -16,7 +16,6 @@
 package net.hasor.neta.channel.data;
 import java.util.Collections;
 import java.util.List;
-
 /**
  * Send-side data container at a protocol stack boundary.
  * <p>It only defines the write semantics for outbound data and does not constrain whether the concrete implementation is a main queue, a sub-view, or a temporary container.</p>

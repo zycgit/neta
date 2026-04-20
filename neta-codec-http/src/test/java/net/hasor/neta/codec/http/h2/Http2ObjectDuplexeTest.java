@@ -14,13 +14,17 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h2;
-import java.nio.charset.StandardCharsets;
-import java.util.List;
-import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
-import net.hasor.neta.codec.http.*;
-import org.junit.Test;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+
+import org.junit.Test;
+
+import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
+import net.hasor.neta.codec.http.*;
 
 public class Http2ObjectDuplexeTest extends AbstractHttp2Test {
     @Test

@@ -20,7 +20,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
-
 /**
  * Sequential {@link OutputStream}/{@link DataOutput} view over a {@link ByteBuf}.
  * <p>Writes append to the wrapped buffer by advancing its {@code writerIndex}.
@@ -30,10 +29,10 @@ import java.util.Objects;
  * @see ByteBufInputStream
  */
 public class ByteBufOutputStream extends OutputStream implements DataOutput {
-    private final ByteBuf          buffer;
-    private final int              cacheSize;
-    private       DataOutputStream utf8out; // lazily-instantiated
-    private       boolean          closed;
+    private final ByteBuf    buffer;
+    private final int        cacheSize;
+    private DataOutputStream utf8out; // lazily-instantiated
+    private boolean          closed;
 
     /**
      * Creates a stream with auto flush disabled.

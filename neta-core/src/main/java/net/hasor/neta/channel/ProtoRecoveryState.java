@@ -16,20 +16,19 @@
 package net.hasor.neta.channel;
 import java.util.LinkedHashMap;
 import java.util.Map;
-
 final class ProtoRecoveryState {
-    static final int                 RECOVERY_RCV = 1;
-    static final int                 RECOVERY_SND = 1 << 1;
-    private      String              recoveryOwnerId;
-    private      String              recoveryBranchName;
-    private      boolean             pendingRcvRecoveryGlobal;
-    private      boolean             pendingSndRecoveryGlobal;
-    private      boolean             activeRcvRecoveryGlobal;
-    private      boolean             activeSndRecoveryGlobal;
-    private      Map<String, String> pendingRcvRecoveryBranches;
-    private      Map<String, String> pendingSndRecoveryBranches;
-    private      Map<String, String> activeRcvRecoveryBranches;
-    private      Map<String, String> activeSndRecoveryBranches;
+    static final int            RECOVERY_RCV = 1;
+    static final int            RECOVERY_SND = 1 << 1;
+    private String              recoveryOwnerId;
+    private String              recoveryBranchName;
+    private boolean             pendingRcvRecoveryGlobal;
+    private boolean             pendingSndRecoveryGlobal;
+    private boolean             activeRcvRecoveryGlobal;
+    private boolean             activeSndRecoveryGlobal;
+    private Map<String, String> pendingRcvRecoveryBranches;
+    private Map<String, String> pendingSndRecoveryBranches;
+    private Map<String, String> activeRcvRecoveryBranches;
+    private Map<String, String> activeSndRecoveryBranches;
 
     void setupSource(String ownerId, String branchName) {
         this.recoveryOwnerId = ownerId;

@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.channel;
 import java.util.concurrent.TimeUnit;
-
 /**
  * {@link DefaultSoTask} that delays itself once and then finishes.
  * <p>During the first execution of {@link DefaultSoTask#doWork(int)}, the task records a delay

@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.channel.transport.tcp;
 import net.hasor.neta.channel.SoConfig;
-
 /**
  * Configuration holder for TCP socket options.
  * <p>This type extends the base {@link net.hasor.neta.channel.SoConfig} with TCP-specific tuning

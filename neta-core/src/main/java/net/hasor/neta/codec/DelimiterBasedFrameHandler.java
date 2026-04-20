@@ -22,7 +22,6 @@ import net.hasor.neta.channel.ProtoHandler;
 import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
-
 /**
  * Splits an inbound {@link ByteBuf} byte stream into frames based on one or more
  * fixed byte-sequence delimiters.

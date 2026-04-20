@@ -14,12 +14,18 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
+
+import static org.junit.Assert.*;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
+
+import org.junit.Test;
+
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.SoChannel;
 import net.hasor.neta.channel.SoEvent;
@@ -29,8 +35,6 @@ import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.websocket.extensions.DeflateFrameSupport;
 import net.hasor.neta.codec.http.websocket.extensions.PerMessageDeflateSupport;
 import net.hasor.neta.codec.http.websocket.extensions.XWebkitDeflateFrameSupport;
-import org.junit.Test;
-import static org.junit.Assert.*;
 
 public class WebSocketHandshakeExtensionTest extends AbstractWebSocketTest {
     private static final String WS_URI     = "ws://example.com/chat";

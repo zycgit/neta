@@ -14,11 +14,15 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.transport.quic.rfc;
+
 import java.net.InetSocketAddress;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+
+import org.junit.Test;
+
 import net.hasor.neta.channel.AbstractSoTest;
 import net.hasor.neta.channel.NetChannel;
 import net.hasor.neta.channel.NetManager;
@@ -32,7 +36,6 @@ import net.hasor.neta.codec.LineBasedFrameHandler;
 import net.hasor.neta.codec.ssl.SslAuthKeyType;
 import net.hasor.neta.codec.ssl.SslCertConfig;
 import net.hasor.neta.codec.string.StringDuplexer;
-import org.junit.Test;
 
 /**
  * QUIC RFC 合规测试 — 流 ID 编码（RFC 9000 §2.1）、握手流程（RFC 9000 §7）、
@@ -191,7 +194,8 @@ public class QuicRFCStreamTest extends AbstractSoTest {
         int port = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", port);
         NetManager neta = new NetManager(globalConf());
-        neta.bind(address, ctx -> { /* no handler */ }, quicConfig());
+        neta.bind(address, ctx -> {
+            /* no handler */ }, quicConfig());
 
         try (QuicSimplyClient client = new QuicSimplyClient(address)) {
             // 手动构建并发送 Initial 包
@@ -237,7 +241,8 @@ public class QuicRFCStreamTest extends AbstractSoTest {
         int port = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", port);
         NetManager neta = new NetManager(globalConf());
-        neta.bind(address, ctx -> { /* no handler */ }, quicConfig());
+        neta.bind(address, ctx -> {
+            /* no handler */ }, quicConfig());
 
         try (QuicSimplyClient client = new QuicSimplyClient(address)) {
             client.handshake();
@@ -268,7 +273,8 @@ public class QuicRFCStreamTest extends AbstractSoTest {
         int port = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", port);
         NetManager neta = new NetManager(globalConf());
-        neta.bind(address, ctx -> { /* no handler */ }, quicConfig());
+        neta.bind(address, ctx -> {
+            /* no handler */ }, quicConfig());
 
         try (QuicSimplyClient client = new QuicSimplyClient(address)) {
             byte[] clientLocalCid = client.getLocalCid();
@@ -365,7 +371,8 @@ public class QuicRFCStreamTest extends AbstractSoTest {
         int port = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", port);
         NetManager neta = new NetManager(globalConf());
-        neta.bind(address, ctx -> { /* no handler needed */ }, quicConfig());
+        neta.bind(address, ctx -> {
+            /* no handler needed */ }, quicConfig());
 
         try (QuicSimplyClient client = new QuicSimplyClient(address)) {
             byte[] originalRemoteCid = new byte[client.getRemoteCid().length];
@@ -403,7 +410,8 @@ public class QuicRFCStreamTest extends AbstractSoTest {
         int port = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", port);
         NetManager neta = new NetManager(globalConf());
-        neta.bind(address, ctx -> { /* no handler */ }, quicConfig());
+        neta.bind(address, ctx -> {
+            /* no handler */ }, quicConfig());
 
         try (QuicSimplyClient client = new QuicSimplyClient(address)) {
             // 构建带错误 version 的 Initial 包
@@ -469,7 +477,8 @@ public class QuicRFCStreamTest extends AbstractSoTest {
         int port = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", port);
         NetManager neta = new NetManager(globalConf());
-        neta.bind(address, ctx -> { /* no handler */ }, quicConfig());
+        neta.bind(address, ctx -> {
+            /* no handler */ }, quicConfig());
 
         try (QuicSimplyClient client = new QuicSimplyClient(address)) {
             // 构建 Handshake 类型的 Long Header 包（TYPE_HANDSHAKE = 0x02）
@@ -500,7 +509,8 @@ public class QuicRFCStreamTest extends AbstractSoTest {
         int port = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", port);
         NetManager neta = new NetManager(globalConf());
-        neta.bind(address, ctx -> { /* no handler */ }, quicConfig());
+        neta.bind(address, ctx -> {
+            /* no handler */ }, quicConfig());
 
         try (QuicSimplyClient client = new QuicSimplyClient(address)) {
             client.handshake();
@@ -536,7 +546,8 @@ public class QuicRFCStreamTest extends AbstractSoTest {
         boolean gotTimeout = false;
         try {
             // 不 bind 任何服务端 — 直接 connectAsync 到空端口
-            neta.connectAsync(address, ctx -> { /* no handler */ }, quicConfig()).get(2, java.util.concurrent.TimeUnit.SECONDS);
+            neta.connectAsync(address, ctx -> {
+                /* no handler */ }, quicConfig()).get(2, java.util.concurrent.TimeUnit.SECONDS);
         } catch (java.util.concurrent.TimeoutException e) {
             gotTimeout = true;
         } catch (java.util.concurrent.ExecutionException e) {
@@ -560,7 +571,8 @@ public class QuicRFCStreamTest extends AbstractSoTest {
         int port = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", port);
         NetManager neta = new NetManager(globalConf());
-        neta.bind(address, ctx -> { /* no handler */ }, quicConfig());
+        neta.bind(address, ctx -> {
+            /* no handler */ }, quicConfig());
 
         try (QuicSimplyClient client = new QuicSimplyClient(address)) {
             // 构建包含损坏 CRYPTO 数据的 Initial 包
@@ -594,7 +606,8 @@ public class QuicRFCStreamTest extends AbstractSoTest {
         int port = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", port);
         NetManager neta = new NetManager(globalConf());
-        neta.bind(address, ctx -> { /* no handler */ }, quicConfig());
+        neta.bind(address, ctx -> {
+            /* no handler */ }, quicConfig());
 
         // 发送各种无效数据
         java.net.DatagramSocket rawSocket = new java.net.DatagramSocket();
@@ -644,7 +657,8 @@ public class QuicRFCStreamTest extends AbstractSoTest {
         int port = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", port);
         NetManager neta = new NetManager(globalConf());
-        neta.bind(address, ctx -> { /* no handler */ }, quicConfig());
+        neta.bind(address, ctx -> {
+            /* no handler */ }, quicConfig());
 
         try (QuicSimplyClient client = new QuicSimplyClient(address)) {
             // 构建带有伪造 token 的 Initial 包
@@ -691,7 +705,8 @@ public class QuicRFCStreamTest extends AbstractSoTest {
         int port = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", port);
         NetManager neta = new NetManager(globalConf());
-        neta.bind(address, ctx -> { /* no handler */ }, quicConfig());
+        neta.bind(address, ctx -> {
+            /* no handler */ }, quicConfig());
 
         // 使用底层客户端手动发送错误版本并接收 VN 包
         try (QuicSimplyClient client = new QuicSimplyClient(address)) {
@@ -787,7 +802,8 @@ public class QuicRFCStreamTest extends AbstractSoTest {
         int port = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", port);
         NetManager neta = new NetManager(globalConf());
-        neta.bind(address, ctx -> { /* no handler */ }, quicTlsConfig());
+        neta.bind(address, ctx -> {
+            /* no handler */ }, quicTlsConfig());
 
         SslCertConfig clientSsl = new SslCertConfig();  // 客户端不需要证书
 
@@ -820,7 +836,8 @@ public class QuicRFCStreamTest extends AbstractSoTest {
         int port = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", port);
         NetManager neta = new NetManager(globalConf());
-        neta.bind(address, ctx -> { /* no handler */ }, quicTlsConfig());
+        neta.bind(address, ctx -> {
+            /* no handler */ }, quicTlsConfig());
 
         SslCertConfig clientSsl = new SslCertConfig();
 
@@ -855,7 +872,8 @@ public class QuicRFCStreamTest extends AbstractSoTest {
         int port = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", port);
         NetManager neta = new NetManager(globalConf());
-        neta.bind(address, ctx -> { /* no handler */ }, quicTlsConfig());
+        neta.bind(address, ctx -> {
+            /* no handler */ }, quicTlsConfig());
 
         SslCertConfig clientSsl = new SslCertConfig();
 
@@ -890,7 +908,8 @@ public class QuicRFCStreamTest extends AbstractSoTest {
         int port = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", port);
         NetManager neta = new NetManager(globalConf());
-        neta.bind(address, ctx -> { /* no handler */ }, quicTlsConfig());
+        neta.bind(address, ctx -> {
+            /* no handler */ }, quicTlsConfig());
 
         SslCertConfig clientSsl = new SslCertConfig();
 
@@ -923,7 +942,8 @@ public class QuicRFCStreamTest extends AbstractSoTest {
         int port = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", port);
         NetManager neta = new NetManager(globalConf());
-        neta.bind(address, ctx -> { /* no handler */ }, quicTlsConfig());
+        neta.bind(address, ctx -> {
+            /* no handler */ }, quicTlsConfig());
 
         SslCertConfig clientSsl = new SslCertConfig();
 

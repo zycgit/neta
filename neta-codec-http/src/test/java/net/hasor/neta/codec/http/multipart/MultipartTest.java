@@ -14,15 +14,20 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.multipart;
+
+import static org.junit.Assert.*;
+
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import org.junit.Test;
+
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-import org.junit.Test;
-import static org.junit.Assert.*;
+import net.hasor.neta.bytebuf.ByteBufAllocatorMetric;
 
 /**
  * Tests for the multipart package:
@@ -305,6 +310,23 @@ public class MultipartTest {
         assertEquals("alpha", toString(parts.get(0).content()));
         assertEquals("beta", toString(parts.get(1).content()));
         assertEquals("gamma", toString(parts.get(2).content()));
+    }
+
+    @Test
+    public void testEncoder_doesNotLeakWrappedPartBuffers() {
+        ByteBufAllocatorMetric metric = ByteBufAllocator.DEFAULT.metric();
+        long beforeTotalActive = metric.totalActiveAllocations();
+        long beforeTotalActiveBytes = metric.totalActiveBytes();
+
+        MultipartEncoder enc = new MultipartEncoder("rt-wrap", StandardCharsets.UTF_8);
+        enc.addField("username", "alice");
+        enc.addField("role", "admin");
+        enc.addFile("avatar", "photo.png", "image/png", new byte[] { 1, 2, 3, 4 });
+        byte[] encoded = enc.encode();
+
+        assertTrue(encoded.length > 0);
+        assertEquals(beforeTotalActive, metric.totalActiveAllocations());
+        assertEquals(beforeTotalActiveBytes, metric.totalActiveBytes());
     }
 
     @Test

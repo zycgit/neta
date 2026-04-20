@@ -20,7 +20,6 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.channel.routing.ProtoRoutingControl;
 import net.hasor.neta.codec.http.HttpObject;
 import net.hasor.neta.codec.http.HttpProtocolStateException;
-
 /**
  * HTTP/2 message-layer duplex codec that combines frame-to-object decoding and object-to-frame encoding.
  * <p>

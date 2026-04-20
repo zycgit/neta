@@ -23,7 +23,6 @@ import javax.net.ssl.ManagerFactoryParameters;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.TrustManagerFactorySpi;
-
 /**
  * A skeletal {@link javax.net.ssl.TrustManagerFactory} that simplifies the
  * creation of custom {@link javax.net.ssl.TrustManager} implementations.
@@ -91,8 +90,8 @@ public abstract class SimpleTrustManagerFactory extends TrustManagerFactory {
     protected abstract TrustManager[] engineGetTrustManagers();
 
     static final class SimpleTrustManagerFactorySpi extends TrustManagerFactorySpi {
-        private          SimpleTrustManagerFactory parent;
-        private volatile TrustManager[]            trustManagers;
+        private SimpleTrustManagerFactory parent;
+        private volatile TrustManager[]   trustManagers;
 
         void init(SimpleTrustManagerFactory parent) {
             this.parent = parent;

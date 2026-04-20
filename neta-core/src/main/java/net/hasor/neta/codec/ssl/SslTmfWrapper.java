@@ -18,7 +18,6 @@ import java.security.KeyStore;
 import java.util.Objects;
 import javax.net.ssl.ManagerFactoryParameters;
 import javax.net.ssl.TrustManager;
-
 /**
  * A {@link SimpleTrustManagerFactory} that wraps an existing
  * {@link javax.net.ssl.TrustManager} (or array of them) into a

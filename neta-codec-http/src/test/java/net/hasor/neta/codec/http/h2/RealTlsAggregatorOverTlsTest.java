@@ -1,5 +1,7 @@
 package net.hasor.neta.codec.http.h2;
 
+import static org.junit.Assert.*;
+
 import java.io.Closeable;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -8,9 +10,13 @@ import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
+
+import org.junit.Test;
+
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
@@ -24,8 +30,6 @@ import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.routing.HttpAggregatorOverTlsRoute;
 import net.hasor.neta.codec.http.routing.HttpRouteKey;
 import net.hasor.neta.codec.ssl.*;
-import org.junit.Test;
-import static org.junit.Assert.*;
 
 public class RealTlsAggregatorOverTlsTest extends AbstractHttp2Test {
     private static final int    MAX_CONTENT_LENGTH = 1048576;
@@ -140,9 +144,9 @@ public class RealTlsAggregatorOverTlsTest extends AbstractHttp2Test {
                     ProtoRoutingControl routingControl = routing.control();
 
                     routing.branch(HttpRouteKey.BRANCH_H1, b -> b//
-                                    .nextDuplex("http-codec", new HttpServerDuplexe())//
-                                    .nextDecoder("http-aggregator", new HttpRequestAggregator(MAX_CONTENT_LENGTH))//
-                                    .nextDecoder("http-handler", new InlineTlsHandler("h1")))//
+                            .nextDuplex("http-codec", new HttpServerDuplexe())//
+                            .nextDecoder("http-aggregator", new HttpRequestAggregator(MAX_CONTENT_LENGTH))//
+                            .nextDecoder("http-handler", new InlineTlsHandler("h1")))//
                             .branch(HttpRouteKey.BRANCH_H2, b -> b//
                                     .nextDuplex("h2-frame", new Http2FrameDuplexe(true))//
                                     .nextDuplex("h2-message", new Http2ObjectDuplexe(true, routingControl))//

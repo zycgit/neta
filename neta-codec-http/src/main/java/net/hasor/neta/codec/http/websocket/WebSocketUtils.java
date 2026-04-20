@@ -30,7 +30,6 @@ import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.cookie.Cookie;
 import net.hasor.neta.codec.http.cookie.CookieDecoder;
 import net.hasor.neta.codec.http.cookie.CookieEncoder;
-
 /**
  * Factory and validation helpers shared across the websocket codec pipeline.
  * <p>

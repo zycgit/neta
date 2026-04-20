@@ -16,7 +16,6 @@
 package net.hasor.neta.codec.ssl;
 import java.util.List;
 import net.hasor.neta.channel.SoChannel;
-
 /**
  * Select a protocol that is supported in the TLS NPN/ALPN extension.
  * <p>

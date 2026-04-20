@@ -14,10 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.routing;
-
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoPartitionDuplexer;
-
 /**
  * Selector that decides which partition the current data should enter.
  * <p>When a message or event reaches {@link ProtoPartitionDuplexer}, the framework calls this

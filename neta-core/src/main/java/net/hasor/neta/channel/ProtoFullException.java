@@ -18,7 +18,6 @@ import java.net.SocketException;
 import net.hasor.neta.channel.data.ProtoQueue;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
-
 /**
  * Thrown when pipeline scheduling can no longer write data into the target queue.
  * <p>This exception acts as a channel-layer backpressure signal. {@link ProtoQueue} and

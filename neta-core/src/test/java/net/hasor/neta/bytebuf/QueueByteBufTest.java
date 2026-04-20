@@ -14,10 +14,13 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
+
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import net.hasor.neta.channel.data.ProtoQueue;
+
 import org.junit.Test;
+
+import net.hasor.neta.channel.data.ProtoQueue;
 
 /**
  * Comprehensive tests for {@link QueueByteBuf}.

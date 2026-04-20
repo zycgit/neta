@@ -21,7 +21,6 @@ import java.util.function.Consumer;
 import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.routing.*;
-
 /**
  * Factory for building type-safe protocol pipeline builders and routing builders.
  * <h3>Pipeline builders</h3>
@@ -358,9 +357,9 @@ public final class ProtoHelper {
 
     private static class ProtoPartitionBuilderImpl<RCV_DOWN, SND_UP> implements ProtoPartitionBuilder<RCV_DOWN, SND_UP> {
         private final ProtoPartitionDuplexer<RCV_DOWN, SND_UP> duplexer;
-        private       ProtoPartitionPolicy                     policy;
-        private       ProtoInitializer                         partitionInitializer;
-        private       ProtoInitializer                         defaultInitializer;
+        private ProtoPartitionPolicy                           policy;
+        private ProtoInitializer                               partitionInitializer;
+        private ProtoInitializer                               defaultInitializer;
 
         public ProtoPartitionBuilderImpl(ProtoPartitionDuplexer<RCV_DOWN, SND_UP> duplexer) {
             this.duplexer = duplexer;

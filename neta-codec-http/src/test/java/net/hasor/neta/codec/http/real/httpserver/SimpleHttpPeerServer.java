@@ -1,5 +1,7 @@
 package net.hasor.neta.codec.http.real.httpserver;
 
+import static org.junit.Assert.assertTrue;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -11,7 +13,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import static org.junit.Assert.assertTrue;
 
 public class SimpleHttpPeerServer {
     private final ServerSocket               serverSocket;

@@ -28,8 +28,8 @@ import net.hasor.cobble.concurrent.timer.HashedWheelTimer;
 import net.hasor.cobble.concurrent.timer.TimerTask;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
+import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-
 /**
  * Default implementation of {@link SoContext} and the shared runtime container for a single
  * {@link NetManager}.
@@ -45,24 +45,24 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
  * @see NetManager
  */
 public class SoContextService implements SoContext {
-    private static final Logger                  logger    = Logger.getLogger(SoContextService.class);
-    private final        AtomicLong              nextID    = new AtomicLong(0);
-    private final        NetConfig               config;
-    private final        NetManager              manager;
-    private final        ByteBufAllocator        allocator;
-    private final        ClassLoader             useClassLoader;
-    private final        SoThreadFactory         useSoThreadFactory;
+    private static final Logger    logger = Logger.getLogger(SoContextService.class);
+    private final AtomicLong       nextID = new AtomicLong(0);
+    private final NetConfig        config;
+    private final NetManager       manager;
+    private final ByteBufAllocator allocator;
+    private final ClassLoader      useClassLoader;
+    private final SoThreadFactory  useSoThreadFactory;
     //
-    private final        List<SubscriptionEntry> listeners = new CopyOnWriteArrayList<>();
+    private final List<SubscriptionEntry> listeners = new CopyOnWriteArrayList<>();
     //
-    private final        HashedWheelTimer        globalTimer;
-    private final        ExecutorService         ioExecutor;
-    private final        SoTaskExecutor          eventExecutor;
-    private final        ReentrantReadWriteLock  closeSyncLock;
-    private final        Map<Long, SoChannel<?>> channelMap;
-    private final        Queue<NetChannel>       channelList;
-    private final        Queue<NetListen>        listenList;
-    private volatile     boolean                 closeStatus;
+    private final HashedWheelTimer        globalTimer;
+    private final ExecutorService         ioExecutor;
+    private final SoTaskExecutor          eventExecutor;
+    private final ReentrantReadWriteLock  closeSyncLock;
+    private final Map<Long, SoChannel<?>> channelMap;
+    private final Queue<NetChannel>       channelList;
+    private final Queue<NetListen>        listenList;
+    private volatile boolean              closeStatus;
 
     SoContextService(NetConfig netConf, NetManager manager) {
         this.manager = manager;
@@ -655,7 +655,7 @@ public class SoContextService implements SoContext {
         public void unSubscribe() {
             this.active.set(false);
             if (this.eventQueue != null) {
-                this.eventQueue.clear();
+                this.discardQueuedEvents();
             }
             SoContextService.this.listeners.remove(this);
         }
@@ -671,10 +671,38 @@ public class SoContextService implements SoContext {
             if (this.mode == SubscribeMode.SYNC) {
                 this.listener.onEvent(data);
             } else {
-                this.eventQueue.offer(data);
+                this.eventQueue.offer(this.retainForAsync(data));
                 this.scheduleDrain();
             }
             return true;
+        }
+
+        private PlayLoad retainForAsync(PlayLoad data) {
+            Object eventData = data.getData();
+            if (!(eventData instanceof ByteBuf) || !data.isSuccess()) {
+                return data;
+            }
+
+            ByteBuf byteBuf = (ByteBuf) eventData;
+            return PlayLoadObject.of(data.getSource(), byteBuf.retain(), data.isInbound(), data.isOutbound());
+        }
+
+        private void releaseAsyncPayload(PlayLoad data) {
+            if (data == null || !data.isSuccess()) {
+                return;
+            }
+
+            Object eventData = data.getData();
+            if (eventData instanceof ByteBuf) {
+                ((ByteBuf) eventData).release();
+            }
+        }
+
+        private void discardQueuedEvents() {
+            PlayLoad next;
+            while ((next = this.eventQueue.poll()) != null) {
+                this.releaseAsyncPayload(next);
+            }
         }
 
         private void scheduleDrain() {
@@ -713,9 +741,11 @@ public class SoContextService implements SoContext {
                         prefix = "event";
                     }
                     logger.error(prefix + "(" + next.getSource().getChannelId() + ") trigger " + this.listener.getClass().getName() + " has error " + e.getMessage(), e);
+                } finally {
+                    this.releaseAsyncPayload(next);
                 }
             }
-            this.eventQueue.clear();
+            this.discardQueuedEvents();
             this.draining.set(false);
         }
     }

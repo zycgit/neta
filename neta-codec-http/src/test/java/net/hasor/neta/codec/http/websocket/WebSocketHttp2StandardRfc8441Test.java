@@ -15,12 +15,17 @@
  */
 package net.hasor.neta.codec.http.websocket;
 
+import static org.junit.Assert.*;
+
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 import java.util.Queue;
 import java.util.function.BooleanSupplier;
+
+import org.junit.Test;
+
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
@@ -33,8 +38,6 @@ import net.hasor.neta.codec.http.h2.*;
 import net.hasor.neta.codec.http.routing.H2CUpgradeServerDuplexer;
 import net.hasor.neta.codec.http.routing.HttpAggregatorRoute;
 import net.hasor.neta.codec.http.routing.HttpRouteKey;
-import org.junit.Test;
-import static org.junit.Assert.*;
 
 public class WebSocketHttp2StandardRfc8441Test extends AbstractHttpTest {
     private static final int    MAX_CONTENT_LENGTH = 1024 * 1024;
@@ -222,10 +225,10 @@ public class WebSocketHttp2StandardRfc8441Test extends AbstractHttpTest {
                 ProtoRoutingControl routingControl = routing.control();
 
                 routing.branch(HttpRouteKey.BRANCH_H1, b -> b//
-                                .nextDuplex("http-codec", new HttpServerDuplexe())//
-                                .nextDuplex("h1-upgrade", new H2CUpgradeServerDuplexer(routingControl))//
-                                .nextDecoder("http-request", new HttpRequestAggregator(MAX_CONTENT_LENGTH))//
-                                .nextDecoder("http-handler", httpEchoHandler()))//
+                        .nextDuplex("http-codec", new HttpServerDuplexe())//
+                        .nextDuplex("h1-upgrade", new H2CUpgradeServerDuplexer(routingControl))//
+                        .nextDecoder("http-request", new HttpRequestAggregator(MAX_CONTENT_LENGTH))//
+                        .nextDecoder("http-handler", httpEchoHandler()))//
                         .branch(HttpRouteKey.BRANCH_H2C, b -> b//
                                 .nextDuplex("http-codec", new HttpServerDuplexe())//
                                 .nextDuplex("h2c-upgrade", new H2CUpgradeServerDuplexer(routingControl)))//

@@ -15,8 +15,9 @@
  */
 package net.hasor.neta.codec.http.h3;
 
-import org.junit.Test;
 import static org.junit.Assert.*;
+
+import org.junit.Test;
 
 /**
  * Tests for {@link Http3Context} implementation created via {@link Http3FrameDecoder#createContext()}.

@@ -18,7 +18,6 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.ReadOnlyBufferException;
 import java.nio.charset.Charset;
-
 /**
  * Read-only {@link ByteBuf} view that delegates all read operations to another
  * buffer and rejects every write attempt.

@@ -25,7 +25,6 @@ import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.codec.http.HttpProtocolOutOfBoundsException;
 import net.hasor.neta.codec.http.HttpProtocolStateException;
-
 /**
  * Decodes inbound socket bytes into HTTP/2 binary frames.
  * <p>

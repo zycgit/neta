@@ -17,7 +17,6 @@ package net.hasor.neta.channel.routing;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import net.hasor.neta.channel.ProtoContext;
-
 /**
  * Key object used to identify a logical partition.
  * <p>Partitioned pipelines use this key to route messages or events into the corresponding
@@ -32,8 +31,8 @@ public class PartitionKey {
     private static final int                       CACHE_LIMIT = 8192;
     private static final Map<String, PartitionKey> KEY_CACHE   = new ConcurrentHashMap<>();
     private static final PartitionKey              defaultPartitionKey;
-    private final        String                    partitionKey;
-    private final        int                       hashCode;
+    private final String                           partitionKey;
+    private final int                              hashCode;
 
     static {
         class DefaultPartitionKey {

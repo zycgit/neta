@@ -14,15 +14,22 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.ssl.tcp;
+
+import static net.hasor.neta.codec.AbstractSoTest.*;
+
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+
 import javax.net.ssl.SSLServerSocket;
 import javax.net.ssl.SSLServerSocketFactory;
 import javax.net.ssl.SSLSocket;
+
+import org.junit.Test;
+
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.function.Callable;
@@ -34,8 +41,6 @@ import net.hasor.neta.codec.ssl.AbstractSslTest;
 import net.hasor.neta.codec.ssl.SoSslUtils;
 import net.hasor.neta.codec.ssl.SslConfig;
 import net.hasor.neta.codec.ssl.SslProtocol;
-import org.junit.Test;
-import static net.hasor.neta.codec.AbstractSoTest.*;
 
 /**
  * @author 赵永春 (zyc@hasor.net)

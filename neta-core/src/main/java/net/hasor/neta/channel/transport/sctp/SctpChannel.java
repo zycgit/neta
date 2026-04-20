@@ -16,7 +16,6 @@
 package net.hasor.neta.channel.transport.sctp;
 import java.io.IOException;
 import net.hasor.neta.channel.*;
-
 /**
  * SCTP channel implementation bound to the application-level protocol pipeline.
  * <p>This class wraps {@link SctpAsyncChannel} and manages the handler used for SCTP protocol

@@ -21,7 +21,6 @@ import java.nio.channels.DatagramChannel;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.channel.*;
-
 /**
  * Base asynchronous channel wrapper for the view of a single UDP peer.
  * <p>This type acts as the lightweight transport adapter behind {@link UdpChannel}. It stores the
@@ -58,7 +57,7 @@ public class UdpAsyncChannel implements AsyncChannel {
     protected final SoContextService  context;
     protected final UdpSoConfig       soConfig;
     //
-    protected final AtomicBoolean     writing;
+    protected final AtomicBoolean writing;
 
     /**
      * Create a UDP asynchronous channel wrapper.

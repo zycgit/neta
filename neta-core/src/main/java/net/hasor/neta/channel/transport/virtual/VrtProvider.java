@@ -8,7 +8,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
-
 /**
  * Provider for virtual channels.
  * <p>This provider maintains the process-local listener registry indexed by virtual port.
@@ -16,9 +15,9 @@ import net.hasor.neta.channel.*;
  * @version 2025-08-07
  */
 public class VrtProvider implements AsyncChannelProvider {
-    public static final  String                              NAME   = "VIRTUAL";
-    private static final Logger                              logger = Logger.getLogger(VrtProvider.class);
-    private final        Map<Integer, VrtAsyncServerChannel> listenPool;
+    public static final String                        NAME   = "VIRTUAL";
+    private static final Logger                       logger = Logger.getLogger(VrtProvider.class);
+    private final Map<Integer, VrtAsyncServerChannel> listenPool;
 
     /**
      * Create the virtual transport provider.

@@ -21,7 +21,6 @@ import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.NetworkChannel;
 import java.util.Set;
 import net.hasor.cobble.logging.Logger;
-
 /**
  * Helper utility that applies settings from {@link TcpSoConfig} to
  * {@link java.nio.channels.AsynchronousSocketChannel} and

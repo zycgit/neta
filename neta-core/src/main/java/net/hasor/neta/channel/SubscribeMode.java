@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-
 /**
  * Event delivery mode for {@link PlayLoadListener} subscriptions.
  * <ul>

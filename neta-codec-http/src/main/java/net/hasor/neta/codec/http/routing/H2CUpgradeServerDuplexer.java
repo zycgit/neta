@@ -34,7 +34,6 @@ import net.hasor.neta.channel.routing.ProtoRoutingControl;
 import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.h2.Http2ContextImpl;
 import net.hasor.neta.codec.http.h2.Http2Settings;
-
 /**
  * Server-side bridge handling the RFC 7540 h2c upgrade flow over HTTP/1.1.
  * <p>

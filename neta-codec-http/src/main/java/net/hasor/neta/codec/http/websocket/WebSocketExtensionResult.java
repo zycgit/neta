@@ -16,7 +16,6 @@
 package net.hasor.neta.codec.http.websocket;
 import java.util.*;
 import net.hasor.cobble.StringUtils;
-
 /**
  * Structured representation of one websocket extension negotiation entry.
  * @author 赵永春 (zyc@hasor.net)

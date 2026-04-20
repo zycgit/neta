@@ -19,7 +19,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import net.hasor.cobble.ref.RecycleObjectPool;
-
 /**
  * {@link ByteBuf} implementation that starts in memory and spills overflow to a
  * deque of temporary file segments.
@@ -61,24 +60,24 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class SwapFileByteBuf extends AbstractByteBuf {
-    public static final  int                 DEFAULT_MEM_THRESHOLD    = 512 * 1024;         // memory threshold 512 KB
-    public static final  int                 DEFAULT_SEGMENT_SIZE     = 64 * 1024 * 1024;   // temporary file segment: 64MB
-    public static final  String              DEFAULT_TEMP_FILE_PREFIX = "neta-swap-";       // temporary swap files.
-    private static final int                 MEM_INIT_SIZE            = 4 * 1024;
+    public static final int    DEFAULT_MEM_THRESHOLD    = 512 * 1024;         // memory threshold 512 KB
+    public static final int    DEFAULT_SEGMENT_SIZE     = 64 * 1024 * 1024;   // temporary file segment: 64MB
+    public static final String DEFAULT_TEMP_FILE_PREFIX = "neta-swap-";       // temporary swap files.
+    private static final int   MEM_INIT_SIZE            = 4 * 1024;
     //
-    private final        int                 memThreshold;
-    private final        int                 segmentSize;
-    private final        String              tempFilePrefix;
-    private final        boolean             direct;
-    private final        ArrayDeque<Segment> segments                 = new ArrayDeque<>();
-    private              byte[]              memBuf;
-    private              boolean             fileMode                 = false;
+    private final int                 memThreshold;
+    private final int                 segmentSize;
+    private final String              tempFilePrefix;
+    private final boolean             direct;
+    private final ArrayDeque<Segment> segments     = new ArrayDeque<>();
+    private byte[]                    memBuf;
+    private boolean                   fileMode     = false;
     /**
      * Monotonically increasing count of bytes consumed so far.
      * In file mode: {@code absoluteBase + logicalIndex} gives the absolute stream position.
      * Advanced by markReader / discardReadBytes / sliceOff; never reset to zero.
      */
-    private              long                absoluteBase             = 0;
+    private long                      absoluteBase = 0;
 
     /** Heap mode (FileChannel). Equivalent to {@code SwapFileByteBuf(alloc, memThreshold, segmentSize, tempFilePrefix, false)}. */
     SwapFileByteBuf(ByteBufAllocator alloc, int memThreshold, int segmentSize, String tempFilePrefix) {
@@ -98,6 +97,7 @@ public class SwapFileByteBuf extends AbstractByteBuf {
         int initSize = memThreshold > 0 ? Math.min(MEM_INIT_SIZE, memThreshold) : MEM_INIT_SIZE;
         this.memBuf = new byte[initSize];
         super.initByteBuf(alloc, Integer.MAX_VALUE);
+        this.initMetricTracking(alloc.metric(), this.direct, initSize);
     }
 
     // ── mode switch ───────────────────────────────────────────────────────────

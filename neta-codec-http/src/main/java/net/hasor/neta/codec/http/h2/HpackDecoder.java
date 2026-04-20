@@ -17,7 +17,6 @@ package net.hasor.neta.codec.http.h2;
 import java.nio.charset.StandardCharsets;
 import net.hasor.neta.codec.http.DefaultHttpHeaders;
 import net.hasor.neta.codec.http.HttpHeaderTooLargeException;
-
 /**
  * Decodes an HPACK header block into an HTTP/2 header collection.
  * <p>

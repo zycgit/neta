@@ -19,7 +19,6 @@ import net.hasor.cobble.StringUtils;
 import net.hasor.neta.codec.http.DefaultHttpHeaders;
 import net.hasor.neta.codec.http.HttpHeaders;
 import net.hasor.neta.codec.http.cookie.Cookie;
-
 /**
  * Configuration object for automatically initiating a client-side handshake.
  * <p>

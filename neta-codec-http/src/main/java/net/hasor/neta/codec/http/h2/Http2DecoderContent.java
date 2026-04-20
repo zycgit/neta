@@ -19,7 +19,6 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
 import net.hasor.neta.codec.http.*;
-
 /**
  * Connection-level state container shared by the HTTP/2 message layer.
  * <p>

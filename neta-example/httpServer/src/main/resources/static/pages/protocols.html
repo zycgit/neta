@@ -69,25 +69,25 @@
         <section class="panel">
             <h2>HTTP/3 (h3)</h2>
             <p style="color:var(--text-secondary); margin-bottom:12px;">
-                The latest HTTP version running over QUIC (UDP). Features built-in encryption,
-                faster connection setup (0-RTT), and improved head-of-line blocking resistance.
+                HTTP/3 support exists in the underlying project, but this example currently keeps it
+                disabled while the new HTTP server integration focuses on HTTP/1.1 and HTTP/2.
             </p>
             <div class="info-grid">
                 <div class="info-item">
-                    <span class="info-label">RFC</span>
-                    <span class="info-value">RFC 9114</span>
+                    <span class="info-label">Status</span>
+                    <span class="info-value">Disabled in this example</span>
                 </div>
                 <div class="info-item">
                     <span class="info-label">Transport</span>
-                    <span class="info-value">UDP (QUIC)</span>
+                    <span class="info-value">Not bound</span>
                 </div>
                 <div class="info-item">
-                    <span class="info-label">Multiplexing</span>
-                    <span class="info-value">Yes (no HOL blocking)</span>
+                    <span class="info-label">Reason</span>
+                    <span class="info-value">Waiting for current HTTP/3 support to be completed</span>
                 </div>
                 <div class="info-item">
-                    <span class="info-label">Neta Codec</span>
-                    <span class="info-value">Http3ServerDuplexe</span>
+                    <span class="info-label">Next Step</span>
+                    <span class="info-value">Re-enable after HTTP/3 server path is ready</span>
                 </div>
             </div>
         </section>

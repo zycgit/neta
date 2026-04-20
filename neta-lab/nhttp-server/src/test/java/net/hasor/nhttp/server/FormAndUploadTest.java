@@ -28,6 +28,7 @@ import org.junit.Test;
 
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.bytebuf.ByteBufAllocatorMetric;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.ProtoInitializer;
 import net.hasor.neta.channel.transport.virtual.VrtChannel;
@@ -589,6 +590,36 @@ public class FormAndUploadTest {
         }
     }
 
+    @Test
+    public void test_requestReleaseReclaimsMultipartBuffers() throws Exception {
+        NetManager neta = new NetManager();
+        FullHttpRequest httpReq = null;
+        DefaultServletRequest req = null;
+        ByteBufAllocatorMetric metric = ByteBufAllocator.DEFAULT.metric();
+        long activeCountBefore = metric.totalActiveAllocations();
+        long activeBytesBefore = metric.totalActiveBytes();
+        try {
+            VrtChannel channel = createMockChannel(neta);
+
+            MultipartEncoder encoder = new MultipartEncoder();
+            encoder.addField("username", "charlie");
+            encoder.addField("role", "admin");
+            encoder.addFile("avatar", "photo.jpg", "image/jpeg", new byte[] { 1, 2, 3, 4, 5, 6 });
+
+            httpReq = buildMultipartRequest("/api/upload", encoder);
+            req = new DefaultServletRequest(httpReq, channel, false, SESSION_MANAGER);
+
+            assertEquals(3, req.getFileUploads().size());
+            assertEquals("charlie", req.getParameter("username"));
+        } finally {
+            releaseQuietly(req, httpReq);
+            neta.shutdown();
+        }
+
+        assertEquals(activeCountBefore, metric.totalActiveAllocations());
+        assertEquals(activeBytesBefore, metric.totalActiveBytes());
+    }
+
     // =========================================================================
     //  Layer 2: Pipeline Integration Tests (VrtChannel + VrtTransfer)
     // =========================================================================
@@ -705,6 +736,63 @@ public class FormAndUploadTest {
             assertTrue("Response should contain files=2: " + response, response.contains("files=2"));
             assertTrue("Response should contain size=17: " + response, response.contains("size=17"));
             assertTrue("Response should contain desc=TestUpload: " + response, response.contains("desc=TestUpload"));
+        } finally {
+            neta.shutdown();
+        }
+    }
+
+    @Test
+    public void test_pipeline_asyncSubscriberDoesNotSeeReleasedBuffers() throws Throwable {
+        NetaHttpServer httpServer = new NetaHttpServer();
+        httpServer.addServlet("/api/form", new HttpServlet() {
+            @Override
+            protected void doPost(ServletRequest req, ServletResponse resp) throws IOException {
+                resp.setContentType("text/plain");
+                resp.write("ok=" + req.getParameter("username"));
+            }
+        });
+        httpServer.initServletContext();
+
+        ProtoInitializer serverInit = httpServer.createHttpInitializer(false);
+
+        NetManager neta = new NetManager();
+        try {
+            VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), serverInit, VrtSoConfig.asServer());
+            VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+            }, VrtSoConfig.asClient());
+
+            VrtTransfer transfer = new VrtTransfer(neta);
+            transfer.linkTo(client, server, VrtTransfer.duplicate());
+            transfer.linkTo(server, client, VrtTransfer.duplicate());
+
+            Queue<String> clientRcv = new ConcurrentLinkedQueue<>();
+            Queue<Throwable> subscriberErrors = new ConcurrentLinkedQueue<>();
+            client.subscribe(d -> {
+                Object data = d.getData();
+                if (data instanceof ByteBuf) {
+                    try {
+                        ByteBuf buf = (ByteBuf) data;
+                        if (buf.readableBytes() > 0) {
+                            clientRcv.offer(buf.readString(buf.readableBytes(), StandardCharsets.US_ASCII));
+                        }
+                    } catch (Throwable e) {
+                        subscriberErrors.offer(e);
+                    }
+                }
+            });
+
+            String body = "username=alice";
+            String request = "POST /api/form HTTP/1.1\r\n" + "Host: localhost\r\n" + "Content-Type: application/x-www-form-urlencoded\r\n" + "Content-Length: " + body.length() + "\r\n" + "\r\n" + body;
+
+            for (int i = 0; i < 20; i++) {
+                client.sendData(toByteBuf(request)).get();
+            }
+
+            Thread.sleep(500);
+
+            assertTrue("async subscriber should not observe released ByteBuf: " + subscriberErrors, subscriberErrors.isEmpty());
+            String response = collectStrings(clientRcv);
+            assertTrue("Response should contain ok=alice: " + response, response.contains("ok=alice"));
         } finally {
             neta.shutdown();
         }

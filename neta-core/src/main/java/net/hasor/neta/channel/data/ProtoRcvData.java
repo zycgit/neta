@@ -18,7 +18,6 @@ import java.io.Closeable;
 import java.util.List;
 import net.hasor.cobble.function.Release;
 import net.hasor.neta.bytebuf.ReferenceHolder;
-
 /**
  * Receive-side data container at a protocol stack boundary.
  * <p>It only defines the read semantics for inbound data and does not constrain whether the concrete implementation is a main queue, a sub-view, or a temporary container.</p>

@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h2;
-
 /**
  * HPACK dynamic table as defined by RFC 7541 Section 2.3.2.
  * <p>

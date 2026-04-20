@@ -22,7 +22,6 @@ import javax.net.ssl.SSLEngineResult.HandshakeStatus;
 import javax.net.ssl.SSLException;
 import net.hasor.cobble.function.ESupplier;
 import net.hasor.cobble.logging.Logger;
-
 /**
  * Lightweight wrapper around {@link SSLEngine} used by {@link SslHandle}.
  * <p>The actual engine is created lazily when {@link #beginHandshake()} is
@@ -40,11 +39,11 @@ import net.hasor.cobble.logging.Logger;
  * @see SSLEngine
  */
 class SslEngineWrap {
-    private static final Logger                            logger = Logger.getLogger(SslHandle.class);
-    private final        long                              channelID;
-    private final        SslConfig                         sslConfig;
-    private final        ESupplier<SSLEngine, IOException> sslEngineFactory;
-    private              SSLEngine                         sslEngine;
+    private static final Logger                     logger = Logger.getLogger(SslHandle.class);
+    private final long                              channelID;
+    private final SslConfig                         sslConfig;
+    private final ESupplier<SSLEngine, IOException> sslEngineFactory;
+    private SSLEngine                               sslEngine;
 
     public SslEngineWrap(long channelID, SslConfig sslConfig, ESupplier<SSLEngine, IOException> factory) {
         this.channelID = channelID;

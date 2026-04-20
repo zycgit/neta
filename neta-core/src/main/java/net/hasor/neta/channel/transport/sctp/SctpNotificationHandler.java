@@ -1,7 +1,6 @@
 package net.hasor.neta.channel.transport.sctp;
 import com.sun.nio.sctp.*;
 import net.hasor.neta.channel.SoContextService;
-
 /**
  * Adapter that handles SCTP protocol notifications such as association changes and shutdowns.
  * <p>This class converts native SCTP notifications into network events inside the Neta framework.

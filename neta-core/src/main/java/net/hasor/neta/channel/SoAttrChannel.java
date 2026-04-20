@@ -17,7 +17,6 @@ package net.hasor.neta.channel;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
-
 /**
  * Skeleton implementation of {@link SoChannel} that provides shared attribute storage and
  * subscription forwarding for all concrete channel types.

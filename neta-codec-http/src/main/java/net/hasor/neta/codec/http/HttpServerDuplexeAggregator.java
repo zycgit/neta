@@ -17,7 +17,6 @@ package net.hasor.neta.codec.http;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
-
 /**
  * Bidirectional aggregator for server-side {@link HttpObject} streams.
  * <p>

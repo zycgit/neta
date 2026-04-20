@@ -17,7 +17,6 @@ package net.hasor.neta.channel.transport.quic;
 import net.hasor.neta.channel.SoChannel;
 import net.hasor.neta.codec.ssl.SslCertConfig;
 import net.hasor.neta.codec.ssl.SslContext;
-
 /**
  * Public {@link SslContext} view exposed by a QUIC connection after the handshake completes.
  * <p>This object wraps the TLS metadata produced by {@link QuicTlsEngine}, such as certificate configuration,
@@ -28,14 +27,14 @@ import net.hasor.neta.codec.ssl.SslContext;
  * @version : 2025-01-01
  */
 public class QuicSslContext implements SslContext {
-    private final    SoChannel<?>  channel;
-    private final    SslCertConfig certConfig;
-    private final    boolean       clientMode;
-    private final    String        negotiatedAlpn;
-    private final    String        peerHost;
-    private final    int           peerPort;
-    private final    String        sniHostName;    // SNI server_name extracted during the TLS handshake phase
-    private volatile boolean       ready;
+    private final SoChannel<?>  channel;
+    private final SslCertConfig certConfig;
+    private final boolean       clientMode;
+    private final String        negotiatedAlpn;
+    private final String        peerHost;
+    private final int           peerPort;
+    private final String        sniHostName;    // SNI server_name extracted during the TLS handshake phase
+    private volatile boolean    ready;
 
     /**
      * Creates the SSL context view from a completed QUIC handshake result.

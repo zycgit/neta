@@ -1,4 +1,5 @@
 package net.hasor.neta.bytebuf;
+
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.Map;
@@ -6,9 +7,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+
+import org.junit.Test;
+
 import net.hasor.cobble.RandomUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
-import org.junit.Test;
 
 public class PerformanceTest {
     static boolean[] randomBoolean = new boolean[1024];

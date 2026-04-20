@@ -26,7 +26,6 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
-
 /**
  * AIO {@link java.nio.channels.CompletionHandler} that drives the TCP send loop.
  * <p>Only one instance is created per channel. The send model is single-writer: the
@@ -82,17 +81,17 @@ import net.hasor.neta.channel.*;
  * @see SoUnfinishedSndException
  */
 class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext>, Closeable {
-    private static final Logger           logger = Logger.getLogger(TcpSndCompletionHandler.class);
-    private final        long             channelId;
-    private final        TcpAsyncChannel  channel;
-    private final        SoContextService context;
-    private final        NetMonitor       monitor;
+    private static final Logger    logger = Logger.getLogger(TcpSndCompletionHandler.class);
+    private final long             channelId;
+    private final TcpAsyncChannel  channel;
+    private final SoContextService context;
+    private final NetMonitor       monitor;
     //
-    private final        AtomicBoolean    writing;
-    private final        Integer          wTimeoutMs;
-    private final        ByteBufAllocator allocator;
-    private final        ByteBuffer       sndSwapBuf;
-    private final        int              connectTimeoutMs;
+    private final AtomicBoolean    writing;
+    private final Integer          wTimeoutMs;
+    private final ByteBufAllocator allocator;
+    private final ByteBuffer       sndSwapBuf;
+    private final int              connectTimeoutMs;
 
     /**
      * Create a TCP write-completion handler.

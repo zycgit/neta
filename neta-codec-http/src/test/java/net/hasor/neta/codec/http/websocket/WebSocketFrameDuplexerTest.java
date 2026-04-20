@@ -15,13 +15,16 @@
  */
 package net.hasor.neta.codec.http.websocket;
 
+import static org.junit.Assert.*;
+
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+
+import org.junit.Test;
+
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.codec.http.HttpByteBuf;
 import net.hasor.neta.codec.http.HttpObject;
-import org.junit.Test;
-import static org.junit.Assert.*;
 
 public class WebSocketFrameDuplexerTest extends AbstractWebSocketTest {
     @Test

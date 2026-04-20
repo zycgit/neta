@@ -14,10 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
-import java.util.List;
-import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
-import org.junit.Test;
+
 import static org.junit.Assert.*;
+
+import java.util.List;
+
+import org.junit.Test;
+
+import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 
 public class HttpResponseDecoderTest extends AbstractHttpTest {
     @Test

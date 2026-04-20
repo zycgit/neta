@@ -18,7 +18,6 @@ import java.io.IOException;
 import java.net.SocketAddress;
 import java.nio.channels.DatagramChannel;
 import net.hasor.neta.channel.*;
-
 /**
  * UDP transport provider for Neta.
  * @author 赵永春 (zyc@hasor.net)

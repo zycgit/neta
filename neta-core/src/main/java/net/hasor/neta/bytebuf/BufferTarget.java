@@ -17,7 +17,6 @@ package net.hasor.neta.bytebuf;
 import java.nio.ByteBuffer;
 import java.nio.ReadOnlyBufferException;
 import net.hasor.cobble.ref.RecycleObjectPool;
-
 /**
  * {@link Buffer} implementation backed by a {@link PageChunkSplit} allocated
  * from a {@link PageChunkPool}.
@@ -36,20 +35,21 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * @see PooledByteBuf
  */
 class BufferTarget implements Buffer {
-    static final int                                        RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    static       RecycleObjectPool.ObjHandler<BufferTarget> RECYCLE_HANDLER = new RecycleObjectPool.ObjHandler<BufferTarget>() {
-        public BufferTarget create() {
-            return new BufferTarget();
-        }
+    static final int                                  RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    static RecycleObjectPool.ObjHandler<BufferTarget> RECYCLE_HANDLER = //
+            new RecycleObjectPool.ObjHandler<BufferTarget>() {
+                public BufferTarget create() {
+                    return new BufferTarget();
+                }
 
-        @Override
-        public void free(BufferTarget tar) {
-            RecycleObjectPool.free(RECYCLE_INDEX, tar);
-        }
-    };
-    private      Buffer                                     memory;
-    private      PageChunkSplit                             pages;
-    private      int                                        pageSize;
+                @Override
+                public void free(BufferTarget tar) {
+                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
+                }
+            };
+    private Buffer                                    memory;
+    private PageChunkSplit                            pages;
+    private int                                       pageSize;
 
     // ------------------------------------------------------------------------
     private boolean readOnly;

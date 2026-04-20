@@ -22,7 +22,6 @@ import net.hasor.neta.channel.ProtoDuplexer;
 import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
-
 /**
  * Duplex codec that combines {@link StringDecoder} and {@link StringEncoder}.
  * <p>

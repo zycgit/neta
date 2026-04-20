@@ -23,7 +23,6 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.codec.http.*;
-
 /**
  * Encodes staged {@link HttpObject} instances and HTTP/2 events into wire-level {@link Http2Frame} objects.
  * <p>

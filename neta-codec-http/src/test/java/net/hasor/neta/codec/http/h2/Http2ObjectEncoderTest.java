@@ -14,16 +14,20 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h2;
+
+import static org.junit.Assert.*;
+
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+
+import org.junit.Test;
+
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.ProtoExceptionHolder;
 import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.codec.http.*;
-import org.junit.Test;
-import static org.junit.Assert.*;
 
 public class Http2ObjectEncoderTest extends AbstractHttp2Test {
     private static class TrackingHttpRequest extends DefaultHttpRequest {

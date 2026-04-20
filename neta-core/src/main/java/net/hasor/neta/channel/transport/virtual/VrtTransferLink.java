@@ -6,7 +6,6 @@ import net.hasor.neta.channel.SoContextService;
 import net.hasor.neta.channel.SoException;
 import net.hasor.neta.channel.SoRcvException;
 import net.hasor.neta.channel.data.ProtoQueue;
-
 /**
  * Per-target delivery state owned by {@link VrtTransfer}.
  * <p>Each link binds one source channel ID to one target {@link VrtChannel}. Incoming
@@ -18,12 +17,12 @@ import net.hasor.neta.channel.data.ProtoQueue;
  * @version : 2023-09-24
  */
 class VrtTransferLink {
-    private static final Logger               logger = Logger.getLogger(VrtTransferLink.class);
-    public final         VrtChannel           target;
-    public final         VrtTransferHandler   convert;
-    public final         ProtoQueue<PlayLoad> cacheQueue;
-    public final         ProtoQueue<Object>   tempQueue;
-    protected final      SoContextService     context;
+    private static final Logger       logger = Logger.getLogger(VrtTransferLink.class);
+    public final VrtChannel           target;
+    public final VrtTransferHandler   convert;
+    public final ProtoQueue<PlayLoad> cacheQueue;
+    public final ProtoQueue<Object>   tempQueue;
+    protected final SoContextService  context;
 
     /**
      * Create a virtual transport link targeting one destination channel.

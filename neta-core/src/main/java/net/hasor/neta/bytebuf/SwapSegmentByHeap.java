@@ -19,7 +19,6 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-
 /**
  * {@link SwapSegment} implementation backed by a {@link FileChannel}.
  * <p>All reads and writes flow through the OS page-cache via standard

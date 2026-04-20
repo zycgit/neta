@@ -20,7 +20,6 @@ import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.data.ProtoQueue;
-
 /**
  * Root object of the bidirectional handler chain.
  * <p>It manages the doubly linked list composed of {@link ProtoInvocation} nodes. RCV events
@@ -33,17 +32,17 @@ import net.hasor.neta.channel.data.ProtoQueue;
  * @version : 2023-10-20
  */
 class ProtoStackChain {
-    private static final Logger                      logger   = Logger.getLogger(ProtoStackChain.class);
-    private static final ByteBuf[]                   EMPTY    = new ByteBuf[0];
-    private final        Object                      pipeLock = new Object();
-    private final        ProtoQueue<Object>          tailRcvDown;
-    private              Runnable                    tailRcvDownWritable;
-    private final        ProtoQueue<Object>          headSndDown;
-    private              Runnable                    headSndDownWritable;
-    private final        boolean                     branchMode;
-    private              ProtoInvocation<?, ?, ?, ?> head;
-    private              ProtoInvocation<?, ?, ?, ?> tail;
-    private              long                        channelID;
+    private static final Logger         logger   = Logger.getLogger(ProtoStackChain.class);
+    private static final ByteBuf[]      EMPTY    = new ByteBuf[0];
+    private final Object                pipeLock = new Object();
+    private final ProtoQueue<Object>    tailRcvDown;
+    private Runnable                    tailRcvDownWritable;
+    private final ProtoQueue<Object>    headSndDown;
+    private Runnable                    headSndDownWritable;
+    private final boolean               branchMode;
+    private ProtoInvocation<?, ?, ?, ?> head;
+    private ProtoInvocation<?, ?, ?, ?> tail;
+    private long                        channelID;
 
     ProtoStackChain(SoConfig protoConf) {
         this(protoConf.getRcvSlotSize(), protoConf.getSndSlotSize(), false);

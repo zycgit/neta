@@ -14,14 +14,17 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+
+import org.junit.Test;
+
 import net.hasor.neta.channel.transport.virtual.VrtChannel;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.channel.transport.virtual.VrtSocketAddress;
-import org.junit.Test;
 
 /**
  * Tests for {@link PlayLoadObject} factory methods and behaviour as observed

@@ -27,7 +27,6 @@ import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import net.hasor.cobble.CollectionUtils;
 import net.hasor.neta.channel.SoChannel;
-
 /**
  * Shared certificate and ALPN configuration base class for all SSL/TLS providers
  * (JDK SSLEngine-based TLS/DTLS and QUIC custom TLS).
@@ -47,25 +46,25 @@ import net.hasor.neta.channel.SoChannel;
  */
 public class SslCertConfig {
     // ── Certificate material ───────────────────────────────────────────
-    private SslAuthKeyType         authType            = null;
-    private String                 jksResource         = null;     // JKS File
-    private String                 pemCertChain        = null;     // X.509 certificate chain in PEM format.
-    private String                 pemPrivate          = null;     // PKCS#8 private key in PEM format.
-    private String                 keyPassword         = null;
+    private SslAuthKeyType authType     = null;
+    private String         jksResource  = null;     // JKS File
+    private String         pemCertChain = null;     // X.509 certificate chain in PEM format.
+    private String         pemPrivate   = null;     // PKCS#8 private key in PEM format.
+    private String         keyPassword  = null;
     //
     // ── Direct certificate material (for QUIC or programmatic use) ────
-    private X509Certificate[]      certChainDirect     = null;
-    private PrivateKey             privateKeyDirect    = null;
+    private X509Certificate[] certChainDirect  = null;
+    private PrivateKey        privateKeyDirect = null;
     //
     // ── Pre-built SSL objects ──────────────────────────────────────────
-    private SSLContext             sslContext          = null;
-    private KeyStore               keyStore            = null;
-    private KeyManagerFactory      keyManagerFactory   = null;
-    private TrustManager[]         trustManagers;
-    private TrustManagerFactory    trustManagerFactory = null;
+    private SSLContext          sslContext          = null;
+    private KeyStore            keyStore            = null;
+    private KeyManagerFactory   keyManagerFactory   = null;
+    private TrustManager[]      trustManagers;
+    private TrustManagerFactory trustManagerFactory = null;
     //    // ── SNI configuration ───────────────────────────────────────────
     /** SNI server_name to send (client-side) or expected (server-side virtual hosting). */
-    private String                 sniHostName         = null;
+    private String sniHostName = null;
     //    // ── ALPN configuration ─────────────────────────────────────────────
     /** Supported application-layer protocols for NPN/ALPN negotiation. */
     private String[]               appProtocol         = null;

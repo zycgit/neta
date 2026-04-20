@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h2;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -21,15 +25,15 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicReference;
+
+import org.junit.Test;
+
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.ProtoHandler;
 import net.hasor.neta.channel.ProtoHelper;
 import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.codec.http.*;
-import org.junit.Test;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 public class Http2RealPipelineTest extends AbstractHttp2Test {
     private static class RequestSnapshot {

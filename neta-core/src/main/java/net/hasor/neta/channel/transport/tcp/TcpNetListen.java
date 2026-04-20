@@ -16,7 +16,6 @@
 package net.hasor.neta.channel.transport.tcp;
 import java.net.SocketAddress;
 import net.hasor.neta.channel.*;
-
 /**
  * Wrapper object for the listen handle of a bound TCP server socket.
  * <p>This class is the framework-visible {@link NetListen} descriptor returned by bind operations.

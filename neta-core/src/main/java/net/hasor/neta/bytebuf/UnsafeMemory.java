@@ -14,14 +14,12 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
-
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.Buffer;
-
 /**
  * Provides fast byte-array access via sun.misc.Unsafe for int/long read/write.
  * All Unsafe access is done through reflection + MethodHandle to avoid any

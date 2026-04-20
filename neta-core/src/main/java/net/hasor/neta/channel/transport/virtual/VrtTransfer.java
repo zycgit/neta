@@ -15,7 +15,6 @@ import net.hasor.cobble.NumberUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
-
 /**
  * Route outbound payloads between linked virtual channels.
  * <p>This type is the core in-memory transport bus in the virtual package. It subscribes to
@@ -54,13 +53,13 @@ public class VrtTransfer {
         RANDOM = new Random(System.currentTimeMillis());
     }
 
-    private final    NetManager                       manager;
-    private final    Map<Long, List<VrtTransferLink>> distributeMap;
-    private final    SubscribeHolder                  subscribeHolder;
-    private final    boolean                          asynchronous;
-    private final    AtomicBoolean                    closed;
-    private volatile int                              batchSize;
-    private volatile int                              lossRate;
+    private final NetManager                       manager;
+    private final Map<Long, List<VrtTransferLink>> distributeMap;
+    private final SubscribeHolder                  subscribeHolder;
+    private final boolean                          asynchronous;
+    private final AtomicBoolean                    closed;
+    private volatile int                           batchSize;
+    private volatile int                           lossRate;
 
     /**
      * Create a synchronous virtual transport object.

@@ -31,7 +31,6 @@ import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.DefaultSoTask;
 import net.hasor.neta.channel.SoContextService;
 import net.hasor.neta.channel.SoDelayTask;
-
 /**
  * Shared datagram I/O engine for UDP and UDP-based protocols.
  * <p>This class owns the underlying {@link DatagramChannel}, the matching {@link Selector}, one
@@ -52,13 +51,13 @@ import net.hasor.neta.channel.SoDelayTask;
  * @version 2026-02-21
  */
 public class UdpTransport implements Closeable {
-    private final    DatagramChannel  channel;
-    private final    Selector         selector;
-    private final    SoContextService context;
-    private final    ByteBuffer       receiveBuffer;
-    private final    Object           taskOwner;
-    private final    AtomicBoolean    closed         = new AtomicBoolean(false);
-    private volatile int              selectorPollMs = 100;
+    private final DatagramChannel  channel;
+    private final Selector         selector;
+    private final SoContextService context;
+    private final ByteBuffer       receiveBuffer;
+    private final Object           taskOwner;
+    private final AtomicBoolean    closed         = new AtomicBoolean(false);
+    private volatile int           selectorPollMs = 100;
 
     /**
      * Create a UDP transport.

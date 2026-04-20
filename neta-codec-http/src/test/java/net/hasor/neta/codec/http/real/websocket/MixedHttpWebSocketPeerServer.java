@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.real.websocket;
+
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
 import java.io.*;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -26,9 +30,8 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+
 import net.hasor.neta.codec.http.HttpHeaderNames;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 
 public class MixedHttpWebSocketPeerServer implements Closeable {
     private static final String WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";

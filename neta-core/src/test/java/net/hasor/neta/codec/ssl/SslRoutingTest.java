@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.ssl;
+
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
@@ -21,6 +22,9 @@ import java.util.Queue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+
+import org.junit.Test;
+
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
@@ -31,7 +35,6 @@ import net.hasor.neta.channel.transport.virtual.VrtChannel;
 import net.hasor.neta.channel.transport.virtual.VrtListen;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.channel.transport.virtual.VrtSocketAddress;
-import org.junit.Test;
 
 /**
  * Tests for SSL protocol auto-negotiation using routing pipeline (sub-pipeline).

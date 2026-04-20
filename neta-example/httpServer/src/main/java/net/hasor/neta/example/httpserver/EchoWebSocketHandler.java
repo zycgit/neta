@@ -14,9 +14,11 @@
  * limitations under the License.
  */
 package net.hasor.neta.example.httpserver;
+
 import java.io.IOException;
-import net.hasor.neta.http.WebSocketHandler;
-import net.hasor.neta.http.WebSocketSession;
+
+import net.hasor.nhttp.server.WebSocketHandler;
+import net.hasor.nhttp.server.WebSocketSession;
 
 /**
  * A simple echo WebSocket handler that sends received messages back to the client.

@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http.h3;
 import java.util.concurrent.atomic.AtomicLong;
-
 /**
  * {@link Http3HttpToFrameEncoder} 使用的连接级状态容器。
  * <p>

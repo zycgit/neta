@@ -24,7 +24,6 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.routing.PartitionKey;
 import net.hasor.neta.codec.http.*;
-
 /**
  * Shared base implementation for websocket opening-handshake duplexers.
  * <p>

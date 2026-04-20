@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.channel;
 import java.util.EventListener;
-
 /**
  * Callback interface for channel lifecycle events, for example channel-close notifications.
  * @param <T> concrete channel type handled by this listener

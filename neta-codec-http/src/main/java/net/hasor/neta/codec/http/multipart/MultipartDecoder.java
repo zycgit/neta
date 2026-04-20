@@ -22,7 +22,6 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.codec.http.HttpHeaderNames;
 import net.hasor.neta.codec.http.HttpHeaderValues;
-
 /**
  * Decodes a {@code multipart/form-data} request body into a list of {@link FileUpload} parts.
  * <p>This decoder is a pure utility type. It works on a fully aggregated request-body {@link ByteBuf}
@@ -94,29 +93,27 @@ public final class MultipartDecoder {
         }
 
         byte[] delimiterBytes = ("--" + boundary).getBytes(StandardCharsets.US_ASCII);
+        int bodyStartOffset = body.readerIndex();
         int bodyLen = body.readableBytes();
+        byte[] bodyBytes = new byte[bodyLen];
+        body.getBytes(bodyStartOffset, bodyBytes, 0, bodyLen);
 
         List<FileUpload> parts = new ArrayList<>(4);
 
         // Find and iterate over all boundary positions.
-        int pos = 0;
+        int pos = findBoundary(bodyBytes, delimiterBytes, 0, true);
         while (pos < bodyLen) {
-            int delimPos = indexOfInBuf(body, delimiterBytes, pos);
-            if (delimPos < 0) {
-                break;
-            }
-
             // Skip the delimiter line, including the delimiter itself and the optional \r\n or --.
-            int afterDelim = delimPos + delimiterBytes.length;
+            int afterDelim = pos + delimiterBytes.length;
             if (afterDelim + 2 <= bodyLen) {
                 // Check whether this is the closing boundary "--".
-                if (body.getByte(afterDelim) == '-' && body.getByte(afterDelim + 1) == '-') {
+                if (bodyBytes[afterDelim] == '-' && bodyBytes[afterDelim + 1] == '-') {
                     break; // End of the multipart body.
                 }
                 // Skip the CRLF following the delimiter.
-                if (body.getByte(afterDelim) == '\r' && body.getByte(afterDelim + 1) == '\n') {
+                if (bodyBytes[afterDelim] == '\r' && bodyBytes[afterDelim + 1] == '\n') {
                     afterDelim += 2;
-                } else if (body.getByte(afterDelim) == '\n') {
+                } else if (bodyBytes[afterDelim] == '\n') {
                     afterDelim += 1;
                 }
             } else {
@@ -124,21 +121,21 @@ public final class MultipartDecoder {
             }
 
             // Find the next boundary to determine the end position of the current part.
-            int nextDelimPos = indexOfInBuf(body, delimiterBytes, afterDelim);
+            int nextDelimPos = findBoundary(bodyBytes, delimiterBytes, afterDelim, false);
             if (nextDelimPos < 0) {
                 break;
             }
 
             // The current part content ends at the CRLF right before the next boundary.
             int partEnd = nextDelimPos;
-            if (partEnd >= 2 && body.getByte(partEnd - 2) == '\r' && body.getByte(partEnd - 1) == '\n') {
+            if (partEnd >= 2 && bodyBytes[partEnd - 2] == '\r' && bodyBytes[partEnd - 1] == '\n') {
                 partEnd -= 2;
-            } else if (partEnd >= 1 && body.getByte(partEnd - 1) == '\n') {
+            } else if (partEnd >= 1 && bodyBytes[partEnd - 1] == '\n') {
                 partEnd -= 1;
             }
 
             // Parse headers and body content between afterDelim and partEnd.
-            FileUpload part = parsePart(body, afterDelim, partEnd, charset);
+            FileUpload part = parsePart(body, bodyStartOffset + afterDelim, bodyStartOffset + partEnd, charset);
             if (part != null) {
                 parts.add(part);
             }
@@ -345,6 +342,40 @@ public final class MultipartDecoder {
         }
 
         return -1;
+    }
+
+    private static int findBoundary(byte[] body, byte[] delimiter, int fromIndex, boolean allowStart) {
+        int max = body.length - delimiter.length;
+        for (int i = Math.max(0, fromIndex); i <= max; i++) {
+            if (!allowStart && !isLineStart(body, i)) {
+                continue;
+            }
+            if (allowStart && i != 0 && !isLineStart(body, i)) {
+                continue;
+            }
+
+            boolean match = true;
+            for (int j = 0; j < delimiter.length; j++) {
+                if (body[i + j] != delimiter[j]) {
+                    match = false;
+                    break;
+                }
+            }
+            if (match) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static boolean isLineStart(byte[] body, int index) {
+        if (index == 0) {
+            return true;
+        }
+        if (body[index - 1] == '\n') {
+            return true;
+        }
+        return index >= 2 && body[index - 2] == '\r' && body[index - 1] == '\n';
     }
 
     /** Performs a case-insensitive match between a ByteBuf region and a lowercase ASCII string constant. */

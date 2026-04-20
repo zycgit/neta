@@ -23,7 +23,6 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.transport.udp.AbstractUdpWriteTask;
-
 /**
  * Stream-level {@link AsyncChannel} implementation.
  * <p>This type wraps write requests into STREAM frames for the corresponding stream ID and delegates
@@ -31,15 +30,15 @@ import net.hasor.neta.channel.transport.udp.AbstractUdpWriteTask;
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicStreamChannelAsync implements AsyncChannel {
-    private static final Logger           logger     = Logger.getLogger(QuicStreamChannelAsync.class);
-    private final        long             channelId;
-    private final        long             streamId;
-    private final        QuicChannel      quicChannel;
-    private final        SoContextService context;
+    private static final Logger    logger = Logger.getLogger(QuicStreamChannelAsync.class);
+    private final long             channelId;
+    private final long             streamId;
+    private final QuicChannel      quicChannel;
+    private final SoContextService context;
     //
-    private final        AtomicBoolean    closed     = new AtomicBoolean(false);
-    private final        AtomicBoolean    writing    = new AtomicBoolean(false);
-    private final        AtomicLong       sendOffset = new AtomicLong(0);
+    private final AtomicBoolean closed     = new AtomicBoolean(false);
+    private final AtomicBoolean writing    = new AtomicBoolean(false);
+    private final AtomicLong    sendOffset = new AtomicLong(0);
 
     QuicStreamChannelAsync(long channelId, long streamId, QuicChannel quicChannel, SoContextService context) {
         this.channelId = channelId;
@@ -194,7 +193,7 @@ class QuicStreamChannelAsync implements AsyncChannel {
         /** Shared reference to the cumulative send offset for the stream. */
         private final AtomicLong sendOffsetRef;
         /** Most recent sendData snapshot passed to {@link #wrapSendData(byte[])}. */
-        private       byte[]     prevSendData;
+        private byte[]           prevSendData;
 
         /**
          * Creates a stream write task.

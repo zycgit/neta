@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
-
 /**
  * Extension SPI that covers negotiation, validation, and runtime creation.
  * <p>

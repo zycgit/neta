@@ -18,7 +18,6 @@ import java.util.List;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
-
 /**
  * Duplex layer that applies negotiated runtime websocket extensions.
  * <p>

@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http;
 import net.hasor.neta.bytebuf.ByteBuf;
-
 /**
  * Default implementation of {@link HttpByteBuf}.
  * <p>

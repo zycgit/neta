@@ -14,16 +14,20 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
+
+import static org.junit.Assert.*;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 import java.util.List;
+
+import org.junit.Test;
+
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.codec.http.*;
-import org.junit.Test;
-import static org.junit.Assert.*;
 
 public class WebSocketHandshakeBoundaryTest extends AbstractWebSocketTest {
     private static final String WS_URI      = "ws://example.com/chat";

@@ -18,7 +18,6 @@ import net.hasor.cobble.function.Release;
 import net.hasor.cobble.ref.RecycleObjectPool;
 import net.hasor.cobble.ref.RecycleObjectPool.ObjHandler;
 import net.hasor.neta.bytebuf.ByteBuf;
-
 /**
  * Reassembled QUIC stream payload delivered on the connection pipeline when {@link QuicChannelMode#CHANNEL} is enabled.
  * <p>
@@ -30,17 +29,18 @@ import net.hasor.neta.bytebuf.ByteBuf;
  */
 public class QuicMessage implements Release {
     private static final int                     RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    private static final ObjHandler<QuicMessage> RECYCLE_HANDLER = new ObjHandler<QuicMessage>() {
-        @Override
-        public QuicMessage create() {
-            return new QuicMessage();
-        }
+    private static final ObjHandler<QuicMessage> RECYCLE_HANDLER = //
+            new ObjHandler<QuicMessage>() {
+                @Override
+                public QuicMessage create() {
+                    return new QuicMessage();
+                }
 
-        @Override
-        public void free(QuicMessage tar) {
-            RecycleObjectPool.free(RECYCLE_INDEX, tar);
-        }
-    };
+                @Override
+                public void free(QuicMessage tar) {
+                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
+                }
+            };
 
     private long    streamId;
     private ByteBuf byteBuf;

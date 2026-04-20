@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.channel.routing;
 import net.hasor.neta.channel.ProtoStatus;
-
 /**
  * Control handle owned by the current routing duplexer.
  * <p>Unlike general-purpose context objects, this control is expected to be obtained from

@@ -14,12 +14,15 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.data;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+
+import org.junit.Test;
+
 import net.hasor.cobble.function.Release;
 import net.hasor.neta.bytebuf.ReferenceHolder;
-import org.junit.Test;
 
 /**
  * Extended tests for {@link ProtoQueue} covering edge cases not in ProtoQueueTest.
@@ -498,7 +501,7 @@ public class ProtoQueueExTest {
     public void offerMessage_emptyList() {
         ProtoQueue<Integer> q = new ProtoQueue<>(10);
         boolean cnt = q.offerMessage(Collections.emptyList());
-        assert !cnt;
+        assert cnt;
         assert q.queueSize() == 0;
         assert q.slotSize() == 10;
     }
@@ -507,7 +510,9 @@ public class ProtoQueueExTest {
     public void offerMessage_emptyArray() {
         ProtoQueue<Integer> q = new ProtoQueue<>(10);
         boolean cnt = q.offerMessage(new Integer[0]);
-        assert !cnt;
+        assert cnt;
+        assert q.queueSize() == 0;
+        assert q.slotSize() == 10;
     }
 
     // --- interleaved offer/take cycles ---

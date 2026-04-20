@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http.websocket;
 import net.hasor.neta.bytebuf.ByteBuf;
-
 /**
  * Internal control-message wrapper that re-enters the normal message pipeline.
  * <p>

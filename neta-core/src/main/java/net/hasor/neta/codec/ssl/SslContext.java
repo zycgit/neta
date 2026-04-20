@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.ssl;
 import net.hasor.neta.channel.SoChannel;
-
 /**
  * Per-channel TLS state exposed to pipeline handlers.
  * <p>An instance is created by {@link SslDuplexer#onInit(String, int, int, net.hasor.neta.channel.ProtoContext)}

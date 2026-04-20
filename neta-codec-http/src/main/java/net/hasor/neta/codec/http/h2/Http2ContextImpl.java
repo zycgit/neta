@@ -17,7 +17,6 @@ package net.hasor.neta.codec.http.h2;
 import java.util.Objects;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.codec.http.HttpProtocolStateException;
-
 /**
  * Default implementation of {@link Http2Context}.
  * <p>

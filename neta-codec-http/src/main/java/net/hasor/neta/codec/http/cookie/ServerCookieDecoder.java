@@ -17,7 +17,6 @@ package net.hasor.neta.codec.http.cookie;
 import java.nio.charset.StandardCharsets;
 import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
-
 /**
  * Decodes a single HTTP response-side {@code Set-Cookie} header value into a
  * {@link DefaultCookie} instance.

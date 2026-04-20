@@ -22,20 +22,19 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.transport.udp.AbstractUdpWriteTask;
-
 /**
  * DATAGRAM-level {@link AsyncChannel} implementation.
  * <p>This type wraps write requests into unreliable DATAGRAM frames defined by RFC 9221 and sends them through the parent {@link QuicChannel}.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicDatagramChannelAsync implements AsyncChannel {
-    private static final Logger           logger  = Logger.getLogger(QuicDatagramChannelAsync.class);
-    private final        long             channelId;
-    private final        QuicChannel      quicChannel;
-    private final        SoContextService context;
+    private static final Logger    logger = Logger.getLogger(QuicDatagramChannelAsync.class);
+    private final long             channelId;
+    private final QuicChannel      quicChannel;
+    private final SoContextService context;
     //
-    private final        AtomicBoolean    closed  = new AtomicBoolean(false);
-    private final        AtomicBoolean    writing = new AtomicBoolean(false);
+    private final AtomicBoolean closed  = new AtomicBoolean(false);
+    private final AtomicBoolean writing = new AtomicBoolean(false);
 
     QuicDatagramChannelAsync(long channelId, QuicChannel quicChannel, SoContextService context) {
         this.channelId = channelId;

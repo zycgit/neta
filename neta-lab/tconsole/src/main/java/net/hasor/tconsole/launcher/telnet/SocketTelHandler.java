@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -27,6 +27,8 @@ import net.hasor.cobble.logging.LoggerFactory;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.tconsole.TelOptions;
 import net.hasor.tconsole.launcher.TelSessionObject;
 import net.hasor.tconsole.launcher.TelUtils;
@@ -37,11 +39,11 @@ import net.hasor.tconsole.launcher.TelUtils;
  * @version : 2016年09月20日
  */
 class SocketTelHandler implements ProtoHandler<ByteBuf, ByteBuf> {
-    private static final Logger            logger = LoggerFactory.getLogger(SocketTelHandler.class);
-    private final        Predicate<String> inBoundMatcher;
-    private final        SocketTelService  telContext;
-    private final        ExecutorService   executor;
-    private final        ByteBuf           dataReader;
+    private static final Logger     logger = LoggerFactory.getLogger(SocketTelHandler.class);
+    private final Predicate<String> inBoundMatcher;
+    private final SocketTelService  telContext;
+    private final ExecutorService   executor;
+    private final ByteBuf           dataReader;
 
     SocketTelHandler(SocketTelService telContext, ExecutorService executor, Predicate<String> inBoundMatcher) {
         this.executor = executor;
@@ -75,13 +77,15 @@ class SocketTelHandler implements ProtoHandler<ByteBuf, ByteBuf> {
         sessionObj.setAttribute(TelOptions.SILENT, this.telContext.isSilent());
         sessionObj.setAttribute(TelOptions.ENDCODE_OF_SILENT, this.telContext.encodedOfSilent());
         ctx.context(TelSessionObject.class, sessionObj);
+        ctx.context(SocketWriter.class, dataWriter);
 
         // .异步延迟 200ms 打印欢迎信息，留给例如 silent 生效空间。
         this.executor.submit(() -> {
             try {
                 Thread.sleep(200);
                 printWelcome(ctx, remoteAddr, localAddr);
-            } catch (Exception e) { /**/ }
+            } catch (Exception e) {
+                /**/ }
         });
 
         // .创建Session
@@ -91,6 +95,7 @@ class SocketTelHandler implements ProtoHandler<ByteBuf, ByteBuf> {
     @Override
     public ProtoStatus onMessage(ProtoContext ctx, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) throws IOException {
         TelSessionObject telSession = ctx.context(TelSessionObject.class);
+        SocketWriter dataWriter = ctx.context(SocketWriter.class);
 
         while (src.hasMore()) {
             ByteBuf buf = src.takeMessage();
@@ -107,7 +112,6 @@ class SocketTelHandler implements ProtoHandler<ByteBuf, ByteBuf> {
             this.dataReader.writeBuffer(buf);
             this.dataReader.flush();
             buf.free();
-            src.rcvSubmit();
         }
 
         // do tryReceiveEvent
@@ -119,17 +123,31 @@ class SocketTelHandler implements ProtoHandler<ByteBuf, ByteBuf> {
             lastBufferSize = this.dataReader.readableBytes();
         }
 
+        String responseMessage = dataWriter.drainMessage();
+        boolean closeSession = dataWriter.isCloseRequested() || TelUtils.aBoolean(telSession, TelOptions.CLOSE_SESSION);
+
         // 输出
-        if (this.dataReader.readableBytes() == 0) {
+        if (!closeSession && this.dataReader.readableBytes() == 0) {
             boolean noSilent = !TelUtils.aBoolean(telSession, TelOptions.SILENT);
             if (noSilent) {
-                ctx.sendData(TelUtils.CMD.getBytes());
+                if (StringUtils.isBlank(responseMessage)) {
+                    responseMessage = TelUtils.CMD;
+                }
             } else {
                 String codeOfSilent = TelUtils.aString(telSession, TelOptions.ENDCODE_OF_SILENT);
                 if (StringUtils.isNotBlank(codeOfSilent)) {
-                    ctx.sendData((codeOfSilent + "\n").getBytes());
+                    responseMessage = responseMessage + codeOfSilent + "\n";
                 }
             }
+        }
+
+        if (StringUtils.isNotBlank(responseMessage)) {
+            ctx.sendData(responseMessage.getBytes());
+            if (closeSession) {
+                ctx.getChannel().close();
+            }
+        } else if (closeSession) {
+            ctx.getChannel().close();
         }
 
         return ProtoStatus.Next;

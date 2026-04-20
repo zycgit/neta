@@ -14,11 +14,17 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h2;
+
+import static org.junit.Assert.*;
+
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+
+import org.junit.Test;
+
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoHandler;
 import net.hasor.neta.channel.ProtoStatus;
@@ -31,8 +37,6 @@ import net.hasor.neta.codec.http.FullHttpRequest;
 import net.hasor.neta.codec.http.FullHttpResponse;
 import net.hasor.neta.codec.http.HttpObject;
 import net.hasor.neta.codec.http.HttpStatus;
-import org.junit.Test;
-import static org.junit.Assert.*;
 
 public class Http2LifecycleTest extends AbstractHttp2Test {
     private static class HoldingRequestHandler implements ProtoHandler<HttpObject, Object> {

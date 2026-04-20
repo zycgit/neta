@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.transport.quic;
-
 /**
  * Callback interface invoked after a newly accepted server-side QUIC connection has finished initialization.
  * <p>This listener is triggered by {@link QuicAsyncServerChannel} after the handshake completes, the

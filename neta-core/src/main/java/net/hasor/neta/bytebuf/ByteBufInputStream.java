@@ -17,7 +17,6 @@ package net.hasor.neta.bytebuf;
 import java.io.*;
 import java.nio.charset.Charset;
 import java.util.Objects;
-
 /**
  * Sequential {@link InputStream}/{@link DataInput} view over a {@link ByteBuf}.
  * <p>The stream reads from the buffer's current readable region and advances the
@@ -31,7 +30,7 @@ public class ByteBufInputStream extends InputStream implements DataInput {
     private final ByteBuf buffer;
     /** Releases the wrapped buffer when the stream is closed. */
     private final boolean releaseOnClose;
-    private       boolean closed;
+    private boolean       closed;
 
     /**
      * Creates a new stream which reads data from the specified {@code buffer}

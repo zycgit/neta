@@ -16,7 +16,6 @@
 package net.hasor.neta.channel.transport.sctp;
 import java.net.SocketAddress;
 import net.hasor.neta.channel.*;
-
 /**
  * Wrapper object for the listen handle bound by an SCTP server. The actual accept loop and the
  * lifecycle of the underlying socket are managed by {@link SctpAsyncServerChannel}.

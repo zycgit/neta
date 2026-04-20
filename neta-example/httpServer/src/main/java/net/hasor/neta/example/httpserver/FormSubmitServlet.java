@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.neta.example.httpserver;
+
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import net.hasor.neta.http.HttpServlet;
-import net.hasor.neta.http.ServletRequest;
-import net.hasor.neta.http.ServletResponse;
+
+import net.hasor.nhttp.server.HttpServlet;
+import net.hasor.nhttp.server.ServletRequest;
+import net.hasor.nhttp.server.ServletResponse;
 
 /**
  * Example servlet demonstrating HTML form submission handling.

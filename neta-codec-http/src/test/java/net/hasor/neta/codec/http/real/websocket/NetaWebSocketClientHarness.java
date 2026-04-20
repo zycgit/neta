@@ -14,15 +14,18 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.real.websocket;
+
+import static org.junit.Assert.*;
+
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.*;
+
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
-import static org.junit.Assert.*;
 
 public class NetaWebSocketClientHarness implements Closeable {
     private static final String WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
@@ -31,8 +34,8 @@ public class NetaWebSocketClientHarness implements Closeable {
     private final int           port;
     private final NetChannel    channel;
     private final Deque<byte[]> inboundChunks;
-    private       byte[]        currentChunk;
-    private       int           currentOffset;
+    private byte[]              currentChunk;
+    private int                 currentOffset;
 
     private NetaWebSocketClientHarness(NetManager neta, int port, NetChannel channel) {
         this.neta = neta;

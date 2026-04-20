@@ -17,7 +17,6 @@ package net.hasor.neta.codec.http.h2;
 import java.util.HashMap;
 import java.util.Map;
 import net.hasor.neta.codec.http.HttpHeaderNames;
-
 /**
  * HPACK static table defined by RFC 7541 Appendix A.
  * <p>

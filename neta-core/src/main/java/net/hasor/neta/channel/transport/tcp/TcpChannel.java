@@ -19,7 +19,6 @@ import java.nio.channels.NotYetConnectedException;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
-
 /**
  * Application-facing TCP {@link NetChannel} implementation.
  * <p>This class binds one {@link TcpAsyncChannel} together with its dedicated
@@ -31,9 +30,9 @@ import net.hasor.neta.channel.*;
  * @version : 2023-09-24
  */
 public class TcpChannel extends NetChannel {
-    private static final Logger                  logger = Logger.getLogger(TcpChannel.class);
-    private final        TcpRcvCompletionHandler readHandler;
-    private final        TcpSndCompletionHandler writeHandler;
+    private static final Logger           logger = Logger.getLogger(TcpChannel.class);
+    private final TcpRcvCompletionHandler readHandler;
+    private final TcpSndCompletionHandler writeHandler;
 
     TcpChannel(long channelId, NetMonitor monitor, NetListen forListen, ProtoInitializer initializer, TcpAsyncChannel asyncChannel, SoContextService context//
             , TcpRcvCompletionHandler readHandler, TcpSndCompletionHandler writeHandler) throws IOException {

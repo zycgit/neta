@@ -2,7 +2,6 @@ package net.hasor.neta.channel.transport.virtual;
 import net.hasor.neta.channel.PlayLoad;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
-
 /**
  * Handler interface used by virtual data transfer.
  * <p>This interface defines how data is converted or moved between queues inside a virtual link.

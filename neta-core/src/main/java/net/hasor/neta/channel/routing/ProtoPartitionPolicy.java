@@ -14,10 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.routing;
-
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoPartitionDuplexer;
-
 /**
  * Policy hook consulted by the partition duplexer before creating a new partition.
  * <p>After {@link ProtoPartitionDuplexer} resolves a partition key through

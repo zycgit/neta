@@ -16,7 +16,6 @@
 package net.hasor.neta.codec.http.multipart;
 import net.hasor.cobble.function.Release;
 import net.hasor.neta.bytebuf.ByteBuf;
-
 /**
  * Represents a single part (field) inside a {@code multipart/form-data} request body, as defined by
  * <a href="https://tools.ietf.org/html/rfc7578">RFC 7578</a>.

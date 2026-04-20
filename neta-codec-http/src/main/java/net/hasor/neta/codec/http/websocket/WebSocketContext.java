@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http.websocket;
 import java.util.List;
-
 /**
  * Context object representing the parsed websocket handshake result.
  * <p>

@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-
 /**
  * Traffic counters and I/O timing monitor maintained by each {@link NetChannel}.
  * <p>Counters start at zero and increase monotonically, resetting only when the channel is created.
@@ -23,9 +22,9 @@ package net.hasor.neta.channel;
  * @version : 2023-09-24
  */
 public class NetMonitor {
-    private final    long createdTime = System.currentTimeMillis();
-    private          long rcvCounterBytes;
-    private          long sndCounterBytes;
+    private final long    createdTime = System.currentTimeMillis();
+    private long          rcvCounterBytes;
+    private long          sndCounterBytes;
     private volatile long lastSndTime;
     private volatile long lastRcvTime;
 

@@ -18,7 +18,6 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.codec.http.HttpObject;
-
 /**
  * Duplex frame codec for websocket traffic after the handshake.
  * <p>

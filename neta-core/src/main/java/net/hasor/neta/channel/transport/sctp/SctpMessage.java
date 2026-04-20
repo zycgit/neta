@@ -16,7 +16,6 @@
 package net.hasor.neta.channel.transport.sctp;
 import com.sun.nio.sctp.MessageInfo;
 import net.hasor.neta.bytebuf.ByteBuf;
-
 /**
  * Represents one SCTP message, including both {@link MessageInfo} and the message body.
  * <p>This type passes SCTP-specific metadata and the actual payload through the protocol pipeline.

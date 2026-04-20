@@ -24,7 +24,6 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.*;
-
 /**
  * Connected UDP client transport built on top of {@link UdpTransport}.
  * <p>After {@link #connectTo(ProtoInitializer, Future)} is called, it creates an
@@ -63,9 +62,9 @@ import net.hasor.neta.channel.*;
  * @see DatagramChannel
  */
 public class UdpAsyncClientChannel extends UdpAsyncChannel {
-    private static final Logger           logger = Logger.getLogger(UdpAsyncClientChannel.class);
-    protected final      UdpTransport     transport;
-    protected final      ByteBufAllocator bufAllocator;
+    private static final Logger      logger = Logger.getLogger(UdpAsyncClientChannel.class);
+    protected final UdpTransport     transport;
+    protected final ByteBufAllocator bufAllocator;
 
     /**
      * Create a UDP client asynchronous channel.

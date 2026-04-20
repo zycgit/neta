@@ -25,7 +25,6 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.*;
-
 /**
  * UDP server-side demultiplexer built on a single {@link DatagramChannel}.
  * <p>UDP has no real accept phase, so this server does not accept independent sockets the way TCP
@@ -67,13 +66,13 @@ import net.hasor.neta.channel.*;
  * @see java.nio.channels.DatagramChannel
  */
 public class UdpAsyncServerChannel implements AsyncServerChannel {
-    private static final Logger            logger = Logger.getLogger(UdpAsyncServerChannel.class);
-    protected final      long              channelId;
-    protected final      SoContextService  context;
-    protected final      InetSocketAddress listenAddr;
-    protected final      UdpSoConfig       soConfig;
-    protected final      ByteBufAllocator  bufAllocator;
-    protected final      UdpTransport      transport;
+    private static final Logger       logger = Logger.getLogger(UdpAsyncServerChannel.class);
+    protected final long              channelId;
+    protected final SoContextService  context;
+    protected final InetSocketAddress listenAddr;
+    protected final UdpSoConfig       soConfig;
+    protected final ByteBufAllocator  bufAllocator;
+    protected final UdpTransport      transport;
 
     /**
      * Create a UDP server asynchronous channel.

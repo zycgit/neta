@@ -15,12 +15,15 @@
  */
 package net.hasor.neta.codec.http.h2;
 
+import static org.junit.Assert.*;
+
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+
+import org.junit.Test;
+
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.ProtoContext;
-import org.junit.Test;
-import static org.junit.Assert.*;
 
 /**
  * Tests for {@link Http2Context} implementation and registration

@@ -19,7 +19,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.StampedLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
-
 /**
  * Ring Buffer linked list.
  * Uses {@link StampedLock} for efficient read-write concurrency control.
@@ -27,9 +26,9 @@ import java.util.function.Function;
  * @version : 2022-11-01
  */
 class BufferRing<T> {
-    private final    AtomicInteger size;
-    private final    StampedLock   lock;
-    private volatile Node<T>       curNode;
+    private final AtomicInteger size;
+    private final StampedLock   lock;
+    private volatile Node<T>    curNode;
 
     public BufferRing() {
         this.size = new AtomicInteger();

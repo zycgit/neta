@@ -24,7 +24,6 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.channel.routing.PartitionKey;
 import net.hasor.neta.channel.routing.ProtoRoutingControl;
 import net.hasor.neta.codec.http.*;
-
 /**
  * Bridge duplexer that upgrades one routed client HTTP exchange into a websocket route.
  * <p>

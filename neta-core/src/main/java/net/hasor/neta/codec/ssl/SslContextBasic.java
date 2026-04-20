@@ -28,7 +28,6 @@ import net.hasor.neta.channel.SoChannel;
 import net.hasor.neta.channel.SoContext;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
-
 /**
  * Base implementation shared by concrete TLS context variants.
  * <p>This class combines the channel-facing {@link SslContext} API with three operational pieces:
@@ -65,19 +64,19 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * @see SslConfig
  */
 public abstract class SslContextBasic implements SslContext {
-    protected static final Logger        logger = Logger.getLogger(SslContextBasic.class);
-    protected final        SoChannel<?>  channel;
-    protected final        long          channelId;
-    protected final        String        stackName;
-    protected final        ProtoContext  protoCtx;
-    protected final        SoContext     soContext;
+    protected static final Logger logger = Logger.getLogger(SslContextBasic.class);
+    protected final SoChannel<?>  channel;
+    protected final long          channelId;
+    protected final String        stackName;
+    protected final ProtoContext  protoCtx;
+    protected final SoContext     soContext;
     //
-    protected final        SslConfig     sslConfig;
-    private final          boolean       clientMode;
-    private final          SSLContext    sslContext;
-    private final          SslEngineWrap sslEngine;
-    private final          SslHandle     sslHandler;
-    protected volatile     boolean       sslEnable;
+    protected final SslConfig   sslConfig;
+    private final boolean       clientMode;
+    private final SSLContext    sslContext;
+    private final SslEngineWrap sslEngine;
+    private final SslHandle     sslHandler;
+    protected volatile boolean  sslEnable;
 
     public SslContextBasic(SoChannel<?> channel, String stackName, SslConfig config, ProtoContext protoCtx, boolean clientMode) throws Exception {
         this.channel = channel;

@@ -21,7 +21,6 @@ import java.nio.channels.ShutdownChannelGroupException;
 import java.util.concurrent.TimeUnit;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.channel.*;
-
 /**
  * Abstract skeletal implementation of a UDP send task.
  * <p>This class breaks one send attempt into a consistent sequence of stages: fetch pending data
@@ -80,11 +79,11 @@ import net.hasor.neta.channel.*;
  */
 public abstract class AbstractUdpWriteTask extends DefaultSoTask {
     protected final SoContextService context;
-    private final   NetChannel       netChannel;
-    private final   NetMonitor       monitor;
-    private final   SoSndContext     wContext;
-    private         byte[]           sendData;
-    private         int              timeoutRetryCnt = 0;
+    private final NetChannel         netChannel;
+    private final NetMonitor         monitor;
+    private final SoSndContext       wContext;
+    private byte[]                   sendData;
+    private int                      timeoutRetryCnt = 0;
 
     /**
      * Create a UDP write task.

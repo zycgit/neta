@@ -14,10 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+
+import org.junit.Test;
+
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
@@ -25,7 +29,6 @@ import net.hasor.neta.channel.transport.virtual.VrtChannel;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.channel.transport.virtual.VrtSocketAddress;
 import net.hasor.neta.channel.transport.virtual.VrtTransfer;
-import org.junit.Test;
 
 public class NetChannelPipelineScopeTest extends AbstractStackTest {
     @Test

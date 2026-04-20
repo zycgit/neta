@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.ssl;
 import net.hasor.neta.channel.SoEventData;
-
 /**
  * Network event fired on the <em>RCV</em> pipeline when a TLS {@code close_notify}
  * alert is received from the remote peer — the "goodbye handshake", symmetric

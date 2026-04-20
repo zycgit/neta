@@ -15,18 +15,22 @@
  */
 package net.hasor.neta.channel.transport.sctp;
 
+import static net.hasor.neta.channel.AbstractSoTest.safePort;
+
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.junit.Test;
+
 import com.sun.nio.sctp.SctpChannel;
 import com.sun.nio.sctp.SctpServerChannel;
+
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
-import org.junit.Test;
-import static net.hasor.neta.channel.AbstractSoTest.safePort;
 
 public class SctpNeta2JvmTest {
 

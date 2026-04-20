@@ -20,7 +20,6 @@ import net.hasor.neta.channel.routing.PartitionDataKind;
 import net.hasor.neta.channel.routing.PartitionKey;
 import net.hasor.neta.channel.routing.ProtoPartitionSelector;
 import net.hasor.neta.codec.http.HttpObject;
-
 /**
  * Partition selector that maps HTTP/2 traffic to child pipelines according to {@code streamId}.
  * @author 赵永春 (zyc@hasor.net)

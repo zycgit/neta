@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
-
 /**
  * Logical websocket close actions that still need transport-specific execution.
  * @author 赵永春 (zyc@hasor.net)

@@ -14,9 +14,11 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+
+import org.junit.Test;
+
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.neta.bytebuf.ByteBuf;
-import org.junit.Test;
 
 /**
  * Tests for {@link SoSndContext} queue operations.

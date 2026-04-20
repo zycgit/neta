@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http.websocket;
 import java.util.Objects;
-
 /**
  * Key that identifies a websocket endpoint inside a shared registry.
  * <p>

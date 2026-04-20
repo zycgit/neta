@@ -23,7 +23,6 @@ import java.nio.channels.CompletionHandler;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
-
 /**
  * Completion handler for accepting inbound TCP connections.
  * <p>This handler creates a new {@link TcpChannel} for each accepted socket, applies configuration,
@@ -55,10 +54,10 @@ import net.hasor.neta.channel.*;
  * @version 2025-08-06
  */
 class TcpAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketChannel, SoContext> {
-    private static final Logger                          logger = Logger.getLogger(TcpAcceptCompletionHandler.class);
-    private final        NetListen                       forListen;
-    private final        AsynchronousServerSocketChannel channel;
-    private final        TcpSoConfig                     soConfig;
+    private static final Logger                   logger = Logger.getLogger(TcpAcceptCompletionHandler.class);
+    private final NetListen                       forListen;
+    private final AsynchronousServerSocketChannel channel;
+    private final TcpSoConfig                     soConfig;
 
     /**
      * Create an accept-completion handler.

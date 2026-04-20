@@ -20,7 +20,6 @@ import net.hasor.neta.channel.routing.PartitionDataKind;
 import net.hasor.neta.channel.routing.PartitionKey;
 import net.hasor.neta.channel.routing.ProtoPartitionControl;
 import net.hasor.neta.channel.routing.ProtoPartitionPolicy;
-
 /**
  * HTTP/2 partition policy that prevents connection-level control events from leaking into
  * per-stream business handlers and strictly preserves stream lifecycle boundaries.

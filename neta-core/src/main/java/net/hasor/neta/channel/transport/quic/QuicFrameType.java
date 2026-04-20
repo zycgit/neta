@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.transport.quic;
-
 /**
  * Integer constant definitions for the various QUIC frame types.
  * <p>Covers the frame types defined in <a href="https://www.rfc-editor.org/rfc/rfc9000#section-19">RFC 9000 Section 19</a>

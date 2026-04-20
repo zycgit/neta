@@ -16,7 +16,6 @@
 package net.hasor.neta.codec.http.websocket;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.codec.http.AbstractHttpEvent;
-
 /**
  * Event representing a received pong control frame or a request to send pong actively.
  * <p>

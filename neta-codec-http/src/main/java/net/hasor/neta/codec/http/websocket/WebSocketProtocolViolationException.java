@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
-
 /**
  * Exception indicating a websocket protocol-format violation.
  * <p>

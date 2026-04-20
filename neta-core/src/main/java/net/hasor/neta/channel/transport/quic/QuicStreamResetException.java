@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.transport.quic;
-
 /**
  * Exception thrown when a QUIC RESET_STREAM frame sent by the peer is received.
  * <p>Corresponds to RFC 9000 Section 19.4 and indicates that a stream was aborted by the peer together with its final size.

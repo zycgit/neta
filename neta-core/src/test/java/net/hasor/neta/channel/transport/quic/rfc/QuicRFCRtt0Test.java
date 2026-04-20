@@ -19,6 +19,9 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.security.SecureRandom;
+
+import org.junit.Test;
+
 import net.hasor.neta.channel.AbstractSoTest;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.transport.quic.QuicSimplyTlsClient;
@@ -26,7 +29,6 @@ import net.hasor.neta.channel.transport.quic.QuicSoConfig;
 import net.hasor.neta.channel.transport.quic.simply.QuicSimplyClient;
 import net.hasor.neta.codec.ssl.SslAuthKeyType;
 import net.hasor.neta.codec.ssl.SslCertConfig;
-import org.junit.Test;
 
 /**
  * QUIC RFC 合规测试 — 0-RTT 早期数据（RFC 9001 §4.9.1）。
@@ -104,7 +106,8 @@ public class QuicRFCRtt0Test extends AbstractSoTest {
         int port = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", port);
         NetManager neta = new NetManager(globalConf());
-        neta.bind(address, ctx -> { /* no handler needed */ }, quicConfig());
+        neta.bind(address, ctx -> {
+            /* no handler needed */ }, quicConfig());
 
         // ── 1. 构造并发送 0-RTT 包（DCID 从未存在于服务端任何 map 中） ────────
         byte[] unknownDcid = randomBytes(QuicSimplyClient.DEFAULT_CID_LEN);
@@ -179,7 +182,8 @@ public class QuicRFCRtt0Test extends AbstractSoTest {
         int port = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", port);
         NetManager neta = new NetManager(globalConf());
-        neta.bind(address, ctx -> { /* no handler needed */ }, quicTlsConfig());
+        neta.bind(address, ctx -> {
+            /* no handler needed */ }, quicTlsConfig());
 
         // Initial 与 0-RTT 包必须使用同一 DCID，
         // 才能让 0-RTT 在服务端 handshakeMap 中路由到同一握手条目
@@ -265,7 +269,8 @@ public class QuicRFCRtt0Test extends AbstractSoTest {
         int port = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", port);
         NetManager neta = new NetManager(globalConf());
-        neta.bind(address, ctx -> { /* no handler needed */ }, quicTlsConfig());
+        neta.bind(address, ctx -> {
+            /* no handler needed */ }, quicTlsConfig());
 
         byte[] sharedDcid = randomBytes(QuicSimplyClient.DEFAULT_CID_LEN);
         byte[] scid = randomBytes(QuicSimplyClient.DEFAULT_CID_LEN);
@@ -348,7 +353,8 @@ public class QuicRFCRtt0Test extends AbstractSoTest {
         int port = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", port);
         NetManager neta = new NetManager(globalConf());
-        neta.bind(address, ctx -> { /* no handler needed */ }, quicConfig());
+        neta.bind(address, ctx -> {
+            /* no handler needed */ }, quicConfig());
 
         // ── 1. 完成明文握手，获取服务端 CID ─────────────────────────────────
         byte[] serverCid;
@@ -432,7 +438,8 @@ public class QuicRFCRtt0Test extends AbstractSoTest {
         int port = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", port);
         NetManager neta = new NetManager(globalConf());
-        neta.bind(address, ctx -> { /* no handler */ }, quicTlsConfig());
+        neta.bind(address, ctx -> {
+            /* no handler */ }, quicTlsConfig());
 
         SslCertConfig clientSslCfg = new SslCertConfig();
         try (QuicSimplyTlsClient tlsClient = new QuicSimplyTlsClient(address, clientSslCfg)) {
@@ -496,7 +503,8 @@ public class QuicRFCRtt0Test extends AbstractSoTest {
         int port = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", port);
         NetManager neta = new NetManager(globalConf());
-        neta.bind(address, ctx -> { /* no handler */ }, quicTlsConfig());
+        neta.bind(address, ctx -> {
+            /* no handler */ }, quicTlsConfig());
 
         SslCertConfig clientSslCfg = new SslCertConfig();
         try (QuicSimplyTlsClient tlsClient = new QuicSimplyTlsClient(address, clientSslCfg)) {

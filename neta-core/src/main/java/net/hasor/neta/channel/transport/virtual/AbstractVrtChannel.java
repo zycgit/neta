@@ -16,7 +16,6 @@
 package net.hasor.neta.channel.transport.virtual;
 import java.io.IOException;
 import net.hasor.neta.channel.*;
-
 /**
  * Abstract base class for virtual channels.
  * <p>This type represents a channel that runs entirely in application memory and can move data

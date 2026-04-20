@@ -16,7 +16,6 @@
 package net.hasor.neta.codec.http;
 import java.util.*;
 import net.hasor.cobble.StringUtils;
-
 /**
  * Default implementation of {@link HttpHeaders} backed by plain string header entries.
  * @author 赵永春 (zyc@hasor.net)

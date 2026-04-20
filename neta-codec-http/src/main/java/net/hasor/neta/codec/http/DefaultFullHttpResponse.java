@@ -19,7 +19,6 @@ import java.util.Set;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.bytebuf.CompositeByteBuf;
-
 /**
  * Default implementation of {@link FullHttpResponse}.
  * <p>

@@ -19,7 +19,6 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
 import net.hasor.neta.codec.http.HttpHeaders;
-
 /**
  * 由 {@link Http3FrameToHttpDecoder} 与 {@link Http3HttpToFrameEncoder} 共享的连接级状态容器。
  * <p>

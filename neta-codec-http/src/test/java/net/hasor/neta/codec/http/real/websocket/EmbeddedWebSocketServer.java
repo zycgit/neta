@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.real.websocket;
+
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
 import java.io.Closeable;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -21,11 +25,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.server.WebSocketServer;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 
 public class EmbeddedWebSocketServer extends WebSocketServer implements Closeable {
     private final CountDownLatch             startLatch         = new CountDownLatch(1);

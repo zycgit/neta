@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http.h2;
 import net.hasor.neta.bytebuf.ByteBuf;
-
 /**
  * Represents the accumulated state of an HTTP/2 stream.
  * <p>

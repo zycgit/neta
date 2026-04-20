@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.bytebuf;
 import java.nio.ByteBuffer;
-
 /**
  * Basic read and write view over a memory block.
  * @author 赵永春 (zyc@hasor.net)

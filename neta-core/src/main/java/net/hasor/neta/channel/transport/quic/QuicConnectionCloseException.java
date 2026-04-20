@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.transport.quic;
-
 /**
  * Exception thrown when a QUIC CONNECTION_CLOSE frame is received or sent.
  * <p>Corresponds to RFC 9000 Section 19.19 and represents connection-level shutdown together with its error reason.

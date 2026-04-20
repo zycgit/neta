@@ -30,7 +30,6 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
-
 /**
  * Asynchronous channel adapter built on top of JDK {@link com.sun.nio.sctp.SctpChannel}.
  * <p>This class has two operating modes:
@@ -62,19 +61,19 @@ import net.hasor.neta.channel.*;
  * @see SctpSoConfig
  */
 class SctpAsyncChannel implements AsyncChannel {
-    private static final Logger           logger = Logger.getLogger(SctpAsyncChannel.class);
-    protected final      long             channelId;
-    protected final      SctpChannel      channel;
-    protected final      SocketAddress    localAddress;
-    protected final      SocketAddress    remoteAddress;
-    protected final      SoContextService context;
-    protected final      SctpSoConfig     soConfig;
+    private static final Logger      logger = Logger.getLogger(SctpAsyncChannel.class);
+    protected final long             channelId;
+    protected final SctpChannel      channel;
+    protected final SocketAddress    localAddress;
+    protected final SocketAddress    remoteAddress;
+    protected final SoContextService context;
+    protected final SctpSoConfig     soConfig;
     //
-    private final        AtomicBoolean    writing;
+    private final AtomicBoolean writing;
     // Client Mode
-    private final        Selector         selector;
-    private final        ByteBufAllocator bufAllocator;
-    private final        ByteBuffer       receiveBuffer;
+    private final Selector         selector;
+    private final ByteBufAllocator bufAllocator;
+    private final ByteBuffer       receiveBuffer;
 
     SctpAsyncChannel(long channelId, SctpChannel channel, SocketAddress localAddr, SocketAddress remoteAddr, SoContextService context, SctpSoConfig soConfig) throws IOException {
         this.channelId = channelId;

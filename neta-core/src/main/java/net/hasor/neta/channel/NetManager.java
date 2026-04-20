@@ -30,7 +30,6 @@ import net.hasor.neta.channel.transport.sctp.SctpProvider;
 import net.hasor.neta.channel.transport.tcp.TcpProvider;
 import net.hasor.neta.channel.transport.udp.UdpProvider;
 import net.hasor.neta.channel.transport.virtual.VrtProvider;
-
 /**
  * Entry point to the Neta AIO networking layer.
  * Manages server listeners and client connections for TCP, UDP, QUIC, SCTP, and virtual transports.
@@ -53,8 +52,8 @@ import net.hasor.neta.channel.transport.virtual.VrtProvider;
  * @version : 2023-09-24
  */
 public class NetManager extends AbstractNetManager {
-    private static final Logger                            logger = Logger.getLogger(NetManager.class);
-    protected final      Map<String, AsyncChannelProvider> providerMap;
+    private static final Logger                       logger = Logger.getLogger(NetManager.class);
+    protected final Map<String, AsyncChannelProvider> providerMap;
 
     /** Create a network manager with the default configuration. */
     public NetManager() {

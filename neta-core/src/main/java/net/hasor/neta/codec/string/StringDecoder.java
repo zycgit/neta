@@ -24,7 +24,6 @@ import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.codec.DelimiterBasedFrameHandler;
 import net.hasor.neta.codec.LineBasedFrameHandler;
-
 /**
  * Decodes each received {@link ByteBuf} into a {@link String} with the configured charset.
  * <p>

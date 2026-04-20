@@ -14,10 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h3;
-
 import java.util.HashMap;
 import java.util.Map;
-
 /**
  * RFC 9204 附录 A 定义的 QPACK 静态表。
  * <p>

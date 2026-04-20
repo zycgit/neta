@@ -18,7 +18,6 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.bytebuf.ByteBuf;
-
 /**
  * One logical write request carrying one or more {@link ByteBuf} fragments plus a completion
  * {@link Future} used to notify the caller when sending finishes.
@@ -44,7 +43,7 @@ public class SoSndData {
     private final Object[]           data;
     private final Future<NetChannel> future;
     private final NetChannel         result;
-    private       int                readIdx;
+    private int                      readIdx;
 
     SoSndData(long sendSize, Object[] data, Future<NetChannel> future, NetChannel result) {
         this.dataSize = sendSize;

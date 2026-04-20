@@ -17,7 +17,6 @@ package net.hasor.neta.bytebuf;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import net.hasor.cobble.ref.RecycleObjectPool;
-
 /**
  * Fixed-size {@link ByteBuf} view over an existing {@link ByteBuffer}.
  * <p>
@@ -31,6 +30,7 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  *   +---------------------------------------------------+
  *   | 0 | 1 | 2 | ... | capacity - 1 |
  *   +---------------------------------------------------+
+ * 
  * logical layout on top of the ByteBuffer
  *   0      markedReaderIndex   readerIndex   markedWriterIndex   writerIndex   capacity
  *   |-------------|---------------|------------------|---------------|
@@ -40,18 +40,19 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * @version : 2022-11-01
  */
 class WrapByteBuffer extends AbstractByteBuf {
-    static final int                                          RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    static       RecycleObjectPool.ObjHandler<WrapByteBuffer> RECYCLE_HANDLER = new RecycleObjectPool.ObjHandler<WrapByteBuffer>() {
-        public WrapByteBuffer create() {
-            return new WrapByteBuffer();
-        }
+    static final int                                    RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    static RecycleObjectPool.ObjHandler<WrapByteBuffer> RECYCLE_HANDLER = //
+            new RecycleObjectPool.ObjHandler<WrapByteBuffer>() {
+                public WrapByteBuffer create() {
+                    return new WrapByteBuffer();
+                }
 
-        @Override
-        public void free(WrapByteBuffer tar) {
-            RecycleObjectPool.free(RECYCLE_INDEX, tar);
-        }
-    };
-    protected    ByteBuffer                                   target;
+                @Override
+                public void free(WrapByteBuffer tar) {
+                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
+                }
+            };
+    protected ByteBuffer                                target;
 
     private WrapByteBuffer() {
     }
@@ -61,6 +62,9 @@ class WrapByteBuffer extends AbstractByteBuf {
     void initBuffer(ByteBuffer initData, boolean asWrite) {
         super.initByteBuf(null, initData.limit());
         this.target = initData;
+        if (initData.limit() > 0) {
+            this.initMetricTracking(ByteBufAllocator.DEFAULT.metric(), initData.isDirect(), initData.limit());
+        }
         if (!asWrite) {
             this.writerIndex = initData.limit();
             this.markedWriterIndex = initData.limit(); // initData.length -> initData.limit()

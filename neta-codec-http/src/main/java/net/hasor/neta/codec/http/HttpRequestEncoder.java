@@ -27,7 +27,6 @@ import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.channel.SoEvent;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
-
 /**
  * Encodes staged request-side {@link HttpObject} instances into outbound HTTP/1.x bytes.
  * <p>

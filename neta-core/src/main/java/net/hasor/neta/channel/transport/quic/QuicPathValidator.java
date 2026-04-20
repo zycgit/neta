@@ -21,7 +21,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeoutException;
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.logging.Logger;
-
 /**
  * Handles PATH_CHALLENGE and PATH_RESPONSE frames for path validation and migration.
  * <p>This corresponds to RFC 9000 Section 8.2.
@@ -35,16 +34,16 @@ class QuicPathValidator {
     private static final long VALIDATION_TIMEOUT_MS = 3000;
 
     /** Pending path validations, keyed by challenge data with the send timestamp as the value. */
-    private final    Map<ChallengeKey, Long> pendingChallenges    = new ConcurrentHashMap<>();
+    private final Map<ChallengeKey, Long> pendingChallenges    = new ConcurrentHashMap<>();
     /** Whether the current path has already been validated. */
-    private volatile boolean                 currentPathValidated = true;
+    private volatile boolean              currentPathValidated = true;
     // ── Anti-amplification limit (RFC 9000 §9.3.1) ───────────────────
-    private volatile boolean                 antAmpActive         = false; // True while the new path has not been validated yet
-    private volatile long                    antAmpBytesIn        = 0;     // Bytes received on the unvalidated path
-    private volatile long                    antAmpBytesSent      = 0;     // Bytes sent on the unvalidated path
+    private volatile boolean antAmpActive    = false; // True while the new path has not been validated yet
+    private volatile long    antAmpBytesIn   = 0;     // Bytes received on the unvalidated path
+    private volatile long    antAmpBytesSent = 0;     // Bytes sent on the unvalidated path
     // ── Migration callbacks ───────────────────────────────────────────
-    private volatile Runnable                onTimeoutCallback    = null;  // Callback invoked when PATH_CHALLENGE times out
-    private volatile BasicFuture<Long>       validationFuture     = null;  // Completed with RTT when validation succeeds
+    private volatile Runnable          onTimeoutCallback = null;  // Callback invoked when PATH_CHALLENGE times out
+    private volatile BasicFuture<Long> validationFuture  = null;  // Completed with RTT when validation succeeds
 
     /**
      * Builds a PATH_CHALLENGE frame.

@@ -14,11 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.transport.quic.simply;
+
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+
+import org.junit.Test;
+
 import net.hasor.neta.channel.AbstractSoTest;
 import net.hasor.neta.channel.NetManager;
-import org.junit.Test;
 
 /**
  * {@link QuicSimplyClient} 冒烟测试。
@@ -38,7 +41,8 @@ public class QuicSimplyClientTest extends AbstractSoTest {
         int port = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", port);
         NetManager neta = new NetManager(globalConf());
-        neta.bind(address, ctx -> { /* 无需任何 handler */ }, quicConfig());
+        neta.bind(address, ctx -> {
+            /* 无需任何 handler */ }, quicConfig());
 
         try (QuicSimplyClient client = new QuicSimplyClient(address)) {
             client.handshake();
@@ -59,7 +63,8 @@ public class QuicSimplyClientTest extends AbstractSoTest {
         int port = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", port);
         NetManager neta = new NetManager(globalConf());
-        neta.bind(address, ctx -> { /* 无需任何 handler */ }, quicConfig());
+        neta.bind(address, ctx -> {
+            /* 无需任何 handler */ }, quicConfig());
 
         try (QuicSimplyClient client = new QuicSimplyClient(address)) {
             client.handshake();
@@ -81,7 +86,8 @@ public class QuicSimplyClientTest extends AbstractSoTest {
         int port = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", port);
         NetManager neta = new NetManager(globalConf());
-        neta.bind(address, ctx -> { /* 无需任何 handler */ }, quicConfig());
+        neta.bind(address, ctx -> {
+            /* 无需任何 handler */ }, quicConfig());
 
         try (QuicSimplyClient client = new QuicSimplyClient(address)) {
             client.handshake();
@@ -102,7 +108,8 @@ public class QuicSimplyClientTest extends AbstractSoTest {
         int port = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", port);
         NetManager neta = new NetManager(globalConf());
-        neta.bind(address, ctx -> { /* 无需任何 handler */ }, quicConfig());
+        neta.bind(address, ctx -> {
+            /* 无需任何 handler */ }, quicConfig());
 
         try (QuicSimplyClient client = new QuicSimplyClient(address)) {
             client.handshake();

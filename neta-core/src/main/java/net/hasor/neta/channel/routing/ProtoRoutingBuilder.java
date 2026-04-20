@@ -16,7 +16,6 @@
 package net.hasor.neta.channel.routing;
 import java.util.function.Consumer;
 import net.hasor.neta.channel.*;
-
 /**
  * Builder for routing branches.
  * <p>It registers multiple named branches into the same {@link ProtoRoutingDuplexer}. Each branch

@@ -17,7 +17,6 @@ package net.hasor.neta.bytebuf;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.hasor.cobble.ref.RecycleObjectPool;
-
 /**
  * Live allocation descriptor returned by {@link PageChunkPool}.
  * <p>{@link PageChunk} models free ranges inside the buddy tree, while
@@ -38,24 +37,25 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * @see PageRange
  */
 class PageChunkSplit implements PageRange {
-    static final  int                                          RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    static        RecycleObjectPool.ObjHandler<PageChunkSplit> RECYCLE_HANDLER = new RecycleObjectPool.ObjHandler<PageChunkSplit>() {
-        public PageChunkSplit create() {
-            return new PageChunkSplit();
-        }
+    static final int                                    RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    static RecycleObjectPool.ObjHandler<PageChunkSplit> RECYCLE_HANDLER = //
+            new RecycleObjectPool.ObjHandler<PageChunkSplit>() {
+                public PageChunkSplit create() {
+                    return new PageChunkSplit();
+                }
 
-        @Override
-        public void free(PageChunkSplit tar) {
-            RecycleObjectPool.free(RECYCLE_INDEX, tar);
-        }
-    };
-    private final AtomicBoolean                                available       = new AtomicBoolean(false);
-    private       int                                          fromPage;
-    private       int                                          toPage;
+                @Override
+                public void free(PageChunkSplit tar) {
+                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
+                }
+            };
+    private final AtomicBoolean                         available       = new AtomicBoolean(false);
+    private int                                         fromPage;
+    private int                                         toPage;
     // ------------------------------------------------------------------------
-    private       int                                          capacity;
-    private       PageChunkPool                                chunkPool;
-    private       AtomicInteger                                refCount;
+    private int           capacity;
+    private PageChunkPool chunkPool;
+    private AtomicInteger refCount;
 
     private PageChunkSplit() {
     }

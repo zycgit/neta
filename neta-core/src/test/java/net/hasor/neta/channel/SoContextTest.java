@@ -14,11 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import org.junit.Test;
+
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.concurrent.future.Future;
-import org.junit.Test;
 
 /**
  * @author 赵永春 (zyc@hasor.net)

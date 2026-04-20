@@ -14,13 +14,16 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h2;
+
+import static org.junit.Assert.*;
+
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.routing.ProtoPartitionControl;
 import net.hasor.neta.codec.http.*;
-import static org.junit.Assert.*;
 
 public class AbstractHttp2Test extends AbstractHttpTest {
     protected static final byte[] CLIENT_PREFACE = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n".getBytes(StandardCharsets.US_ASCII);

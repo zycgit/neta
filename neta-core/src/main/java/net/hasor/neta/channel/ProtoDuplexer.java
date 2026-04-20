@@ -16,7 +16,6 @@
 package net.hasor.neta.channel;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
-
 /**
  * Bidirectional protocol node used inside {@link ProtoStackChain}.
  * <p>A duplexer can observe traffic in both directions. During receive processing

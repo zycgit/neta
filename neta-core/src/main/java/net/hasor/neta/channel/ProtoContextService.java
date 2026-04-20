@@ -20,7 +20,6 @@ import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.concurrent.future.Futures;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-
 /**
  * Default {@link ProtoContext} implementation for one logical channel pipeline.
  * <p>It holds the channel-oriented {@link ProtoStackChain}, the typed attachments exposed through

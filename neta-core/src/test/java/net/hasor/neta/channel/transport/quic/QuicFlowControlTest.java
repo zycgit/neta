@@ -15,8 +15,9 @@
  */
 package net.hasor.neta.channel.transport.quic;
 
-import org.junit.Test;
 import static org.junit.Assert.*;
+
+import org.junit.Test;
 
 /**
  * QuicFlowControl 单元测试 — RFC 9000 §4 流量控制 / §19.9 MAX_DATA / §19.10 MAX_STREAM_DATA。

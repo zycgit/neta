@@ -15,11 +15,14 @@
  */
 package net.hasor.neta.codec.http.websocket;
 
+import static org.junit.Assert.*;
+
 import java.util.List;
+
+import org.junit.Test;
+
 import net.hasor.neta.channel.transport.virtual.VrtTransfer;
 import net.hasor.neta.codec.http.HttpObject;
-import org.junit.Test;
-import static org.junit.Assert.*;
 
 public class WebSocketMessageDuplexerTest extends AbstractWebSocketTest {
     private static final String WS_URI = "ws://example.com/chat";

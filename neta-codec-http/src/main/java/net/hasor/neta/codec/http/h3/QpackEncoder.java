@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http.h3;
 import net.hasor.neta.codec.http.HttpHeaders;
-
 /**
  * HTTP/3 头压缩所使用的 QPACK 编码器，定义见 RFC 9204。
  * <p>

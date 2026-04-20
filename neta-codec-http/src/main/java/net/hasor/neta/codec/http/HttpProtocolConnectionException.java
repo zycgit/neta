@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
-
 /**
  * Thrown when a protocol error affects the entire connection rather than a single stream.
  * @author 赵永春 (zyc@hasor.net)

@@ -316,8 +316,7 @@ public class ByteBufBenchmark {
     //          composite.free() fully cleans up (refCnt: 1->0 for each).
     //    Netty: addComponent(true, wrappedBuf) takes ownership directly.
     //          composite.release() fully releases all components.
-    //    Neta requires 4 extra free() calls for ownership transfer — this is
-    //    a real API design difference and is measured intentionally.
+    //    Neta: addComponent(...) transfers ownership directly.
     // ========================================================================
 
     @Benchmark
@@ -343,14 +342,10 @@ public class ByteBufBenchmark {
         net.hasor.neta.bytebuf.ByteBuf b4 = net.hasor.neta.bytebuf.ByteBuf.wrap(frag4);
 
         net.hasor.neta.bytebuf.CompositeByteBuf composite = ByteBufUtils.compositeBuffer();
-        composite.addComponents(b1, b2, b3, b4);
-
-        // Transfer ownership: release original references (refCnt: 2->1 each)
-        // After this, only composite holds a reference to each component.
-        b1.free();
-        b2.free();
-        b3.free();
-        b4.free();
+        composite.addComponent(b1);
+        composite.addComponent(b2);
+        composite.addComponent(b3);
+        composite.addComponent(b4);
 
         long sum = 0;
         while (composite.readableBytes() > 0) {

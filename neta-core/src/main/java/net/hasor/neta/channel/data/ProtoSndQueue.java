@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.channel.data;
 import java.util.List;
-
 /**
  * Main send-side queue interface.
  * <p>On top of the write semantics defined by {@link ProtoSndData}, it adds capacity management and named send views.</p>

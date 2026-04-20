@@ -24,7 +24,6 @@ import com.sun.nio.sctp.SctpSocketOption;
 import com.sun.nio.sctp.SctpStandardSocketOptions;
 import com.sun.nio.sctp.SctpStandardSocketOptions.InitMaxStreams;
 import net.hasor.cobble.logging.Logger;
-
 /**
  * Helper utilities for SCTP configuration.
  * <p>Responsible for detecting the SCTP socket options supported by the current platform and for

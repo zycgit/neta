@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http.websocket;
 import net.hasor.neta.codec.http.AbstractHttpEvent;
-
 /**
  * Network event published after a close control frame is received.
  * <p>

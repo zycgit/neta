@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http;
 import java.nio.charset.StandardCharsets;
-
 /**
  * Represents an HTTP protocol version as defined in
  * <a href="https://tools.ietf.org/html/rfc7230#section-2.6">RFC 7230, Section 2.6</a>.

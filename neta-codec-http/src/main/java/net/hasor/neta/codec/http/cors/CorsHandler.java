@@ -26,7 +26,6 @@ import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.codec.http.*;
-
 /**
  * Pipeline handler that provides CORS (Cross-Origin Resource Sharing) support.
  * <h3>How It Works</h3>

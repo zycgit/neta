@@ -16,7 +16,6 @@
 package net.hasor.neta.channel.transport.quic;
 import net.hasor.neta.channel.transport.udp.UdpSoConfig;
 import net.hasor.neta.codec.ssl.SslCertConfig;
-
 /**
  * QUIC-specific channel configuration built on top of {@link UdpSoConfig}.
  * <p>This object carries two categories of settings:
@@ -32,9 +31,9 @@ import net.hasor.neta.codec.ssl.SslCertConfig;
  */
 public class QuicSoConfig extends UdpSoConfig {
     // ── SSL configuration ─────────────────────────────────────────────
-    private SslCertConfig          sslConfig;                                   // TLS certificate and private-key configuration; null means TLS is disabled
+    private SslCertConfig sslConfig;                                   // TLS certificate and private-key configuration; null means TLS is disabled
     // ── Connection-level configuration ────────────────────────────────
-    private int                    connectionIdLength               = 8;        // Connection ID length in bytes, range 0-20 (RFC 9000 §17.2)
+    private int connectionIdLength = 8;        // Connection ID length in bytes, range 0-20 (RFC 9000 §17.2)
     // ── Transport parameters (RFC 9000 §18.2) ────────────────────────
     private long                   tpMaxIdleTimeout                 = 30000;    // Connection idle timeout in milliseconds; 0 means disabled
     private long                   streamIdleTimeoutMs              = 0;        // Stream idle timeout in milliseconds; 0 means disabled (application policy, not a transport parameter)

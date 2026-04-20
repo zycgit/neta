@@ -22,7 +22,6 @@ import net.hasor.cobble.StringUtils;
 import net.hasor.neta.codec.http.websocket.extensions.DeflateFrameSupport;
 import net.hasor.neta.codec.http.websocket.extensions.PerMessageDeflateSupport;
 import net.hasor.neta.codec.http.websocket.extensions.XWebkitDeflateFrameSupport;
-
 /**
  * Unified entry point for WebSocket settings.
  * <p>

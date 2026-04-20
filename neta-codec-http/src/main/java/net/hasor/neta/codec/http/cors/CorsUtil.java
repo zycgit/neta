@@ -17,7 +17,6 @@ package net.hasor.neta.codec.http.cors;
 import java.util.Set;
 import net.hasor.cobble.StringUtils;
 import net.hasor.neta.codec.http.*;
-
 /**
  * Utility methods for applying CORS headers to responses based on {@link CorsConfig}.
  * <h3>Typical Usage</h3>

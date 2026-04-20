@@ -16,7 +16,6 @@
 package net.hasor.neta.bytebuf;
 import java.util.concurrent.locks.Lock;
 import net.hasor.cobble.ref.RecycleObjectPool;
-
 /**
  * Logical allocation bucket inside a {@link BufferPool}.
  * <p>Each arena holds a group of {@link PageChunkPool}s whose usage ratio falls
@@ -38,10 +37,10 @@ class BufferArena {
     private final BufferPool                bufferPool;
     private final BufferRing<PageChunkPool> bufferRing;
     private final Lock                      shareLock;
-    private       double                    prevValve;
-    private       BufferArena               prev;
-    private       double                    nextValve;
-    private       BufferArena               next;
+    private double                          prevValve;
+    private BufferArena                     prev;
+    private double                          nextValve;
+    private BufferArena                     next;
 
     BufferArena(BufferPool bufferPool, Lock shareLock) {
         this.bufferPool = bufferPool;

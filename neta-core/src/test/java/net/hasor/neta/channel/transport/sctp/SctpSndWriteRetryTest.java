@@ -14,15 +14,18 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.transport.sctp;
+
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.nio.channels.InterruptedByTimeoutException;
+
+import org.junit.Test;
+
 import net.hasor.neta.channel.NetChannel;
 import net.hasor.neta.channel.SoContextService;
 import net.hasor.neta.channel.SoSndContext;
 import net.hasor.neta.channel.WriteRetryTestHelper;
-import org.junit.Test;
 
 /**
  * Unit tests for the write-timeout retry parameters added to {@link SctpSoConfig}

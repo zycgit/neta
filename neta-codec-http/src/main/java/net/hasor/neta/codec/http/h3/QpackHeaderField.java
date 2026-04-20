@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h3;
-
 /**
  * 表示 QPACK 头压缩中使用的单个 header field（名称-值对）。
  * @see QpackStaticTable

@@ -14,18 +14,21 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.ssl;
+
 import java.util.ArrayDeque;
 import java.util.Queue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+
+import org.junit.Assume;
+import org.junit.Test;
+
 import net.hasor.neta.channel.PlayLoad;
 import net.hasor.neta.channel.SubscribeMode;
 import net.hasor.neta.channel.transport.virtual.VrtChannel;
 import net.hasor.neta.channel.transport.virtual.VrtListen;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.channel.transport.virtual.VrtSocketAddress;
-import org.junit.Assume;
-import org.junit.Test;
 
 /**
  * @author 赵永春 (zyc@hasor.net)

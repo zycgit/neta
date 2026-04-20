@@ -27,7 +27,6 @@ import javax.net.ssl.TrustManagerFactory;
 import net.hasor.cobble.ArrayUtils;
 import net.hasor.cobble.ResourcesUtils;
 import net.hasor.cobble.logging.Logger;
-
 /**
  * Static helper for loading certificates, building KeyManagerFactory and
  * TrustManagerFactory from {@link SslCertConfig}.

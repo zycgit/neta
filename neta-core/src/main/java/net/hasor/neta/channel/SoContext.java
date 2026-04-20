@@ -17,7 +17,6 @@ package net.hasor.neta.channel;
 import java.net.SocketAddress;
 import java.util.function.Predicate;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-
 /**
  * Central service context that manages all {@link NetChannel} and {@link NetListen} instances.
  * <p>It is owned by {@link NetManager} and exposes a unified runtime entry point to channels,

@@ -17,7 +17,6 @@ package net.hasor.neta.codec.http;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
-
 /**
  * Represents an HTTP request method, as defined in
  * <a href="https://tools.ietf.org/html/rfc7231#section-4">RFC 7231, Section 4</a>

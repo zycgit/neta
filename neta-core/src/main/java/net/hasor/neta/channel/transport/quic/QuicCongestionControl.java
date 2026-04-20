@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.channel.transport.quic;
 import net.hasor.cobble.logging.Logger;
-
 /**
  * NewReno congestion controller implemented according to RFC 9002 Section 7.
  * <p>Covers slow start, congestion avoidance, and recovery.
@@ -23,22 +22,22 @@ import net.hasor.cobble.logging.Logger;
  */
 class QuicCongestionControl {
     /** RFC 9002 §7.2: initial congestion window, 14720 bytes, approximately 10 packets at 1472 MTU. */
-    static final         long   INITIAL_WINDOW    = 14720;
+    static final long           INITIAL_WINDOW    = 14720;
     /** RFC 9002 §7.2: minimum congestion window, equal to 2 times the maximum datagram size. */
-    static final         long   MINIMUM_WINDOW    = 2 * 1472;
+    static final long           MINIMUM_WINDOW    = 2 * 1472;
     /** Maximum datagram size, approximating Ethernet MTU minus UDP/IP overhead. */
-    static final         long   MAX_DATAGRAM_SIZE = 1472;
+    static final long           MAX_DATAGRAM_SIZE = 1472;
     private static final Logger logger            = Logger.getLogger(QuicCongestionControl.class);
     /** Current congestion window in bytes. */
-    private              long   cwnd              = INITIAL_WINDOW;
+    private long                cwnd              = INITIAL_WINDOW;
     /** Current slow-start threshold in bytes. */
-    private              long   ssthresh          = Long.MAX_VALUE;
+    private long                ssthresh          = Long.MAX_VALUE;
     /** Current congestion-control state. */
-    private              State  state             = State.SLOW_START;
+    private State               state             = State.SLOW_START;
     /** Packet number at which recovery started; -1 means the controller is not currently in recovery. */
-    private              long   recoveryStartPn   = -1;
+    private long                recoveryStartPn   = -1;
     /** ECN-CE counter corresponding to RFC 9002 Section 7.1. */
-    private              long   ecnCeCount        = 0;
+    private long                ecnCeCount        = 0;
 
     /**
      * Determines whether more data can still be sent based on the current bytes in flight.

@@ -14,16 +14,19 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.routing;
+
 import java.util.ArrayList;
 import java.util.List;
+
+import org.junit.Assert;
+import org.junit.Test;
+
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.channel.transport.virtual.VrtChannel;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.channel.transport.virtual.VrtSocketAddress;
-import org.junit.Assert;
-import org.junit.Test;
 
 /**
  * Tests for data, error, and user-event propagation through the routing (branched) pipeline tree.

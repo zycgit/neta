@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.channel.transport.sctp;
 import net.hasor.neta.channel.SoConfig;
-
 /**
  * Configuration object used by the SCTP transport layer in Neta.
  * @author 赵永春 (zyc@hasor.net)
@@ -23,8 +22,8 @@ import net.hasor.neta.channel.SoConfig;
  */
 public class SctpSoConfig extends SoConfig {
     // Swap buffer sizes.
-    private int swapRcvBuf              = 64 * 1024;
-    private int swapSndBuf              = 64 * 1024;
+    private int swapRcvBuf = 64 * 1024;
+    private int swapSndBuf = 64 * 1024;
     // Channel-level write timeout retry settings.
     private int sndWriteRetryCount      = 0;   // 0 = disabled.
     private int sndWriteRetryIntervalMs = 50;  // Delay between retries in milliseconds.

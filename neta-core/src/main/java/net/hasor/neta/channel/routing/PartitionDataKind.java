@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.routing;
-
 /**
  * Identifies the kind of data currently being processed by a partition selector.
  * <p>{@link ProtoPartitionSelector} and {@link ProtoPartitionPolicy} use this enum to distinguish

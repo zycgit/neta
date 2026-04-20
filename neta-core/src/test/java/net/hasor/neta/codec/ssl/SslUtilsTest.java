@@ -14,10 +14,13 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.ssl;
+
 import java.security.cert.X509Certificate;
+
+import org.junit.Test;
+
 import net.hasor.cobble.ResourcesUtils;
 import net.hasor.cobble.codec.MD5;
-import org.junit.Test;
 
 /**
  * @author 赵永春 (zyc@hasor.net)

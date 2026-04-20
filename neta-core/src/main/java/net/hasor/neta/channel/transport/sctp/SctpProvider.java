@@ -18,7 +18,6 @@ import java.io.IOException;
 import java.net.SocketAddress;
 import com.sun.nio.sctp.SctpServerChannel;
 import net.hasor.neta.channel.*;
-
 /**
  * Provider that creates SCTP client and server transport objects for Neta.
  * <p>This implementation opens the underlying JDK SCTP channels and wraps them as

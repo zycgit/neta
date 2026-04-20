@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http;
 import net.hasor.cobble.function.Release;
-
 /**
  * Marks all HTTP objects that flow through the HTTP codec pipeline.
  * <p>

@@ -29,7 +29,6 @@ import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.SoContextService;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
-
 /**
  * Per-channel TLS state machine built on top of {@link SslEngineWrap}.
  * <p>This class is the operational core behind {@link SslDuplexer}. It owns the temporary packet
@@ -64,23 +63,23 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * @see SslContextBasic
  */
 class SslHandle {
-    private static final Logger             logger = Logger.getLogger(SslHandle.class);
-    private static final ByteBuffer         EMPTY  = ByteBuffer.allocate(0);
+    private static final Logger     logger = Logger.getLogger(SslHandle.class);
+    private static final ByteBuffer EMPTY  = ByteBuffer.allocate(0);
     //
-    private final        long               channelID;
-    private final        ProtoContext       protoCtx;
-    private final        SoContextService   soContext;
-    private final        SslContext         sslContext;
-    private final        SslEngineWrap      engine;
-    private final        ByteBufAllocator   bufAllocator;
-    private final        Runnable           closeCallBack;
+    private final long             channelID;
+    private final ProtoContext     protoCtx;
+    private final SoContextService soContext;
+    private final SslContext       sslContext;
+    private final SslEngineWrap    engine;
+    private final ByteBufAllocator bufAllocator;
+    private final Runnable         closeCallBack;
     //
-    private volatile     SslHandshakeStatus handshake;
-    private              ByteBuffer         inNetData;
-    private              ByteBuffer         inAppData;
-    private              ByteBuffer         outNetData;
-    private              ByteBuffer         outAppData;
-    private volatile     boolean            closeNotifyPending;
+    private volatile SslHandshakeStatus handshake;
+    private ByteBuffer                  inNetData;
+    private ByteBuffer                  inAppData;
+    private ByteBuffer                  outNetData;
+    private ByteBuffer                  outAppData;
+    private volatile boolean            closeNotifyPending;
 
     public SslHandle(long channelID, ProtoContext protoCtx, SslContext sslContext, SslEngineWrap engine, Runnable closeCallBack) {
         this.channelID = channelID;
@@ -196,7 +195,7 @@ class SslHandle {
                     continue;
                 default:
                     throw new SSLHandshakeException("inner error ,can't happen.");
-                    // Handle other status:  // FINISHED or NOT_HANDSHAKING
+                // Handle other status:  // FINISHED or NOT_HANDSHAKING
             }
 
             // process Status

@@ -16,7 +16,6 @@
 package net.hasor.neta.codec.http.websocket;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.codec.http.HttpObject;
-
 /**
  * Wire-level frame model for websocket traffic.
  * <p>

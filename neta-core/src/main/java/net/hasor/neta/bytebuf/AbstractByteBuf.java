@@ -31,6 +31,7 @@ import net.hasor.cobble.ObjectUtils;
  *   |----------------------|-----------------|------------------|---------------|
  *   |       ancient        |   discardable   |     readable     |  overlayable  | writable |
  *   |&lt;----- already dropped by markReader() ----&gt;|&lt;-- visible --&gt;|&lt;-- rewritable --&gt;|
+ * 
  * invariants
  *   0 &lt;= markedReaderIndex &lt;= readerIndex &lt;= markedWriterIndex &lt;= writerIndex &lt;= capacity
  * </pre>
@@ -51,6 +52,9 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
     protected boolean                         freed     = false;
     private int                               maxCapacity;
     private ResourceLeakDetector.ResourceLeak leak;
+    private ByteBufAllocatorMetric            metric;
+    private boolean                           metricDirect;
+    private int                               metricCapacity;
 
     protected void initByteBuf(ByteBufAllocator alloc, int maxCapacity) {
         this.alloc = alloc;
@@ -64,6 +68,38 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
         this.leak = LeakDetectorHolder.leakDetector.open(this);
         this.byteOrder = ByteOrder.BIG_ENDIAN;
         this.bigEndian = true;
+        this.metric = null;
+        this.metricDirect = false;
+        this.metricCapacity = 0;
+    }
+
+    final void initMetricTracking(ByteBufAllocatorMetric metric, boolean direct, int capacity) {
+        if (metric == null) {
+            this.metric = null;
+            this.metricDirect = false;
+            this.metricCapacity = 0;
+            return;
+        }
+
+        int normalizedCapacity = Math.max(capacity, 0);
+        this.metric = metric;
+        this.metricDirect = direct;
+        this.metricCapacity = normalizedCapacity;
+        metric.recordAllocation(direct, normalizedCapacity);
+    }
+
+    protected final void updateMetricCapacity(int capacity) {
+        if (this.metric == null) {
+            return;
+        }
+
+        int normalizedCapacity = Math.max(capacity, 0);
+        if (normalizedCapacity == this.metricCapacity) {
+            return;
+        }
+
+        this.metric.recordCapacityChange(this.metricDirect, normalizedCapacity - this.metricCapacity);
+        this.metricCapacity = normalizedCapacity;
     }
 
     @Override
@@ -136,7 +172,11 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
                 if (refCnt == decrement) {
                     this.freed = true;
                     closeLeak();
-                    this._free();
+                    try {
+                        this._free();
+                    } finally {
+                        this.releaseMetricTracking();
+                    }
                     return true;
                 }
                 return false;
@@ -148,6 +188,15 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
         if (this.leak != null) {
             this.leak.close();
             this.leak = null;
+        }
+    }
+
+    private void releaseMetricTracking() {
+        if (this.metric != null) {
+            this.metric.recordRelease(this.metricDirect, this.metricCapacity);
+            this.metric = null;
+            this.metricDirect = false;
+            this.metricCapacity = 0;
         }
     }
 

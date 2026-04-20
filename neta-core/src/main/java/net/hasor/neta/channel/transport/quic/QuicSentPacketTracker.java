@@ -19,7 +19,6 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import net.hasor.cobble.logging.Logger;
-
 /**
  * Tracks sent packets and implements loss detection according to RFC 9002 Section 6.
  * <p>Both packet-threshold and time-threshold loss detection are used.
@@ -27,28 +26,28 @@ import net.hasor.cobble.logging.Logger;
  */
 class QuicSentPacketTracker {
     /** RFC 9002 §6.1.1: packet reordering threshold allowed before declaring loss. */
-    static final         int                        PACKET_THRESHOLD      = 3;
-    private static final Logger                     logger                = Logger.getLogger(QuicSentPacketTracker.class);
+    static final int                         PACKET_THRESHOLD      = 3;
+    private static final Logger              logger                = Logger.getLogger(QuicSentPacketTracker.class);
     /** RFC 9002 §6.1.2: time reordering threshold factor, set to 9/8 of the maximum RTT. */
-    private static final double                     TIME_THRESHOLD_FACTOR = 9.0 / 8.0;
+    private static final double              TIME_THRESHOLD_FACTOR = 9.0 / 8.0;
     /** Sent but unacknowledged packet list kept in send order. */
-    private final        LinkedList<SentPacketInfo> sentPackets           = new LinkedList<>();
+    private final LinkedList<SentPacketInfo> sentPackets           = new LinkedList<>();
     /** Largest packet number acknowledged so far, or -1 if nothing has been acknowledged yet. */
-    private              long                       largestAckedPn        = -1;
+    private long                             largestAckedPn        = -1;
     /** Smoothed RTT in milliseconds. */
-    private              long                       smoothedRtt           = 333; // Initial estimate is 333 ms (RFC 9002 §6.2.2)
+    private long                             smoothedRtt           = 333; // Initial estimate is 333 ms (RFC 9002 §6.2.2)
     /** RTT variation in milliseconds. */
-    private              long                       rttVar                = 166; // Initial RTTVAR = SRTT / 2
+    private long                             rttVar                = 166; // Initial RTTVAR = SRTT / 2
     /** Minimum RTT observed so far, in milliseconds. */
-    private              long                       minRtt                = Long.MAX_VALUE;
+    private long                             minRtt                = Long.MAX_VALUE;
     /** Latest RTT sample in milliseconds. */
-    private              long                       latestRtt             = 0;
+    private long                             latestRtt             = 0;
     /** Bytes currently in flight, that is, sent but neither acknowledged nor declared lost. */
-    private              long                       bytesInFlight         = 0;
+    private long                             bytesInFlight         = 0;
     /** Expiration timestamp of the PTO timer in milliseconds; 0 means unset. */
-    private              long                       ptoExpiry             = 0;
+    private long                             ptoExpiry             = 0;
     /** Number of PTO probes sent while ACKs have not been received consecutively. */
-    private              int                        ptoCount              = 0;
+    private int                              ptoCount              = 0;
 
     /**
      * Returns whether the given packet number falls inside any acknowledged range.

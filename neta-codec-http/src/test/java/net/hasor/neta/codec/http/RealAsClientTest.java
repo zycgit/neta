@@ -14,19 +14,23 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
+
 import java.io.Closeable;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+
+import org.junit.Test;
+
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.multipart.MultipartEncoder;
 import net.hasor.neta.codec.http.real.httpserver.RawHttpResponse;
 import net.hasor.neta.codec.http.real.httpserver.SimpleHttpPeerServer;
-import org.junit.Test;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
 
 public class RealAsClientTest extends AbstractHttpTest {
     private static NetaClientHarness netaClient(NetManager neta, int port) throws Exception {

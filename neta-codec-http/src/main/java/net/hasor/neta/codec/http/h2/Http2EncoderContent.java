@@ -20,7 +20,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import net.hasor.neta.codec.http.HttpMethod;
 import net.hasor.neta.codec.http.HttpRequest;
 import net.hasor.neta.codec.http.HttpResponse;
-
 /**
  * Connection-level state container used by {@link Http2ObjectEncoder}.
  * <p>

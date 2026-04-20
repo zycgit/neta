@@ -23,7 +23,6 @@ import net.hasor.neta.channel.SoEvent;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.codec.http.HttpEvent;
-
 /**
  * Encode outbound websocket messages and control events into websocket frames.
  * <p>

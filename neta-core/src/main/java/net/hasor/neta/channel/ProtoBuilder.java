@@ -18,7 +18,6 @@ import java.util.Objects;
 import java.util.function.Consumer;
 import net.hasor.cobble.StringUtils;
 import net.hasor.neta.channel.routing.*;
-
 /**
  * API for assembling a protocol pipeline step by step.
  * <p>This interface describes pipeline state from the perspective of current inbound input type

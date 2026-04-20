@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.channel;
 import java.util.concurrent.TimeUnit;
-
 /**
  * Base class for retryable event-loop tasks executed by {@link SoTaskExecutor}.
  * <p>When {@link #doWork} finishes, the task calls one of the state-setting methods below to

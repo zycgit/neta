@@ -20,7 +20,6 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import net.hasor.cobble.logging.Logger;
-
 /**
  * Manages Connection ID rotation and lifecycle.
  * <p>This corresponds to RFC 9000 Section 5.1 and covers NEW_CONNECTION_ID and RETIRE_CONNECTION_ID handling.
@@ -31,23 +30,23 @@ class QuicConnectionIdManager {
     private static final SecureRandom RANDOM = new SecureRandom();
 
     /** Locally issued CIDs indexed by sequence number. */
-    private final    ConcurrentHashMap<Long, CidEntry> localCids           = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Long, CidEntry> localCids           = new ConcurrentHashMap<>();
     /** Peer-issued CIDs indexed by sequence number. */
-    private final    ConcurrentHashMap<Long, CidEntry> remoteCids          = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Long, CidEntry> remoteCids          = new ConcurrentHashMap<>();
     /** Next local CID sequence number. */
-    private final    AtomicLong                        nextLocalSeq        = new AtomicLong(1); // 0 is the initial CID
+    private final AtomicLong                        nextLocalSeq        = new AtomicLong(1); // 0 is the initial CID
     /** Next peer CID sequence number. */
-    private final    AtomicLong                        nextRemoteSeq       = new AtomicLong(1);
+    private final AtomicLong                        nextRemoteSeq       = new AtomicLong(1);
     /** Connection ID length in bytes. */
-    private final    int                               cidLength;
+    private final int                               cidLength;
     /** Largest Retire Prior To value sent locally. */
-    private final    long                              localRetirePriorTo  = 0;
+    private final long                              localRetirePriorTo  = 0;
     /** Largest Retire Prior To value received from the peer. */
-    private volatile long                              remoteRetirePriorTo = 0;
+    private volatile long                           remoteRetirePriorTo = 0;
     /** Active Connection ID Limit advertised by the peer. */
-    private volatile int                               peerActiveLimit     = 2;
+    private volatile int                            peerActiveLimit     = 2;
     /** Sequence number of the active peer CID currently used on the sending path. */
-    private volatile long                              activeRemoteCidSeq  = 0;
+    private volatile long                           activeRemoteCidSeq  = 0;
 
     /**
      * Creates the manager from the initial local and peer CIDs.

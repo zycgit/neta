@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
-
 /**
  * Provides shared stream-id and bad-message state handling for default {@link HttpObject} implementations.
  * @param <T> concrete object type

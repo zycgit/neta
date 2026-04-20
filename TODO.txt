@@ -51,10 +51,8 @@
 
 
 高优先
-01. ProtoStatistical 整合到 NetMonitor 中
 02. 背压机制 pipline 的输入/输出 队列容量是有界的，导致数据接收时如果通道没有可用槽需要暂停接收，目前会报错
 03. 如果 pipline 为空 ByteBuf 会直接丢弃，目前没有关闭，在 pool 下会有内存泄漏问题。
-04. SoConfig 类还未完成英文化
 
 次优先
 02. IP 白名单机制
@@ -62,15 +60,13 @@
 05. 通过 SSL 参数支持 peerHost 能力
 06. ByteBuf 大文件 或输入输出流的 传输
 08. 流量控制
-09. pipline 需要支持分叉式的以便可以支持复杂协议树，可以使用 event 来实现，工作在协议层之上
 10. 异步任务机制需要简化使用逻辑。
 11. SSL 证书兼容 PKCS12
-12. 需要一个 CompositeByteBuf 来协助多个 ByteBuf 的操作。
-13. 需要将 ProtoRcvQueue 到 CompositeByteBuf 的代理操作接口，从而屏蔽底层 ProtoRcvQueue 的一些列操作。如 ByteBuf 脱管造成内存泄漏的问题
-14. 需要实现内存托管，简化资源释放。
-15. 需要 owner 机制避免并发操作。
 16. 需要一个流量心跳机制，用来检测对端是否还活着，例如在处理 UDP 连接时，服务器可以在某个特定时间时主动关闭连接
-17. 优雅关闭（需要测试）
+18. SmallBufferCache 的 direct cache 清零策略需要改为可配置。
+    - 这是安全性和性能之间的权衡，不应长期保持为固定策略。
+    - 后续方案：增加 java `-D` 参数决定是否对从 cache 取出的 direct ByteBuffer 执行清零。
+    - 需要补充基准测试，分别验证启用和关闭时的分配性能与脏数据隔离效果。
 
 ## 参考资料
 
@@ -83,23 +79,24 @@
 
 MQTT 协议的编解码，https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html
 
-   1.  "Message Syntax and Routing" (RFC 7230)
-   2.  "Semantics and Content" [RFC7231]
-   3.  "Conditional Requests" [RFC7232]
-   4.  "Range Requests" [RFC7233]
-   5.  "Caching" [RFC7234]
-   6.  "Authentication" [RFC7235]
 
-     HTTP-message   = start-line
-                      *( header-field CRLF )
-                      CRLF
-                      [ message-body ]
+- HTTP2 监控
+- 新增监控挂载机制，监控可以挂载在另外一个监控下（我觉得可以用新的双工器来承接监控数据的收集和挂载）
+- 所有监控都要求位于主监控下。
+- 挂载机制要求每个监控都有一个自己的名字并以 tree 形结构进行管理。
+- 可以通过 tree path 查找监控。
+- 监控打印时候可以清晰看到协议栈每层都运行信息
+- 细化监控指标
+    - HTTP 1.1：请求数、响应数、坏请求、返回状态汇总、最大/最小/平均 RT、业务处理时间（最大、最小）
+    - HTTP/2：实时流数、数据包
+    - HTTP/3：
+    - QUIC：
+    - TCP：
+    - UDP ：
 
 
-     start-line     = request-line / status-line
+使用 ProtoRcvQueue 和 ProtoSndQueue 进行帧顺重组、重发
 
-     request-line   = method SP request-target SP HTTP-version CRLF
-
-     method         = token （method 区分大小写）
-     SP             = 空格
-     status-code    = 3DIGIT
+serverStreamSendAfterBothRequestsTest 这个 testcase 给了我一个提示，我想 NetChannel 的 sendData 方法可能需要增强。
+已有重载只能定位到一个 stack 名字，我想我们可能需要一个能力就是可以通过标识符进行投递。 比如通过 path，不过
+- stack 名称全局唯一

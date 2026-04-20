@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h2;
-
 /**
  * Event describing an HTTP/2 stream reset.
  * <p>

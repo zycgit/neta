@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.bytebuf;
 import java.nio.ByteBuffer;
-
 /**
  * Low-level factory for allocating raw {@link java.nio.ByteBuffer} instances.
  * <p>This interface abstracts the allocation strategy for AIO swap buffers (e.g., TCP).

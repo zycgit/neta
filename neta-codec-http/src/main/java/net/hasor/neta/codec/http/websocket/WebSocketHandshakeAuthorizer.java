@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
-
 /**
  * Asynchronous authorization hook that decides whether a server handshake is accepted.
  * <p>

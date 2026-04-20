@@ -15,8 +15,9 @@
  */
 package net.hasor.neta.channel.transport.quic.rfc;
 
-import net.hasor.neta.channel.transport.quic.QuicVarInt;
 import org.junit.Test;
+
+import net.hasor.neta.channel.transport.quic.QuicVarInt;
 
 /**
  * QUIC RFC 合规测试 — 握手基础组件。

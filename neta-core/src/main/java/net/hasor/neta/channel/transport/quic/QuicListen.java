@@ -20,7 +20,6 @@ import net.hasor.neta.channel.ProtoInitializer;
 import net.hasor.neta.channel.SoConfig;
 import net.hasor.neta.channel.SoContextService;
 import net.hasor.neta.channel.transport.udp.UdpNetListen;
-
 /**
  * QUIC listening endpoint.
  * <p>Because QUIC is built on top of UDP, this type extends {@link UdpNetListen} and carries listening-phase state such as the listen address, initializer, and context.

@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.data;
-
 /**
  * Named view container on the send side.
  * <p>It represents a local send view derived from a main send queue. It has its own write area, but capacity is still governed by the owning main queue.</p>

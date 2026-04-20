@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
-
 /**
  * Default implementation of {@link TrailerHttpHeaders}.
  * @author 赵永春 (zyc@hasor.net)

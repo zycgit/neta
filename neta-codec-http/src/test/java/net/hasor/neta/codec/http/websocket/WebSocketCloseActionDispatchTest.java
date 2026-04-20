@@ -14,7 +14,13 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
+
+import static org.junit.Assert.*;
+
 import java.util.concurrent.atomic.AtomicReference;
+
+import org.junit.Test;
+
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoHandler;
@@ -28,8 +34,6 @@ import net.hasor.neta.codec.http.HttpObject;
 import net.hasor.neta.codec.http.HttpScope;
 import net.hasor.neta.codec.http.HttpVersion;
 import net.hasor.neta.codec.http.h2.Http2ResetEvent;
-import org.junit.Test;
-import static org.junit.Assert.*;
 
 public class WebSocketCloseActionDispatchTest extends AbstractWebSocketTest {
     @Test

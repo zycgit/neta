@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http;
 import net.hasor.neta.channel.SoEventData;
-
 /**
  * Defines the common contract for HTTP-related user events.
  * @author 赵永春 (zyc@hasor.net)

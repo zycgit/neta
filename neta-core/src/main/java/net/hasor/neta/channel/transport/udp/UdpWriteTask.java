@@ -21,7 +21,6 @@ import java.nio.channels.DatagramChannel;
 import net.hasor.neta.channel.NetChannel;
 import net.hasor.neta.channel.SoContextService;
 import net.hasor.neta.channel.SoSndContext;
-
 /**
  * Concrete datagram send task used by plain UDP channels.
  * <p>The transport strategy is straightforward:

@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.channel;
 import net.hasor.neta.bytebuf.ByteBuf;
-
 /**
  * Result of a chained {@link ProtoStackChain} execution, carrying data, final status, and any
  * unhandled error left on the chain.
@@ -26,8 +25,8 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @version : 2026-03-06
  */
 class ChainResult {
-    private static final Object[]    EMPTY_DATA = new ByteBuf[0];
-    public static final  ChainResult EMPTY      = new ChainResult(EMPTY_DATA, ProtoStatus.Next, null);
+    private static final Object[]   EMPTY_DATA = new ByteBuf[0];
+    public static final ChainResult EMPTY      = new ChainResult(EMPTY_DATA, ProtoStatus.Next, null);
 
     final Object[]    data;
     final ProtoStatus status;

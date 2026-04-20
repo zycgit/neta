@@ -14,7 +14,13 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
+
+import static org.junit.Assert.*;
+
 import java.util.List;
+
+import org.junit.Test;
+
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoDuplexer;
 import net.hasor.neta.channel.ProtoStatus;
@@ -23,8 +29,6 @@ import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.channel.transport.virtual.VrtTransfer;
 import net.hasor.neta.codec.http.HttpObject;
-import org.junit.Test;
-import static org.junit.Assert.*;
 
 public class WebSocketOutboundHandlerTest extends AbstractWebSocketTest {
     private static final String WS_URI = "ws://example.com/chat";

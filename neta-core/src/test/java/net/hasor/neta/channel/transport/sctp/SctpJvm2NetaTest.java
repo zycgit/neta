@@ -15,19 +15,23 @@
  */
 package net.hasor.neta.channel.transport.sctp;
 
+import static net.hasor.neta.channel.AbstractSoTest.globalConf;
+import static net.hasor.neta.channel.AbstractSoTest.safePort;
+
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.junit.Test;
+
 import com.sun.nio.sctp.MessageInfo;
 import com.sun.nio.sctp.SctpChannel;
+
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
-import org.junit.Test;
-import static net.hasor.neta.channel.AbstractSoTest.globalConf;
-import static net.hasor.neta.channel.AbstractSoTest.safePort;
 
 public class SctpJvm2NetaTest {
     private boolean checkSupport() {

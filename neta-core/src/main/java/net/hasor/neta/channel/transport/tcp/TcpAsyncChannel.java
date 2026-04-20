@@ -24,7 +24,6 @@ import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
-
 /**
  * Asynchronous channel adapter around a single {@link AsynchronousSocketChannel}.
  * <p>This type is used for both outbound client connections and connections accepted by
@@ -43,14 +42,14 @@ import net.hasor.neta.channel.*;
  * @version 2025-08-06
  */
 class TcpAsyncChannel implements AsyncChannel {
-    private static final Logger                    logger = Logger.getLogger(TcpAsyncChannel.class);
-    private final        long                      channelId;
-    private final        AsynchronousSocketChannel channel;
-    private final        SocketAddress             localAddress;
-    private final        SocketAddress             remoteAddress;
-    private final        AtomicBoolean             shutdownInputSignal;
-    private final        SoContextService          context;
-    private final        TcpSoConfig               soConfig;
+    private static final Logger             logger = Logger.getLogger(TcpAsyncChannel.class);
+    private final long                      channelId;
+    private final AsynchronousSocketChannel channel;
+    private final SocketAddress             localAddress;
+    private final SocketAddress             remoteAddress;
+    private final AtomicBoolean             shutdownInputSignal;
+    private final SoContextService          context;
+    private final TcpSoConfig               soConfig;
 
     /**
      * Create a TCP asynchronous channel adapter.

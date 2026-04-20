@@ -14,15 +14,18 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec;
+
 import java.util.ArrayDeque;
 import java.util.Queue;
+
+import org.junit.Test;
+
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.SubscribeMode;
 import net.hasor.neta.channel.transport.virtual.VrtChannel;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.channel.transport.virtual.VrtSocketAddress;
-import org.junit.Test;
 
 /**
  * @author 赵永春 (zyc@hasor.net)

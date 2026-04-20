@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.channel.transport.quic;
 import java.net.SocketAddress;
-
 /**
  * Stores the QUIC transport parameters negotiated during the handshake phase.
  * <p>Corresponds to RFC 9000 Section 18 and is used internally to pass peer configuration from the handshake phase to the post-handshake connection channel.

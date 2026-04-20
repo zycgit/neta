@@ -24,7 +24,6 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.codec.http.HttpStatus;
 import net.hasor.neta.codec.http.websocket.*;
-
 /**
  * Built-in support for the legacy {@code deflate-frame} websocket extension.
  * <p>

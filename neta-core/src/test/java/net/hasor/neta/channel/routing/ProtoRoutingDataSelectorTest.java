@@ -14,16 +14,19 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.routing;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+
+import org.junit.Assert;
+import org.junit.Test;
+
 import net.hasor.cobble.StringUtils;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.transport.virtual.VrtChannel;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.channel.transport.virtual.VrtSocketAddress;
-import org.junit.Assert;
-import org.junit.Test;
 
 /**
  * @author 赵永春 (zyc@hasor.net)

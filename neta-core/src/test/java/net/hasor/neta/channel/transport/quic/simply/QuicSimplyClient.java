@@ -87,7 +87,7 @@ public class QuicSimplyClient implements Closeable {
      * 对端（server）的 Connection ID。
      * 握手前：我方随机生成的初始 DCID；握手后：从服务端 Initial 的 SCID 字段更新。
      */
-    private       byte[]            remoteCid;
+    private byte[]                  remoteCid;
 
     // ── 构造 ───────────────────────────────────────────────────────────
 

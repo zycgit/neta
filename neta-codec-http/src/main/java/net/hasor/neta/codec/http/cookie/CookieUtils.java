@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http.cookie;
 import net.hasor.neta.bytebuf.ByteBuf;
-
 /**
  * Package-private utility methods used by cookie encoding and decoding.
  * @author 赵永春 (zyc@hasor.net)

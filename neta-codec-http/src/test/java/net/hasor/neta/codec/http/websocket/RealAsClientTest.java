@@ -14,10 +14,16 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
+
+import static org.junit.Assert.*;
+
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+
+import org.junit.Test;
+
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
@@ -28,8 +34,6 @@ import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.real.websocket.EmbeddedWebSocketServer;
 import net.hasor.neta.codec.http.real.websocket.MixedHttpWebSocketPeerServer;
 import net.hasor.neta.codec.http.routing.HttpRouteKey;
-import org.junit.Test;
-import static org.junit.Assert.*;
 
 public class RealAsClientTest extends AbstractWebSocketTest {
     private static final String BRANCH_HTTP = "http";

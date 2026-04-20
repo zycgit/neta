@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
-
 /**
  * Standard websocket close status code definitions.
  * <p>

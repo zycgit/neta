@@ -19,7 +19,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-
 /**
  * A virtual {@link ByteBuf} that combines multiple underlying {@link ByteBuf} instances
  * into a single contiguous view, similar to Netty's CompositeByteBuf.

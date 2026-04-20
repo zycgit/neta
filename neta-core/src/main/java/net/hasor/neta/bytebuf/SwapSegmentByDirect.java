@@ -21,7 +21,6 @@ import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileChannel.MapMode;
-
 /**
  * {@link SwapSegment} implementation backed by a {@link MappedByteBuffer} (memory-mapped file).
  * <p>The entire {@code segmentSize} region is pre-mapped into <em>native (off-heap)</em> memory

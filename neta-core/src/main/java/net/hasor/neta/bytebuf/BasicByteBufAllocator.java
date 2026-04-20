@@ -19,7 +19,6 @@ import java.util.ArrayDeque;
 import java.util.Iterator;
 import net.hasor.cobble.ObjectUtils;
 import net.hasor.cobble.ref.RecycleObjectPool;
-
 /**
  * Shared allocation strategy for concrete {@link ByteBufAllocator} variants.
  * <p>This base class centralises the routing rules that decide which concrete
@@ -48,10 +47,10 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * @see ByteBufAllocator
  */
 public abstract class BasicByteBufAllocator implements ByteBufAllocator {
-    protected final boolean                defaultUsingPooled;
-    protected final int                    initCapacityByDefault;
-    protected final int                    sliceSizeByDefault;
-    private final   ByteBufAllocatorMetric metric = new ByteBufAllocatorMetric();
+    protected final boolean              defaultUsingPooled;
+    protected final int                  initCapacityByDefault;
+    protected final int                  sliceSizeByDefault;
+    private final ByteBufAllocatorMetric metric = new ByteBufAllocatorMetric();
 
     /** Create new instance */
     protected BasicByteBufAllocator(boolean defaultUsingPooled, int initialCapacityByDefault, int sliceSizeByDefault) {
@@ -118,14 +117,15 @@ public abstract class BasicByteBufAllocator implements ByteBufAllocator {
     }
 
     private ByteBuf ringByAllocator(ByteBufAllocator alloc, int capacity) {
-        this.metric.recordRingAllocation(capacity);
         if (alloc.isDirect()) {
             RingByteBuffer byteBuf = RecycleObjectPool.get(RingByteBuffer.RECYCLE_INDEX, RingByteBuffer.RECYCLE_HANDLER);
             byteBuf.initBuffer(alloc, capacity);
+            byteBuf.initMetricTracking(this.metric, true, capacity);
             return byteBuf;
         } else {
             RingArrayByteBuf byteBuf = RecycleObjectPool.get(RingArrayByteBuf.RECYCLE_INDEX, RingArrayByteBuf.RECYCLE_HANDLER);
             byteBuf.initBuffer(alloc, capacity);
+            byteBuf.initMetricTracking(this.metric, false, capacity);
             return byteBuf;
         }
     }
@@ -168,16 +168,16 @@ public abstract class BasicByteBufAllocator implements ByteBufAllocator {
 
     private ByteBuf bufferByAllocator(ByteBufAllocator alloc, int initCapacity, int maxCapacity) {
         if (alloc.isDirect()) {
-            this.metric.recordDirectAllocation(initCapacity);
             AutoByteBuffer byteBuf = RecycleObjectPool.get(AutoByteBuffer.RECYCLE_INDEX, AutoByteBuffer.RECYCLE_HANDLER);
             ByteBuffer jvmBuf = SmallBufferCache.isSmallSize(initCapacity) ? SmallBufferCache.allocDirect(initCapacity) : alloc.jvmBuffer(initCapacity);
             byteBuf.initBuffer(alloc, maxCapacity, this.sliceSizeByDefault, jvmBuf);
+            byteBuf.initMetricTracking(this.metric, true, jvmBuf.capacity());
             return byteBuf;
         } else {
-            this.metric.recordHeapAllocation(initCapacity);
             AutoArrayByteBuf byteBuf = RecycleObjectPool.get(AutoArrayByteBuf.RECYCLE_INDEX, AutoArrayByteBuf.RECYCLE_HANDLER);
             byte[] data = SmallBufferCache.allocHeap(initCapacity);
             byteBuf.initBuffer(alloc, maxCapacity, this.sliceSizeByDefault, data);
+            byteBuf.initMetricTracking(this.metric, false, data.length);
             return byteBuf;
         }
     }
@@ -201,7 +201,6 @@ public abstract class BasicByteBufAllocator implements ByteBufAllocator {
     }
 
     private ByteBuf pooledByAllocator(ByteBufAllocator alloc, int initCapacity, int maxCapacity) {
-        this.metric.recordPooledAllocation(initCapacity);
         int fmtMaxCap = PageChunkPool.tableSizeFor(maxCapacity, Integer.MAX_VALUE);
         BufferPool pool = BufferPoolUtils.getPool(fmtMaxCap, alloc);
 
@@ -233,6 +232,7 @@ public abstract class BasicByteBufAllocator implements ByteBufAllocator {
         try {
             PooledByteBuf byteBuf = RecycleObjectPool.get(PooledByteBuf.RECYCLE_INDEX, PooledByteBuf.RECYCLE_HANDLER);
             byteBuf.initBuffer(alloc, fmtMaxCap, this.sliceSizeByDefault, target, pool);
+            byteBuf.initMetricTracking(this.metric, alloc.isDirect(), target.capacity());
             return byteBuf;
         } catch (Throwable e) {
             target.free();

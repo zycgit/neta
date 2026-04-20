@@ -17,10 +17,9 @@ package net.hasor.neta.channel;
 import java.util.List;
 import java.util.function.Predicate;
 import net.hasor.neta.channel.data.*;
-
 class ProtoQueueView implements ProtoRcvQueue<Object>, ProtoSndQueue<Object> {
     private final ProtoQueue<Object> queue;
-    private       Runnable           writableCallback;
+    private Runnable                 writableCallback;
 
     public ProtoQueueView(int capacity) {
         this.queue = new ProtoQueue<>(capacity < 0 ? -1 : capacity);

@@ -16,7 +16,6 @@
 package net.hasor.neta.codec.net.ntp;
 import java.util.ArrayList;
 import java.util.List;
-
 /**
  * Represents a standard NTP packet (v3 or v4).
  * <p>

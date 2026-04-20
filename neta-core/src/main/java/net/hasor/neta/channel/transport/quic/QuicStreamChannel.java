@@ -19,18 +19,17 @@ import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.ssl.SslContext;
-
 /**
  * QUIC stream-level channel with an independent pipeline, created and managed by its parent {@link QuicChannel}.
  * @author 赵永春 (zyc@hasor.net)
  * @see QuicChannel
  */
 public class QuicStreamChannel extends NetChannel implements SoSubChannel {
-    private final    long        streamId;
-    private final    QuicChannel parent;
-    private volatile long        maxDataSize;
+    private final long        streamId;
+    private final QuicChannel parent;
+    private volatile long     maxDataSize;
     /** Timestamp of the most recent send or receive activity on this stream, in milliseconds, used for stream-level idle timeout checks. */
-    private volatile long        lastActivityTime;
+    private volatile long     lastActivityTime;
 
     /**
      * Constructs a stream-level channel from an already created async stream channel.

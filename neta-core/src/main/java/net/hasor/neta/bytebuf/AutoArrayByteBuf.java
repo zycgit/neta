@@ -17,7 +17,6 @@ package net.hasor.neta.bytebuf;
 import java.nio.ByteBuffer;
 import net.hasor.cobble.ObjectUtils;
 import net.hasor.cobble.ref.RecycleObjectPool;
-
 /**
  * Auto-resizing {@link ByteBuf} backed by a plain Java {@code byte[]} array.
  * <p>Allocated from {@link ByteBufAllocator} when an unpooled heap buffer is
@@ -31,8 +30,8 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  *   | discarded |         readable data         |   writable    |
  *   +-----------------------------------------------------------+
  *   0        markedReaderIndex               writerIndex      target.length
- * after markReader() triggers recycle()
- *   new or compacted target byte[]
+ *   
+ * after markReader() triggers recycle() new or compacted target byte[]
  *   +-------------------------------------------+
  *   |         readable data         | writable  |
  *   +-------------------------------------------+
@@ -53,21 +52,22 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * @see RingArrayByteBuf
  */
 final class AutoArrayByteBuf extends AbstractByteBuf {
-    static final int                                            RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    static       RecycleObjectPool.ObjHandler<AutoArrayByteBuf> RECYCLE_HANDLER = new RecycleObjectPool.ObjHandler<AutoArrayByteBuf>() {
-        public AutoArrayByteBuf create() {
-            return new AutoArrayByteBuf();
-        }
+    static final int                                      RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    static RecycleObjectPool.ObjHandler<AutoArrayByteBuf> RECYCLE_HANDLER = //
+            new RecycleObjectPool.ObjHandler<AutoArrayByteBuf>() {
+                public AutoArrayByteBuf create() {
+                    return new AutoArrayByteBuf();
+                }
 
-        @Override
-        public void free(AutoArrayByteBuf tar) {
-            RecycleObjectPool.free(RECYCLE_INDEX, tar);
-        }
-    };
-    byte[] target;
-    private int extensionSize;
+                @Override
+                public void free(AutoArrayByteBuf tar) {
+                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
+                }
+            };
+    byte[]                                                target;
+    private int                                           extensionSize;
     /** Cached effective write limit = Math.min(target.length, maxCapacity). */
-    private int writeLimit;
+    private int                                           writeLimit;
 
     // ------------------------------------------------------------------------
 
@@ -113,6 +113,7 @@ final class AutoArrayByteBuf extends AbstractByteBuf {
                 System.arraycopy(oldTarget, 0, extension, 0, currentCap);
                 this.target = extension;
                 this.writeLimit = Math.min(extension.length, this.getMaxCapacity());
+                this.updateMetricCapacity(extension.length);
                 extension = null; // transfer ownership
             } finally {
                 if (extension != null) {
@@ -134,6 +135,7 @@ final class AutoArrayByteBuf extends AbstractByteBuf {
             int recyclePos = this.markedReaderIndex;
             this.target = recycle;
             this.writeLimit = Math.min(recycle.length, this.getMaxCapacity());
+            this.updateMetricCapacity(recycle.length);
             recycle = null; // transfer ownership
             this.writerIndex = this.writerIndex - recyclePos;
             this.markedWriterIndex = this.markedWriterIndex - recyclePos;

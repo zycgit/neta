@@ -14,14 +14,16 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
+
+import static org.junit.Assert.*;
+
 import java.lang.reflect.Proxy;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
+
+import org.junit.Test;
+
 import net.hasor.cobble.ref.Tuple;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
@@ -33,8 +35,6 @@ import net.hasor.neta.channel.data.ProtoRcvQueueView;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.channel.data.ProtoSndQueueView;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
-import org.junit.Test;
-import static org.junit.Assert.*;
 
 public class HttpResponseEncoderTest extends AbstractHttpTest {
     @Test
@@ -294,7 +294,7 @@ public class HttpResponseEncoderTest extends AbstractHttpTest {
 
     private static class TrackingByteBufAllocator {
         private final ByteBufAllocator delegate;
-        private final List<ByteBuf>   allocated = new ArrayList<>();
+        private final List<ByteBuf>    allocated = new ArrayList<>();
 
         private TrackingByteBufAllocator(ByteBufAllocator delegate) {
             this.delegate = delegate;
@@ -312,7 +312,7 @@ public class HttpResponseEncoderTest extends AbstractHttpTest {
     }
 
     private static class AdjustableProtoSndQueue<T> implements ProtoSndQueue<T> {
-        private final List<T> offered  = new ArrayList<>();
+        private final List<T> offered = new ArrayList<>();
         private int           capacity;
 
         private AdjustableProtoSndQueue(int capacity) {

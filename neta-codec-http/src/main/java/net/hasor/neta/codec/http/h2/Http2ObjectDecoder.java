@@ -27,7 +27,6 @@ import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.codec.http.*;
-
 /**
  * Reassembles HTTP/2 frames into staged {@link HttpObject} instances and HTTP/2 events.
  * <p>

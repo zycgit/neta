@@ -28,7 +28,6 @@ import net.hasor.neta.channel.routing.PartitionKey;
 import net.hasor.neta.channel.routing.ProtoPartitionControl;
 import net.hasor.neta.codec.http.HttpObject;
 import net.hasor.neta.codec.http.LastHttpContent;
-
 /**
  * Lifecycle guard for the HTTP/2 partition pipeline.
  * <p>

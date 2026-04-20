@@ -15,12 +15,11 @@
  */
 package net.hasor.neta.bytebuf;
 import java.util.concurrent.atomic.LongAdder;
-
 /**
  * Metrics for {@link ByteBufAllocator} to support production diagnostics.
  * <p>
  * Tracks cumulative allocation counts and bytes allocated by buffer type
- * (heap, direct, pooled, ring). All counters are thread-safe and lock-free.
+ * (heap, direct, pooled, ring, swap, wrap). All counters are thread-safe and lock-free.
  * Uses {@link LongAdder} for minimal CAS contention under multi-thread access.
  * <p>
  * Usage:
@@ -34,35 +33,53 @@ import java.util.concurrent.atomic.LongAdder;
  * @version : 2024-02-16
  */
 public final class ByteBufAllocatorMetric {
-    private final LongAdder heapAllocations      = new LongAdder();
-    private final LongAdder directAllocations    = new LongAdder();
-    private final LongAdder pooledAllocations    = new LongAdder();
-    private final LongAdder ringAllocations      = new LongAdder();
-    private final LongAdder heapBytesAllocated   = new LongAdder();
-    private final LongAdder directBytesAllocated = new LongAdder();
-    private final LongAdder pooledBytesAllocated = new LongAdder();
-    private final LongAdder ringBytesAllocated   = new LongAdder();
+    private final LongAdder heapAllocations         = new LongAdder();
+    private final LongAdder directAllocations       = new LongAdder();
+    private final LongAdder heapBytesAllocated      = new LongAdder();
+    private final LongAdder directBytesAllocated    = new LongAdder();
+    private final LongAdder heapActiveAllocations   = new LongAdder();
+    private final LongAdder directActiveAllocations = new LongAdder();
+    private final LongAdder heapActiveBytes         = new LongAdder();
+    private final LongAdder directActiveBytes       = new LongAdder();
 
     // ---- Package-private recording methods ----
 
-    void recordHeapAllocation(int capacity) {
-        heapAllocations.increment();
-        heapBytesAllocated.add(capacity);
+    void recordAllocation(boolean direct, int capacity) {
+        int normalizedCapacity = Math.max(capacity, 0);
+        if (direct) {
+            directAllocations.increment();
+            directBytesAllocated.add(normalizedCapacity);
+            directActiveAllocations.increment();
+            directActiveBytes.add(normalizedCapacity);
+        } else {
+            heapAllocations.increment();
+            heapBytesAllocated.add(normalizedCapacity);
+            heapActiveAllocations.increment();
+            heapActiveBytes.add(normalizedCapacity);
+        }
     }
 
-    void recordDirectAllocation(int capacity) {
-        directAllocations.increment();
-        directBytesAllocated.add(capacity);
+    void recordRelease(boolean direct, int capacity) {
+        int normalizedCapacity = Math.max(capacity, 0);
+        if (direct) {
+            directActiveAllocations.add(-1);
+            directActiveBytes.add(-normalizedCapacity);
+        } else {
+            heapActiveAllocations.add(-1);
+            heapActiveBytes.add(-normalizedCapacity);
+        }
     }
 
-    void recordPooledAllocation(int capacity) {
-        pooledAllocations.increment();
-        pooledBytesAllocated.add(capacity);
-    }
+    void recordCapacityChange(boolean direct, int delta) {
+        if (delta == 0) {
+            return;
+        }
 
-    void recordRingAllocation(int capacity) {
-        ringAllocations.increment();
-        ringBytesAllocated.add(capacity);
+        if (direct) {
+            directActiveBytes.add(delta);
+        } else {
+            heapActiveBytes.add(delta);
+        }
     }
 
     // ---- Public query methods ----
@@ -77,16 +94,6 @@ public final class ByteBufAllocatorMetric {
         return directAllocations.sum();
     }
 
-    /** Total number of pooled buffer allocations. */
-    public long pooledAllocations() {
-        return pooledAllocations.sum();
-    }
-
-    /** Total number of ring buffer allocations. */
-    public long ringAllocations() {
-        return ringAllocations.sum();
-    }
-
     /** Total bytes allocated through heap buffer allocations (cumulative). */
     public long heapBytesAllocated() {
         return heapBytesAllocated.sum();
@@ -97,28 +104,66 @@ public final class ByteBufAllocatorMetric {
         return directBytesAllocated.sum();
     }
 
-    /** Total bytes allocated through pooled buffer allocations (cumulative). */
-    public long pooledBytesAllocated() {
-        return pooledBytesAllocated.sum();
+    /** Currently active heap buffers. */
+    public long heapActiveAllocations() {
+        return heapActiveAllocations.sum();
     }
 
-    /** Total bytes allocated through ring buffer allocations (cumulative). */
-    public long ringBytesAllocated() {
-        return ringBytesAllocated.sum();
+    /** Currently active direct buffers. */
+    public long directActiveAllocations() {
+        return directActiveAllocations.sum();
     }
 
-    /** Total number of all allocations (heap + direct + pooled + ring). */
+    /** Currently active heap bytes. */
+    public long heapActiveBytes() {
+        return heapActiveBytes.sum();
+    }
+
+    /** Currently active direct bytes. */
+    public long directActiveBytes() {
+        return directActiveBytes.sum();
+    }
+
+    /** Total number of all allocations (heap + direct). */
     public long totalAllocations() {
-        return heapAllocations.sum() + directAllocations.sum() + pooledAllocations.sum() + ringAllocations.sum();
+        return heapAllocations.sum() + directAllocations.sum();
     }
 
-    /** Total bytes allocated across all allocation types (cumulative). */
+    /** Total bytes allocated across heap/direct allocation types (cumulative). */
     public long totalBytesAllocated() {
-        return heapBytesAllocated.sum() + directBytesAllocated.sum() + pooledBytesAllocated.sum() + ringBytesAllocated.sum();
+        return heapBytesAllocated.sum() + directBytesAllocated.sum();
+    }
+
+    /** Total number of all currently active buffers. */
+    public long totalActiveAllocations() {
+        return heapActiveAllocations.sum() + directActiveAllocations.sum();
+    }
+
+    /** Total bytes currently retained by active buffers. */
+    public long totalActiveBytes() {
+        return heapActiveBytes.sum() + directActiveBytes.sum();
     }
 
     @Override
     public String toString() {
-        return "ByteBufAllocatorMetric{" + "heap(count=" + heapAllocations.sum() + ", bytes=" + heapBytesAllocated.sum() + ")" + ", direct(count=" + directAllocations.sum() + ", bytes=" + directBytesAllocated.sum() + ")" + ", pooled(count=" + pooledAllocations.sum() + ", bytes=" + pooledBytesAllocated.sum() + ")" + ", ring(count=" + ringAllocations.sum() + ", bytes=" + ringBytesAllocated.sum() + ")" + ", total(count=" + totalAllocations() + ", bytes=" + totalBytesAllocated() + ")" + '}';
+        // @formatter:off
+        return "ByteBufAllocatorMetric{" +
+                "heap(totalCount=" + heapAllocations.sum() +
+                    ", totalBytes=" + heapBytesAllocated.sum() +
+                    ", activeCount=" + heapActiveAllocations.sum() +
+                    ", activeBytes=" + heapActiveBytes.sum() +
+                ")" +
+                ", direct(totalCount=" + directAllocations.sum() +
+                    ", totalBytes=" + directBytesAllocated.sum() +
+                    ", activeCount=" + directActiveAllocations.sum() +
+                    ", activeBytes=" + directActiveBytes.sum() +
+                ")" +
+                ", total(totalCount=" + totalAllocations() +
+                    ", totalBytes=" + totalBytesAllocated() +
+                    ", activeCount=" + totalActiveAllocations() +
+                    ", activeBytes=" + totalActiveBytes() +
+                ")" +
+                '}';
+        // @formatter:on
     }
 }

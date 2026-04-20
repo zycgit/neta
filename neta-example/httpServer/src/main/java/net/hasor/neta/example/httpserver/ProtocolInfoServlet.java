@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.neta.example.httpserver;
+
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import net.hasor.neta.http.HttpServlet;
-import net.hasor.neta.http.ServletRequest;
-import net.hasor.neta.http.ServletResponse;
+
+import net.hasor.nhttp.server.HttpServlet;
+import net.hasor.nhttp.server.ServletRequest;
+import net.hasor.nhttp.server.ServletResponse;
 
 /**
  * API servlet that returns server protocol information as JSON.
@@ -27,6 +29,17 @@ import net.hasor.neta.http.ServletResponse;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class ProtocolInfoServlet extends HttpServlet {
+    private final int httpPort;
+    private final int httpsPort;
+    private final boolean http2Enabled;
+    private final boolean http3Enabled;
+
+    public ProtocolInfoServlet(int httpPort, int httpsPort, boolean http2Enabled, boolean http3Enabled) {
+        this.httpPort = httpPort;
+        this.httpsPort = httpsPort;
+        this.http2Enabled = http2Enabled;
+        this.http3Enabled = http3Enabled;
+    }
 
     @Override
     protected void doGet(ServletRequest request, ServletResponse response) throws IOException {
@@ -47,26 +60,26 @@ public class ProtocolInfoServlet extends HttpServlet {
         boolean secure = "https".equalsIgnoreCase(scheme);
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
 
-        String json = "{\n"                                                                     //
-                + "  \"protocol\": \"" + escapeJson(protocol) + "\",\n"         //
-                + "  \"scheme\": \"" + escapeJson(scheme) + "\",\n"             //
-                + "  \"method\": \"" + escapeJson(method) + "\",\n"             //
-                + "  \"host\": \"" + escapeJson(host) + "\",\n"                 //
-                + "  \"uri\": \"" + escapeJson(uri) + "\",\n"                   //
-                + "  \"secure\": " + secure + ",\n"                             //
-                + "  \"remoteAddress\": \"" + escapeJson(remoteAddr) + "\",\n"  //
-                + "  \"serverTime\": \"" + timestamp + "\",\n"                  //
-                + "  \"serverConfig\": {\n"                                                 //
-                + "    \"http2Enabled\": true,\n"                                           //
-                + "    \"http3Enabled\": true\n"                                            //
-                + "  },\n"                                                                  //
-                + "  \"serverProtocols\": {\n"                                              //
-                + "    \"http1.1\": { \"port\": 8080, \"transport\": \"TCP\" },\n"          //
-                + "    \"h2c\": { \"port\": 8080, \"transport\": \"TCP (Prior Knowledge)\" },\n" //
-                + "    \"h2\": { \"port\": 9443, \"transport\": \"TCP+TLS+ALPN (via Caddy)\" },\n" //
-                + "    \"h3\": { \"port\": 9443, \"transport\": \"UDP+QUIC (via Caddy)\" }\n" //
-                + "  }\n"                                                                   //
-                + "}";                                                                       //
+        String json = "{\n"
+            + "  \"protocol\": \"" + escapeJson(protocol) + "\",\n"
+            + "  \"scheme\": \"" + escapeJson(scheme) + "\",\n"
+            + "  \"method\": \"" + escapeJson(method) + "\",\n"
+            + "  \"host\": \"" + escapeJson(host) + "\",\n"
+            + "  \"uri\": \"" + escapeJson(uri) + "\",\n"
+            + "  \"secure\": " + secure + ",\n"
+            + "  \"remoteAddress\": \"" + escapeJson(remoteAddr) + "\",\n"
+            + "  \"serverTime\": \"" + timestamp + "\",\n"
+            + "  \"serverConfig\": {\n"
+            + "    \"http2Enabled\": " + this.http2Enabled + ",\n"
+            + "    \"http3Enabled\": " + this.http3Enabled + "\n"
+            + "  },\n"
+            + "  \"serverProtocols\": {\n"
+            + "    \"http1.1\": { \"port\": " + this.httpPort + ", \"transport\": \"TCP\" },\n"
+            + "    \"h2c\": { \"port\": " + this.httpPort + ", \"transport\": \"TCP (Prior Knowledge)\" },\n"
+            + "    \"h2\": { \"port\": " + this.httpsPort + ", \"transport\": \"TCP+TLS+ALPN\" },\n"
+            + "    \"h3\": { \"enabled\": false, \"transport\": \"Temporarily unavailable\" }\n"
+            + "  }\n"
+            + "}";
 
         response.write(json);
     }

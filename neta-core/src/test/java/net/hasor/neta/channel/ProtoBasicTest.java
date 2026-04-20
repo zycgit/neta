@@ -14,13 +14,16 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+
+import org.junit.Test;
+
 import net.hasor.neta.channel.transport.virtual.VrtChannel;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.channel.transport.virtual.VrtSocketAddress;
 import net.hasor.neta.codec.TransparentProtoHandler;
-import org.junit.Test;
 
 /**
  * @author 赵永春 (zyc@hasor.net)

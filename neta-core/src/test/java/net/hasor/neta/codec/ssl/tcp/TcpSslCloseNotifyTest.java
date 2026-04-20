@@ -14,19 +14,23 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.ssl.tcp;
+
+import static net.hasor.neta.codec.AbstractSoTest.*;
+
 import java.net.InetSocketAddress;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+
+import org.junit.Test;
+
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.channel.transport.tcp.TcpSoConfig;
 import net.hasor.neta.codec.ssl.*;
-import org.junit.Test;
-import static net.hasor.neta.codec.AbstractSoTest.*;
 
 /**
  * Verifies that a Neta TLS channel emits a proper TLS {@code close_notify} alert
@@ -349,4 +353,3 @@ public class TcpSslCloseNotifyTest extends AbstractSslTest {
         neta.shutdown();
     }
 }
-

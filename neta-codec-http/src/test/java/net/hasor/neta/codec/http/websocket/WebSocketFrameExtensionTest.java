@@ -15,15 +15,21 @@
  */
 package net.hasor.neta.codec.http.websocket;
 
+import static org.junit.Assert.*;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+
+import org.junit.Test;
+
 import com.jcraft.jzlib.Deflater;
 import com.jcraft.jzlib.GZIPException;
 import com.jcraft.jzlib.JZlib;
+
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
@@ -31,8 +37,6 @@ import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.websocket.extensions.DeflateFrameSupport;
 import net.hasor.neta.codec.http.websocket.extensions.PerMessageDeflateSupport;
 import net.hasor.neta.codec.http.websocket.extensions.XWebkitDeflateFrameSupport;
-import org.junit.Test;
-import static org.junit.Assert.*;
 
 public class WebSocketFrameExtensionTest extends AbstractWebSocketTest {
     private static final String WS_URI = "ws://example.com/chat";

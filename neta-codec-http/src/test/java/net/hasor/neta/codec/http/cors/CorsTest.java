@@ -14,16 +14,20 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.cors;
+
+import static org.junit.Assert.*;
+
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+
+import org.junit.Test;
+
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.channel.data.ProtoQueue;
 import net.hasor.neta.codec.http.*;
-import org.junit.Test;
-import static org.junit.Assert.*;
 
 /**
  * Tests for the CORS package:

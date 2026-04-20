@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.transport.quic;
-
 /**
  * Exception thrown when a QUIC STOP_SENDING frame sent by the peer is received.
  * <p>Corresponds to RFC 9000 Section 19.5 and notifies the application layer that a stream should stop sending further data.

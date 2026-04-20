@@ -14,13 +14,15 @@
  * limitations under the License.
  */
 package net.hasor.neta.example.httpserver;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+
+import net.hasor.nhttp.server.HttpServlet;
+import net.hasor.nhttp.server.ServletRequest;
+import net.hasor.nhttp.server.ServletResponse;
 import net.hasor.neta.codec.http.multipart.FileUpload;
-import net.hasor.neta.http.HttpServlet;
-import net.hasor.neta.http.ServletRequest;
-import net.hasor.neta.http.ServletResponse;
 
 /**
  * Example servlet demonstrating multipart/form-data file upload handling.

@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.channel;
 import net.hasor.neta.bytebuf.ByteBuf;
-
 /**
  * Typed event object propagated through a {@link SoChannel} pipeline.
  * <p>Network events are side-band signals independent from normal data messages. Regular data

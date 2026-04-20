@@ -25,7 +25,6 @@ import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.SoChannel;
-
 /**
  * JDK JSSE-backed {@link SslContext} implementation.
  * <p>Uses the JDK's built-in {@code TLS} {@link javax.net.ssl.SSLContext} provider
@@ -58,13 +57,13 @@ import net.hasor.neta.channel.SoChannel;
  * @see SslUtils
  */
 public class JdkSslContext extends SslContextBasic {
-    protected static final String      PROTOCOL = "TLS";
-    private static final   Logger      logger   = Logger.getLogger(JdkSslContext.class);
-    private static final   String[]    DEFAULT_PROTOCOLS;
-    private static final   Set<String> SUPPORTED_CIPHERS;
-    private static final   String[]    DEFAULT_CIPHERS;
-    private static final   String[]    DEFAULT_CIPHERS_NON_TLSV13;
-    private static final   Set<String> SUPPORTED_CIPHERS_NON_TLSV13;
+    protected static final String    PROTOCOL = "TLS";
+    private static final Logger      logger   = Logger.getLogger(JdkSslContext.class);
+    private static final String[]    DEFAULT_PROTOCOLS;
+    private static final Set<String> SUPPORTED_CIPHERS;
+    private static final String[]    DEFAULT_CIPHERS;
+    private static final String[]    DEFAULT_CIPHERS_NON_TLSV13;
+    private static final Set<String> SUPPORTED_CIPHERS_NON_TLSV13;
 
     static {
         SSLContext context;

@@ -76,24 +76,24 @@ public class NetaHttpServer {
     // Configuration fields — mutable until start()
     // =========================================================================
 
-    private String               serverName                  = "Neta-HTTP";
-    private String               contextPath                 = "";
-    private int                  maxContentLength            = 1048576;   // 1 MB
-    private int                  maxInitialLineLength        = 4096;
-    private int                  maxHeaderSize               = 8192;
-    private int                  maxChunkSize                = 8192;
+    private String                     serverName                  = "Neta-HTTP";
+    private String                     contextPath                 = "";
+    private int                        maxContentLength            = 1048576;   // 1 MB
+    private int                        maxInitialLineLength        = 4096;
+    private int                        maxHeaderSize               = 8192;
+    private int                        maxChunkSize                = 8192;
     private final int                  bodyQueueCapacity           = 16;
     private final int                  maxConcurrentRequests       = 200;
     private final long                 requestTimeoutMillis        = 30_000L;
     private final int                  maxConnections              = 10_000;
     private final long                 connectionIdleTimeoutMillis = 60_000L;
     private final long                 gracefulShutdownMillis      = 30_000L;
-    private ExecutorService      executor;
+    private ExecutorService            executor;
     private final BackpressureStrategy backpressureStrategy        = BackpressureStrategy.FAST_FAIL;
-    private boolean              http2Enabled                = true;
-    private SslConfig            sslConfig;
-    private CorsConfig           corsConfig;
-    private ErrorHandler         errorHandler;
+    private boolean                    http2Enabled                = true;
+    private SslConfig                  sslConfig;
+    private CorsConfig                 corsConfig;
+    private ErrorHandler               errorHandler;
 
     // =========================================================================
     // Always-present infrastructure

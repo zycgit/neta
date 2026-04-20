@@ -18,7 +18,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
-
 /**
  * Default implementation of {@link FileUpload}, storing part metadata and the content-buffer reference.
  * @author 赵永春 (zyc@hasor.net)

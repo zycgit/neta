@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.ssl;
 import net.hasor.neta.channel.SoEventData;
-
 /**
  * User-event payload published when the TLS handshake finishes successfully.
  * <p>This event is emitted by {@link SslHandle} into the channel pipeline after the handshake

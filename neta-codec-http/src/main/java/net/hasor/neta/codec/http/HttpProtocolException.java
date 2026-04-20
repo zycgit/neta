@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
-
 /**
  * Base exception type for all HTTP protocol errors.
  * <p>Each HTTP exception carries an {@link HttpStatus} that represents the response status code most appropriate for the error.

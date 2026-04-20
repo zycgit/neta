@@ -21,7 +21,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.hasor.cobble.logging.Logger;
-
 /**
  * A simplified ResourceLeakDetector based on Netty's implementation.
  * Uses ThreadLocal sampling counter to avoid global AtomicInteger CAS contention.
@@ -89,7 +88,7 @@ public class ResourceLeakDetector<T> {
     }
 
     private void reportLeak() {
-        for (; ; ) {
+        for (;;) {
             DefaultResourceLeak ref = (DefaultResourceLeak) refQueue.poll();
             if (ref == null) {
                 break;

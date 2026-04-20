@@ -16,7 +16,6 @@
 package net.hasor.neta.codec.http.h3;
 import java.util.Arrays;
 import net.hasor.neta.codec.http.AbstractHttpEvent;
-
 /**
  * 当远端发送 GOAWAY 时发布的连接级优雅关闭信号。
  * <p>

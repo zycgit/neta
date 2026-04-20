@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-
 /**
  * Thrown when a connection attempt does not complete before the configured deadline.
  * <p>Unlike {@link SoConnectException}, which indicates that the remote host actively refused the

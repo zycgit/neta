@@ -15,8 +15,9 @@
  */
 package net.hasor.neta.channel.transport.quic;
 
-import org.junit.Test;
 import static org.junit.Assert.*;
+
+import org.junit.Test;
 
 /**
  * QuicCongestionControl 单元测试 — RFC 9002 §7 NewReno 拥塞控制。

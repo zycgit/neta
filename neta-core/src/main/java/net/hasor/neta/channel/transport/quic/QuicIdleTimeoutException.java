@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.channel.transport.quic;
 import net.hasor.neta.channel.SoTimeoutException;
-
 /**
  * Exception thrown when a QUIC connection or stream is closed due to idle timeout.
  * <p>Corresponds to RFC 9000 Section 10.1 and can be used to distinguish connection-level and stream-level timeout closures.

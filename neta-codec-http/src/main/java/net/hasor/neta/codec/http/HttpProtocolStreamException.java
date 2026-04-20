@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
-
 /**
  * Thrown when a protocol error can be clearly scoped to a single stream.
  * @author 赵永春 (zyc@hasor.net)

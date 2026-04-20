@@ -14,9 +14,15 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.ssl.udp;
+
+import static net.hasor.neta.codec.AbstractSoTest.*;
+
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
+
+import org.junit.Test;
+
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.neta.channel.NetChannel;
 import net.hasor.neta.channel.NetListen;
@@ -25,8 +31,6 @@ import net.hasor.neta.channel.ProtoInitializer;
 import net.hasor.neta.channel.transport.udp.UdpSoConfig;
 import net.hasor.neta.codec.MyRcvToListProtoHandler;
 import net.hasor.neta.codec.ssl.*;
-import org.junit.Test;
-import static net.hasor.neta.codec.AbstractSoTest.*;
 
 /**
  * @author 赵永春 (zyc@hasor.net)

@@ -17,7 +17,6 @@ package net.hasor.neta.codec.http.websocket;
 import java.util.Collections;
 import java.util.List;
 import net.hasor.cobble.StringUtils;
-
 /**
  * Default implementation of {@link WebSocketContext}.
  * <p>

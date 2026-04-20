@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http;
 import net.hasor.neta.bytebuf.ByteBuf;
-
 /**
  * Wraps raw bytes that pass through the HTTP pipeline without being parsed as a request or response.
  * <p>

@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http;
 import net.hasor.neta.channel.ProtoContext;
-
 /**
  * Mutable per-connection state shared by all HTTP/1.x handlers.
  * <p>

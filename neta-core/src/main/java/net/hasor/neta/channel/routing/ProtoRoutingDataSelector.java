@@ -14,12 +14,10 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.routing;
-
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoRoutingDuplexer;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
-
 /**
  * Data-routing selector.
  * <p>{@link ProtoRoutingDuplexer} invokes it to decide which branch the current inbound data should

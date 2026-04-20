@@ -16,7 +16,6 @@
 package net.hasor.neta.codec.http.h2;
 import net.hasor.neta.channel.ProtoRoutingDuplexer;
 import net.hasor.neta.channel.routing.ProtoRoutingDataSelector;
-
 /**
  * Protocol context interface for an HTTP/2 connection.
  * <p>

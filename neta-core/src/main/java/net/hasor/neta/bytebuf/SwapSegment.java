@@ -17,7 +17,6 @@ package net.hasor.neta.bytebuf;
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-
 /**
  * Per-segment I/O abstraction for {@link SwapFileByteBuf}.
  * <p>Two built-in implementations are provided:

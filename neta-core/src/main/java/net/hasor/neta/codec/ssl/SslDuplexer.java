@@ -22,7 +22,6 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
-
 /**
  * TLS record-layer duplexer for byte-oriented Neta pipelines.
  * <p>This handler is intended to sit close to the transport edge and convert between raw TLS
@@ -62,8 +61,8 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * @see SslCertConfig
  */
 public class SslDuplexer implements ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, ByteBuf> {
-    private static final Logger    logger = Logger.getLogger(SslDuplexer.class);
-    private final        SslConfig config;
+    private static final Logger logger = Logger.getLogger(SslDuplexer.class);
+    private final SslConfig     config;
 
     /** Creates an SSL duplexer with the given SSL configuration. */
     public SslDuplexer(SslConfig config) {

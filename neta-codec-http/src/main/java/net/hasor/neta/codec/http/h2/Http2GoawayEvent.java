@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http.h2;
 import java.util.Arrays;
-
 /**
  * Event describing the closing boundary of an HTTP/2 connection.
  * <p>

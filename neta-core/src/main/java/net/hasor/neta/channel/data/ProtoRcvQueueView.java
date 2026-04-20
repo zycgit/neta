@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.data;
-
 /**
  * Named view container on the receive side.
  * <p>It represents a local receive view derived from a main receive queue. It has its own read ordering, but capacity is still governed by the owning main queue.</p>

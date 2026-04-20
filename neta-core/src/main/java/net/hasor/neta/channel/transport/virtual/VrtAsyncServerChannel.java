@@ -6,7 +6,6 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
-
 /**
  * In-process server-side entry point for the virtual transport.
  * <p>This class maintains listener registration in the provider-shared {@code listenPool}, owns the
@@ -38,15 +37,15 @@ import net.hasor.neta.channel.*;
  * @see VrtSoConfig
  */
 public class VrtAsyncServerChannel implements AsyncServerChannel {
-    private static final Logger                              logger = Logger.getLogger(VrtAsyncServerChannel.class);
-    private final        long                                channelId;
-    private final        AtomicBoolean                       closed;
-    private final        Map<Integer, VrtAsyncServerChannel> listenPool;
-    private final        SoContextService                    context;
-    private final        VrtSocketAddress                    listenAddr;
-    private final        VrtSoConfig                         soConfig;
+    private static final Logger                       logger = Logger.getLogger(VrtAsyncServerChannel.class);
+    private final long                                channelId;
+    private final AtomicBoolean                       closed;
+    private final Map<Integer, VrtAsyncServerChannel> listenPool;
+    private final SoContextService                    context;
+    private final VrtSocketAddress                    listenAddr;
+    private final VrtSoConfig                         soConfig;
     //
-    private              VrtListen                           vrtListen;
+    private VrtListen vrtListen;
 
     /**
      * Create a virtual server asynchronous channel.

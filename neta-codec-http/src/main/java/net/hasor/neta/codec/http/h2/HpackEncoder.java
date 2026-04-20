@@ -16,7 +16,6 @@
 package net.hasor.neta.codec.http.h2;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.codec.http.HttpHeaders;
-
 /**
  * Encodes HTTP/2 header fields into an HPACK header block.
  * <p>

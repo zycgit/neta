@@ -16,7 +16,6 @@
 package net.hasor.neta.bytebuf;
 import java.nio.ByteBuffer;
 import net.hasor.cobble.ref.RecycleObjectPool;
-
 /**
  * Unpooled {@link Buffer} implementation that wraps an existing heap array or
  * {@link ByteBuffer}.
@@ -34,21 +33,22 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * @see BufferCleaner
  */
 class BufferWrap implements Buffer {
-    static final int                                      RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    static       RecycleObjectPool.ObjHandler<BufferWrap> RECYCLE_HANDLER = new RecycleObjectPool.ObjHandler<BufferWrap>() {
-        public BufferWrap create() {
-            return new BufferWrap();
-        }
+    static final int                                RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    static RecycleObjectPool.ObjHandler<BufferWrap> RECYCLE_HANDLER = //
+            new RecycleObjectPool.ObjHandler<BufferWrap>() {
+                public BufferWrap create() {
+                    return new BufferWrap();
+                }
 
-        @Override
-        public void free(BufferWrap tar) {
-            RecycleObjectPool.free(RECYCLE_INDEX, tar);
-        }
-    };
-    private      ByteBuffer                               buffer;
-    private      byte[]                                   heapArray;   // direct heap array (avoids ByteBuffer.wrap)
-    private      boolean                                  available;
-    private      boolean                                  fromSmallCache;
+                @Override
+                public void free(BufferWrap tar) {
+                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
+                }
+            };
+    private ByteBuffer                              buffer;
+    private byte[]                                  heapArray;   // direct heap array (avoids ByteBuffer.wrap)
+    private boolean                                 available;
+    private boolean                                 fromSmallCache;
 
     // ------------------------------------------------------------------------
 

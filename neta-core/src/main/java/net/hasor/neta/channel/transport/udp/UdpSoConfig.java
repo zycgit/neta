@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.channel.transport.udp;
 import net.hasor.neta.channel.SoConfig;
-
 /**
  * Configuration object for UDP and UDP-based transports.
  * <p>In the current implementation, these settings mainly control three aspects:
@@ -37,10 +36,10 @@ import net.hasor.neta.channel.SoConfig;
  */
 public class UdpSoConfig extends SoConfig {
     private Integer rcvPacketSize;
-    private boolean rcvRemoteOnly           = true;
+    private boolean rcvRemoteOnly = true;
     // Channel-level write-timeout retry configuration.
-    private int     sndWriteRetryCount      = 0;   // 0 means disabled.
-    private int     sndWriteRetryIntervalMs = 50;  // Delay between retries in milliseconds.
+    private int sndWriteRetryCount      = 0;   // 0 means disabled.
+    private int sndWriteRetryIntervalMs = 50;  // Delay between retries in milliseconds.
 
     /**
      * Create a configuration object with the UDP provider defaults.

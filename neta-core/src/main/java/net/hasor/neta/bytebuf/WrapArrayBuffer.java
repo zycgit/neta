@@ -16,7 +16,6 @@
 package net.hasor.neta.bytebuf;
 import java.nio.ByteBuffer;
 import net.hasor.cobble.ref.RecycleObjectPool;
-
 /**
  * Fixed-size {@link ByteBuf} view over an existing heap {@code byte[]}.
  * <p>
@@ -28,6 +27,7 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  *   +---------------------------------------------------+
  *   | 0 | 1 | 2 | ... | capacity - 1 |
  *   +---------------------------------------------------+
+ *
  * logical layout on top of the array
  *   0      markedReaderIndex   readerIndex   markedWriterIndex   writerIndex   capacity
  *   |-------------|---------------|------------------|---------------|
@@ -37,18 +37,19 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * @version : 2022-11-01
  */
 final class WrapArrayBuffer extends AbstractByteBuf {
-    static final int                                           RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    static       RecycleObjectPool.ObjHandler<WrapArrayBuffer> RECYCLE_HANDLER = new RecycleObjectPool.ObjHandler<WrapArrayBuffer>() {
-        public WrapArrayBuffer create() {
-            return new WrapArrayBuffer();
-        }
+    static final int                                     RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    static RecycleObjectPool.ObjHandler<WrapArrayBuffer> RECYCLE_HANDLER = //
+            new RecycleObjectPool.ObjHandler<WrapArrayBuffer>() {
+                public WrapArrayBuffer create() {
+                    return new WrapArrayBuffer();
+                }
 
-        @Override
-        public void free(WrapArrayBuffer tar) {
-            RecycleObjectPool.free(RECYCLE_INDEX, tar);
-        }
-    };
-    byte[] target;
+                @Override
+                public void free(WrapArrayBuffer tar) {
+                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
+                }
+            };
+    byte[]                                               target;
 
     private WrapArrayBuffer() {
     }
@@ -58,6 +59,9 @@ final class WrapArrayBuffer extends AbstractByteBuf {
     void initBuffer(byte[] initData, boolean asWrite) {
         super.initByteBuf(null, initData.length);
         this.target = initData;
+        if (initData.length > 0) {
+            this.initMetricTracking(ByteBufAllocator.DEFAULT.metric(), false, initData.length);
+        }
         if (!asWrite) {
             this.writerIndex = initData.length;
             this.markedWriterIndex = initData.length;

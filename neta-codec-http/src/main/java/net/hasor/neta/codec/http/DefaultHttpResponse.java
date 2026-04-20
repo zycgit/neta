@@ -16,7 +16,6 @@
 package net.hasor.neta.codec.http;
 import java.nio.charset.StandardCharsets;
 import net.hasor.neta.bytebuf.ByteBuf;
-
 /**
  * Default implementation of {@link HttpResponse}.
  * <p>

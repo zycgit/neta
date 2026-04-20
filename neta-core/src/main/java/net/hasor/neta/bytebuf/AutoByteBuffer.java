@@ -17,7 +17,6 @@ package net.hasor.neta.bytebuf;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import net.hasor.cobble.ref.RecycleObjectPool;
-
 /**
  * Auto-resizing {@link ByteBuf} backed by a {@link java.nio.ByteBuffer}.
  * <p>Similar to {@link AutoArrayByteBuf} but uses a {@link java.nio.ByteBuffer}
@@ -33,6 +32,7 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  *   | discarded |         readable data         |   writable    |
  *   +-----------------------------------------------------------+
  *   0        markedReaderIndex               writerIndex      target.capacity()
+ *   
  * when resize or recycle happens
  *   old target  --copy readable window-->  new ByteBuffer
  *   +-----------+                         +---------------------+
@@ -53,19 +53,20 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * @see RingByteBuffer
  */
 final class AutoByteBuffer extends AbstractByteBuf {
-    static final int                                          RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    static       RecycleObjectPool.ObjHandler<AutoByteBuffer> RECYCLE_HANDLER = new RecycleObjectPool.ObjHandler<AutoByteBuffer>() {
-        public AutoByteBuffer create() {
-            return new AutoByteBuffer();
-        }
+    static final int                                    RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    static RecycleObjectPool.ObjHandler<AutoByteBuffer> RECYCLE_HANDLER = //
+            new RecycleObjectPool.ObjHandler<AutoByteBuffer>() {
+                public AutoByteBuffer create() {
+                    return new AutoByteBuffer();
+                }
 
-        @Override
-        public void free(AutoByteBuffer tar) {
-            RecycleObjectPool.free(RECYCLE_INDEX, tar);
-        }
-    };
-    ByteBuffer target;
-    private int extensionSize;
+                @Override
+                public void free(AutoByteBuffer tar) {
+                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
+                }
+            };
+    ByteBuffer                                          target;
+    private int                                         extensionSize;
 
     // ------------------------------------------------------------------------
 
@@ -98,6 +99,7 @@ final class AutoByteBuffer extends AbstractByteBuf {
 
             int recyclePos = this.markedReaderIndex;
             this.target = recycle;
+            this.updateMetricCapacity(recycle.capacity());
             recycle = null; // transfer ownership, don't free on exception
             this.writerIndex = this.writerIndex - recyclePos;
             this.markedWriterIndex = this.markedWriterIndex - recyclePos;
@@ -137,6 +139,7 @@ final class AutoByteBuffer extends AbstractByteBuf {
                 ((Buffer) oldTarget).clear();
                 extension.put(oldTarget);
                 this.target = extension;
+                this.updateMetricCapacity(extension.capacity());
                 extension = null; // transfer ownership
             } finally {
                 ByteBuffer toFree = (extension != null) ? extension : oldTarget;

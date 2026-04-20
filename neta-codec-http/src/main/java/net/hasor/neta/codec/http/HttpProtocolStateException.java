@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
-
 /**
  * Thrown when the HTTP codec observes an illegal protocol state transition, timing violation, or a mode/state mismatch.
  * @author 赵永春 (zyc@hasor.net)

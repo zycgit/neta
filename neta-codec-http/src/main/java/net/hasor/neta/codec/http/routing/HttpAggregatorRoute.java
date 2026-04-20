@@ -25,7 +25,6 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.channel.routing.ProtoRoutingDataSelector;
 import net.hasor.neta.codec.http.HttpHeaderNames;
 import net.hasor.neta.codec.http.HttpHeaderValues;
-
 /**
  * Cleartext HTTP aggregate route selector.
  * <p>

@@ -16,7 +16,6 @@
 package net.hasor.neta.codec.http.cors;
 import java.util.*;
 import net.hasor.cobble.StringUtils;
-
 /**
  * Immutable configuration object for the CORS handler.
  * <p>Instances can be created through {@link CorsConfig.Builder}:

@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http.h3;
 import net.hasor.neta.codec.http.AbstractHttpEvent;
-
 /**
  * 请求主动重置指定 HTTP/3 stream 的网络事件。
  */

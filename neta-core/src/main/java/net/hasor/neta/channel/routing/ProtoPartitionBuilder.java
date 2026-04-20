@@ -14,11 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.routing;
-
 import net.hasor.neta.channel.ProtoBuilder;
 import net.hasor.neta.channel.ProtoDuplexer;
 import net.hasor.neta.channel.ProtoInitializer;
-
 /**
  * Builder used to define which handlers should be installed inside a single partition.
  * <p>When a partition duplexer is declared through

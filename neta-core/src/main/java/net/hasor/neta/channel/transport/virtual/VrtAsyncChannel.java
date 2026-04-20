@@ -20,7 +20,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
-
 /**
  * In-process implementation of the low-level virtual transport channel.
  * <p>This type is the low-level adapter used by {@link VrtProvider} for connect-mode clients and
@@ -56,14 +55,14 @@ import net.hasor.neta.channel.*;
  * @see VrtTransfer
  */
 class VrtAsyncChannel implements AsyncChannel {
-    private static final Logger                logger = Logger.getLogger(VrtAsyncChannel.class);
-    private final        long                  channelId;
-    private final        VrtSocketAddress      bindAddr;
-    private final        VrtSocketAddress      targetAddr;
-    private final        VrtAsyncServerChannel target;
-    private final        SoContextService      context;
-    private final        VrtSoConfig           soConfig;
-    private final        AtomicBoolean         closeFlag;
+    private static final Logger         logger = Logger.getLogger(VrtAsyncChannel.class);
+    private final long                  channelId;
+    private final VrtSocketAddress      bindAddr;
+    private final VrtSocketAddress      targetAddr;
+    private final VrtAsyncServerChannel target;
+    private final SoContextService      context;
+    private final VrtSoConfig           soConfig;
+    private final AtomicBoolean         closeFlag;
 
     /**
      * Create a virtual asynchronous channel.

@@ -1,7 +1,6 @@
 package net.hasor.neta.channel.transport.sctp;
 import com.sun.nio.sctp.Notification;
 import net.hasor.neta.channel.SoEventData;
-
 /**
  * {@link SoEventData} wrapper for SCTP protocol notifications.
  * <p>In addition to ordinary payload messages, SCTP can emit protocol-level events such as

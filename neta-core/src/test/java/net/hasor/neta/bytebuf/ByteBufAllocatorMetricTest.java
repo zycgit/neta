@@ -63,13 +63,13 @@ public class ByteBufAllocatorMetricTest {
     public void test_pooled_allocation_tracked() {
         ByteBufAllocator alloc = ByteBufUtils.POOLED_HEAP_ALLOCATOR;
         ByteBufAllocatorMetric metric = alloc.metric();
-        long beforeCount = metric.pooledAllocations();
-        long beforeBytes = metric.pooledBytesAllocated();
+        long beforeCount = metric.heapAllocations();
+        long beforeBytes = metric.heapBytesAllocated();
 
         ByteBuf buf = alloc.pooledBuffer(1024);
         try {
-            assert metric.pooledAllocations() > beforeCount : "pooled allocation count should increase";
-            assert metric.pooledBytesAllocated() > beforeBytes : "pooled bytes allocated should increase";
+            assert metric.heapAllocations() > beforeCount : "heap allocation count should increase";
+            assert metric.heapBytesAllocated() > beforeBytes : "heap bytes allocated should increase";
         } finally {
             buf.free();
         }
@@ -79,13 +79,13 @@ public class ByteBufAllocatorMetricTest {
     public void test_ring_allocation_tracked() {
         ByteBufAllocator alloc = ByteBufUtils.UNPOOLED_HEAP_ALLOCATOR;
         ByteBufAllocatorMetric metric = alloc.metric();
-        long beforeCount = metric.ringAllocations();
-        long beforeBytes = metric.ringBytesAllocated();
+        long beforeCount = metric.heapAllocations();
+        long beforeBytes = metric.heapBytesAllocated();
 
         ByteBuf buf = alloc.ringBuffer(64);
         try {
-            assert metric.ringAllocations() > beforeCount : "ring allocation count should increase";
-            assert metric.ringBytesAllocated() > beforeBytes : "ring bytes allocated should increase";
+            assert metric.heapAllocations() > beforeCount : "heap allocation count should increase";
+            assert metric.heapBytesAllocated() > beforeBytes : "heap bytes allocated should increase";
         } finally {
             buf.free();
         }
@@ -122,6 +122,64 @@ public class ByteBufAllocatorMetricTest {
     }
 
     @Test
+    public void test_active_heap_metrics_return_to_baseline_after_release() {
+        ByteBufAllocator alloc = ByteBufUtils.UNPOOLED_HEAP_ALLOCATOR;
+        ByteBufAllocatorMetric metric = alloc.metric();
+        long activeCountBefore = metric.heapActiveAllocations();
+        long activeBytesBefore = metric.heapActiveBytes();
+
+        ByteBuf buf = alloc.heapBuffer(200);
+        assert metric.heapActiveAllocations() == activeCountBefore + 1 : "active heap allocation count should increase";
+        assert metric.heapActiveBytes() >= activeBytesBefore + 200 : "active heap bytes should increase";
+
+        buf.free();
+
+        assert metric.heapActiveAllocations() == activeCountBefore : "active heap allocation count should return to baseline";
+        assert metric.heapActiveBytes() == activeBytesBefore : "active heap bytes should return to baseline";
+    }
+
+    @Test
+    public void test_swap_allocation_tracked_and_released() {
+        ByteBufAllocator alloc = ByteBufAllocator.DEFAULT;
+        ByteBufAllocatorMetric metric = alloc.metric();
+        long beforeAllocations = metric.heapAllocations();
+        long beforeActiveAllocations = metric.heapActiveAllocations();
+        long beforeActiveBytes = metric.heapActiveBytes();
+
+        ByteBuf buf = alloc.swapFile();
+        try {
+            assert metric.heapAllocations() == beforeAllocations + 1 : "heap allocation count should increase";
+            assert metric.heapActiveAllocations() == beforeActiveAllocations + 1 : "active heap allocation count should increase";
+            assert metric.heapActiveBytes() >= beforeActiveBytes : "active heap bytes should not decrease while buffer is active";
+        } finally {
+            buf.free();
+        }
+
+        assert metric.heapActiveAllocations() == beforeActiveAllocations : "active heap allocation count should return to baseline";
+        assert metric.heapActiveBytes() == beforeActiveBytes : "active heap bytes should return to baseline";
+    }
+
+    @Test
+    public void test_wrap_allocation_tracked_and_released() {
+        ByteBufAllocatorMetric metric = ByteBufAllocator.DEFAULT.metric();
+        long beforeAllocations = metric.heapAllocations();
+        long beforeActiveAllocations = metric.heapActiveAllocations();
+        long beforeActiveBytes = metric.heapActiveBytes();
+
+        ByteBuf buf = ByteBuf.wrap(new byte[64]);
+        try {
+            assert metric.heapAllocations() == beforeAllocations + 1 : "heap allocation count should increase";
+            assert metric.heapActiveAllocations() == beforeActiveAllocations + 1 : "active heap allocation count should increase";
+            assert metric.heapActiveBytes() == beforeActiveBytes + 64 : "active heap bytes should increase";
+        } finally {
+            buf.free();
+        }
+
+        assert metric.heapActiveAllocations() == beforeActiveAllocations : "active heap allocation count should return to baseline";
+        assert metric.heapActiveBytes() == beforeActiveBytes : "active heap bytes should return to baseline";
+    }
+
+    @Test
     public void test_multiple_allocations_accumulate() {
         ByteBufAllocator alloc = ByteBufUtils.UNPOOLED_HEAP_ALLOCATOR;
         ByteBufAllocatorMetric metric = alloc.metric();
@@ -149,9 +207,8 @@ public class ByteBufAllocatorMetricTest {
         assert str.contains("ByteBufAllocatorMetric");
         assert str.contains("heap");
         assert str.contains("direct");
-        assert str.contains("pooled");
-        assert str.contains("ring");
         assert str.contains("total");
+        assert str.contains("activeCount");
     }
 
     @Test

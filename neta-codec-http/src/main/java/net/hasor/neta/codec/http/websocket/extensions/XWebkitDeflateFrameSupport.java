@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket.extensions;
-
 /**
  * Compatibility alias for the legacy {@code x-webkit-deflate-frame} websocket extension.
  * <p>

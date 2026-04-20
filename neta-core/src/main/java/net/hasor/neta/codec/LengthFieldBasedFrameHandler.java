@@ -25,7 +25,6 @@ import net.hasor.neta.channel.ProtoHandler;
 import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
-
 /**
  * A decoder that splits the received {@link ByteBuf}s dynamically by the
  * value of the length field in the message.

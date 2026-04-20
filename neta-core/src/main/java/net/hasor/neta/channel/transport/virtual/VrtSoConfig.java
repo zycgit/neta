@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.channel.transport.virtual;
 import net.hasor.neta.channel.SoConfig;
-
 /**
  * Configuration object for the in-process virtual transport.
  * <p>Virtual channels simulate the full transport process inside one JVM. This configuration

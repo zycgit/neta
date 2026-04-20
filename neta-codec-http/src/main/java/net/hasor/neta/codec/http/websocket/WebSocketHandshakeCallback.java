@@ -16,7 +16,6 @@
 package net.hasor.neta.codec.http.websocket;
 import net.hasor.neta.codec.http.HttpHeaders;
 import net.hasor.neta.codec.http.HttpStatus;
-
 /**
  * Callback used by the server handshake authorizer to accept or reject a request.
  * <p>

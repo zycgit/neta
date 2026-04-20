@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.channel;
 import net.hasor.cobble.logging.Logger;
-
 /**
  * Asynchronous task responsible for gracefully closing a channel.
  * <h3>Safe close flow</h3>
@@ -34,11 +33,11 @@ import net.hasor.cobble.logging.Logger;
  * @version : 2023-10-09
  */
 class SoCloseTask extends DefaultSoTask {
-    private static final Logger           logger = Logger.getLogger(SoCloseTask.class);
-    private final        long             channelID;
-    private final        SoContextService context;
-    private final        boolean          forceNow;
-    private              boolean          eventFired;
+    private static final Logger    logger = Logger.getLogger(SoCloseTask.class);
+    private final long             channelID;
+    private final SoContextService context;
+    private final boolean          forceNow;
+    private boolean                eventFired;
 
     public SoCloseTask(long channelID, SoContextService context, boolean forceNow) {
         this.channelID = channelID;

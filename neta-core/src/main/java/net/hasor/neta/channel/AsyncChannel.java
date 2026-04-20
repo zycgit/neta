@@ -18,7 +18,6 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.net.SocketAddress;
 import net.hasor.cobble.concurrent.future.Future;
-
 /**
  * Transport-layer abstraction behind a client-side {@link NetChannel}.
  * @author 赵永春 (zyc@hasor.net)

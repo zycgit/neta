@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
-
 /**
  * Thrown when the protocol decoder detects payload boundary overflow, an out-of-range value, or an invalid numeric constraint that makes the input unsafe to process.
  * @author 赵永春 (zyc@hasor.net)

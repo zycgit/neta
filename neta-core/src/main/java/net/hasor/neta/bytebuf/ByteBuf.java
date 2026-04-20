@@ -25,7 +25,6 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import net.hasor.cobble.ref.RecycleObjectPool;
-
 /**
  * Mutable byte buffer abstraction used throughout Neta codecs and transports.
  * <p>A {@code ByteBuf} keeps two moving cursors plus two marks:

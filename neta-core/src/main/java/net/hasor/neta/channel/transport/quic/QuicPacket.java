@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.channel.transport.quic;
 import java.util.Arrays;
-
 /**
  * Low-level encoding and decoding helper for QUIC long-header and short-header packets.
  * <p>This utility is responsible for parsing packet outer structures, applying or removing

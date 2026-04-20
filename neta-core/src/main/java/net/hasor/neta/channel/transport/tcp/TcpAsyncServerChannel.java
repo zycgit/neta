@@ -20,7 +20,6 @@ import java.net.SocketAddress;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
-
 /**
  * TCP server-side transport implementation based on {@link AsynchronousServerSocketChannel}.
  * <p>This class binds the listening socket, creates the framework-level {@link TcpNetListen}, and
@@ -44,12 +43,12 @@ import net.hasor.neta.channel.*;
  * @version 2025-08-06
  */
 class TcpAsyncServerChannel implements AsyncServerChannel {
-    private static final Logger                          logger = Logger.getLogger(TcpAsyncServerChannel.class);
-    private final        long                            channelId;
-    private final        AsynchronousServerSocketChannel channel;
-    private final        SoContextService                context;
-    private final        InetSocketAddress               listenAddr;
-    private final        TcpSoConfig                     soConfig;
+    private static final Logger                   logger = Logger.getLogger(TcpAsyncServerChannel.class);
+    private final long                            channelId;
+    private final AsynchronousServerSocketChannel channel;
+    private final SoContextService                context;
+    private final InetSocketAddress               listenAddr;
+    private final TcpSoConfig                     soConfig;
 
     /**
      * Create a TCP asynchronous server channel.

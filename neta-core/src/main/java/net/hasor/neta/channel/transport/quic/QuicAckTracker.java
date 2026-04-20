@@ -18,7 +18,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.TreeSet;
-
 /**
  * Tracks received packet numbers and generates ACK frames according to RFC 9000 Sections 13.2 and 19.3.
  * @author 赵永春 (zyc@hasor.net)
@@ -29,19 +28,19 @@ class QuicAckTracker {
     /** Threshold of accumulated ack-eliciting packets before generating an ACK; RFC recommends 2. */
     private final int           ackElicitingThreshold = 2;
     /** Largest packet number received so far; -1 means nothing has been received yet. */
-    private       long          largestReceivedPn     = -1;
+    private long                largestReceivedPn     = -1;
     /** Timestamp in milliseconds when the largest packet number was received. */
-    private       long          largestReceivedTime   = 0;
+    private long                largestReceivedTime   = 0;
     /** Number of ack-eliciting packets received since the last ACK was sent. */
-    private       int           pendingAckEliciting   = 0;
+    private int                 pendingAckEliciting   = 0;
     /** Whether any out-of-order packet has been received since the last ACK was sent. */
-    private       boolean       hasGap                = false;
+    private boolean             hasGap                = false;
     /** ACK delay exponent used to encode the ack_delay field; defaults to 3. */
-    private       int           ackDelayExponent      = 3;
+    private int                 ackDelayExponent      = 3;
     /** Maximum ACK delay in milliseconds; defaults to 25 ms. */
-    private       long          maxAckDelay           = 25;
+    private long                maxAckDelay           = 25;
     /** Timestamp in milliseconds when the last ACK frame was sent. */
-    private       long          lastAckSentTime       = 0;
+    private long                lastAckSentTime       = 0;
 
     /**
      * Parses ACK ranges from the contents of a received ACK frame.

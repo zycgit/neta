@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-
 /**
  * Network event fired in the <em>SND</em> direction, tail to head, just before a locally initiated
  * channel close is actually performed.

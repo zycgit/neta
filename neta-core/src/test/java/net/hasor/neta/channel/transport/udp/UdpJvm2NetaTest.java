@@ -14,17 +14,21 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.transport.udp;
+
+import static net.hasor.neta.channel.AbstractSoTest.*;
+
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.junit.Test;
+
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
-import org.junit.Test;
-import static net.hasor.neta.channel.AbstractSoTest.*;
 
 /**
  * @author 赵永春 (zyc@hasor.net)

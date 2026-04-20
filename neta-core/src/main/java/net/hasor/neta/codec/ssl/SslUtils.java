@@ -42,7 +42,6 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufInputStream;
 import net.hasor.neta.channel.NetChannel;
-
 /**
  * Shared static utilities for the SSL/TLS support package.
  * <p>The responsibilities in this class are narrower than a full runtime context. It mainly provides:
@@ -61,12 +60,12 @@ import net.hasor.neta.channel.NetChannel;
  * @see SslPemReaderByBouncyCastle
  */
 public class SslUtils {
-    public static final  String[] DEFAULT_CIPHER_SUITES;
-    public static final  String[] DEFAULT_TLSV13_CIPHER_SUITES;
-    public static final  String[] TLSV13_CIPHER_SUITES = { "TLS_AES_128_GCM_SHA256", "TLS_AES_256_GCM_SHA384", "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256", "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA" };
-    private static final Logger   logger               = Logger.getLogger(SslUtils.class);
-    private static final boolean  TLSV1_3_JDK_SUPPORTED;
-    private static final boolean  TLSV1_3_JDK_DEFAULT_ENABLED;
+    public static final String[] DEFAULT_CIPHER_SUITES;
+    public static final String[] DEFAULT_TLSV13_CIPHER_SUITES;
+    public static final String[] TLSV13_CIPHER_SUITES = { "TLS_AES_128_GCM_SHA256", "TLS_AES_256_GCM_SHA384", "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256", "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA" };
+    private static final Logger  logger               = Logger.getLogger(SslUtils.class);
+    private static final boolean TLSV1_3_JDK_SUPPORTED;
+    private static final boolean TLSV1_3_JDK_DEFAULT_ENABLED;
 
     static {
         TLSV1_3_JDK_SUPPORTED = isTLSv13SupportedByJDK0(null);

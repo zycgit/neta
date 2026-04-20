@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http.h2;
 import net.hasor.neta.codec.http.AbstractHttpEvent;
-
 /**
  * Base type for HTTP/2 network events.
  * <p>

@@ -18,7 +18,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import net.hasor.cobble.logging.Logger;
-
 /**
  * Abstraction for eagerly releasing native memory held by direct
  * {@link java.nio.ByteBuffer} instances.

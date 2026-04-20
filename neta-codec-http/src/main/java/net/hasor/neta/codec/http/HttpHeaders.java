@@ -1,7 +1,6 @@
 package net.hasor.neta.codec.http;
 import java.util.List;
 import java.util.Set;
-
 /**
  * Represents an HTTP header block.
  * <p>

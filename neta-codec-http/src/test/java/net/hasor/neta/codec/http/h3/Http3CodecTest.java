@@ -1,5 +1,7 @@
 package net.hasor.neta.codec.http.h3;
 
+import static org.junit.Assert.*;
+
 import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -8,19 +10,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
+
+import org.junit.Test;
+
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.NetConfig;
 import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.data.ProtoQueue;
-import net.hasor.neta.channel.data.ProtoRcvQueue;
-import net.hasor.neta.channel.data.ProtoRcvQueueView;
-import net.hasor.neta.channel.data.ProtoSndQueue;
-import net.hasor.neta.channel.data.ProtoSndQueueView;
+import net.hasor.neta.channel.data.*;
 import net.hasor.neta.channel.transport.quic.QuicVarInt;
 import net.hasor.neta.codec.http.*;
-import org.junit.Test;
-import static org.junit.Assert.*;
 
 /**
  * Comprehensive tests for HTTP/3 codec (encoder + decoder) implementation.
@@ -28,8 +27,8 @@ import static org.junit.Assert.*;
  * error handling, and boundary conditions.
  */
 public class Http3CodecTest {
-    private static final String name     = "test";
-    private static final int    poolSize = 8;
+    private static final String        name               = "test";
+    private static final int           poolSize           = 8;
     private static final Http3Settings CLIENT_H3_SETTINGS = Http3Settings.defaultLocalSettings(false);
     private static final Http3Settings SERVER_H3_SETTINGS = Http3Settings.defaultLocalSettings(true);
 
@@ -319,11 +318,7 @@ public class Http3CodecTest {
 
     @Test
     public void testEncoderPrependsSettingsFrameFromLocalSettings() throws Throwable {
-        Http3Settings localSettings = new Http3Settings()
-                .qpackMaxTableCapacity(32)
-                .maxFieldSectionSize(2048)
-                .qpackBlockedStreams(5)
-                .enableConnectProtocol(true);
+        Http3Settings localSettings = new Http3Settings().qpackMaxTableCapacity(32).maxFieldSectionSize(2048).qpackBlockedStreams(5).enableConnectProtocol(true);
         Http3HttpToFrameEncoder encoder = new Http3HttpToFrameEncoder(false, localSettings);
         ProtoContext context = mockContext();
         encoder.onInit(name, poolSize, context);

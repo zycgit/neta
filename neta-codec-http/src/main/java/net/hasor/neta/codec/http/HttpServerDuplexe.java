@@ -18,7 +18,6 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
-
 /**
  * Server-side HTTP/1.x duplex codec that combines request decoding and response encoding.
  * <p>

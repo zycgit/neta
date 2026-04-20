@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
-
 /**
  * Thrown when an HTTP message has a syntax error and parsing cannot continue.
  * <p>Corresponds to {@link HttpStatus#BAD_REQUEST 400 Bad Request}.</p>

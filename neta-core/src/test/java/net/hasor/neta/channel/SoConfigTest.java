@@ -14,9 +14,11 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+
+import org.junit.Test;
+
 import net.hasor.neta.channel.transport.tcp.TcpSoConfig;
 import net.hasor.neta.channel.transport.udp.UdpSoConfig;
-import org.junit.Test;
 
 /**
  * Tests for {@link SoConfig} factory methods, getters and setters.

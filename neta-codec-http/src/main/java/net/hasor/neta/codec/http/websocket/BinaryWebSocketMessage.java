@@ -17,7 +17,6 @@ package net.hasor.neta.codec.http.websocket;
 import net.hasor.cobble.ref.RecycleObjectPool;
 import net.hasor.cobble.ref.RecycleObjectPool.ObjHandler;
 import net.hasor.neta.bytebuf.ByteBuf;
-
 /**
  * Pooled binary message chunk.
  * <p>
@@ -27,17 +26,18 @@ import net.hasor.neta.bytebuf.ByteBuf;
  */
 public final class BinaryWebSocketMessage extends AbstractWebSocketMessage {
     private static final int                                RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    private static final ObjHandler<BinaryWebSocketMessage> RECYCLE_HANDLER = new ObjHandler<BinaryWebSocketMessage>() {
-                                                                                @Override
-                                                                                public BinaryWebSocketMessage create() {
-                                                                                    return new BinaryWebSocketMessage();
-                                                                                }
+    private static final ObjHandler<BinaryWebSocketMessage> RECYCLE_HANDLER = //
+            new ObjHandler<BinaryWebSocketMessage>() {
+                @Override
+                public BinaryWebSocketMessage create() {
+                    return new BinaryWebSocketMessage();
+                }
 
-                                                                                @Override
-                                                                                public void free(BinaryWebSocketMessage tar) {
-                                                                                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
-                                                                                }
-                                                                            };
+                @Override
+                public void free(BinaryWebSocketMessage tar) {
+                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
+                }
+            };
 
     private BinaryWebSocketMessage() {
     }

@@ -16,7 +16,6 @@
 package net.hasor.neta.channel.transport.udp;
 import java.io.IOException;
 import net.hasor.neta.channel.*;
-
 /**
  * Application-facing UDP {@link NetChannel} implementation.
  * <p>This wrapper binds one logical remote-address view to the framework pipeline.

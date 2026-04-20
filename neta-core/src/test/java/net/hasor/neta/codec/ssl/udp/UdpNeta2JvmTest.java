@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.ssl.udp;
+
+import static net.hasor.neta.codec.AbstractSoTest.*;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -21,10 +24,14 @@ import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.util.ArrayList;
 import java.util.List;
+
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLSession;
+
+import org.junit.Test;
+
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.NetChannel;
@@ -35,8 +42,6 @@ import net.hasor.neta.codec.ssl.AbstractSslTest;
 import net.hasor.neta.codec.ssl.SoSslUtils;
 import net.hasor.neta.codec.ssl.SslConfig;
 import net.hasor.neta.codec.ssl.SslProtocol;
-import org.junit.Test;
-import static net.hasor.neta.codec.AbstractSoTest.*;
 
 /**
  * @author 赵永春 (zyc@hasor.net)

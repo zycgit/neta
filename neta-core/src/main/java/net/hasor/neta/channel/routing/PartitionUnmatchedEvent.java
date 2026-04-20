@@ -20,7 +20,6 @@ import java.util.List;
 import net.hasor.cobble.function.Release;
 import net.hasor.neta.channel.SoEventData;
 import net.hasor.neta.channel.SoUtils;
-
 /**
  * Event payload describing a batch of inbound messages that could not enter a newly created partition.
  * @author 赵永春 (zyc@hasor.net)

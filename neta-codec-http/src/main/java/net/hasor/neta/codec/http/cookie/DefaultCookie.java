@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.cookie;
-
 /**
  * Default implementation of {@link Cookie}.
  * <p>This implementation stores {@link String} values directly and does not keep a lazily resolved

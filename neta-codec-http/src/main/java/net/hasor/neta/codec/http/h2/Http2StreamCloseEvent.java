@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h2;
-
 /**
  * HTTP/2 event published when one direction of a stream reaches END_STREAM.
  * <p>

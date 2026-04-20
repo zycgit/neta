@@ -17,7 +17,6 @@ package net.hasor.neta.channel.transport.quic;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
-
 /**
  * Connection-level send task used when QUIC runs in {@link QuicChannelMode#CHANNEL}.
  * @author 赵永春 (zyc@hasor.net)
@@ -27,8 +26,8 @@ class QuicMessageWriteTask extends DefaultSoTask {
     private final QuicChannelAsync quicChannel;
     private final SoSndContext     wContext;
     private final SoContextService context;
-    private       SoSndData        currentData;
-    private       QuicMessage      currentMessage;
+    private SoSndData              currentData;
+    private QuicMessage            currentMessage;
 
     QuicMessageWriteTask(NetChannel netChannel, QuicChannelAsync quicChannel, SoSndContext wContext, SoContextService context) {
         this.netChannel = netChannel;

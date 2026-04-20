@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
-
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.ProtoContext;
@@ -25,7 +24,6 @@ import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.codec.http.DefaultHttpByteBuf;
 import net.hasor.neta.codec.http.HttpObject;
-
 /**
  * Encode {@link WebSocketFrame} into upgraded HTTP payload objects.
  * <p>

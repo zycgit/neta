@@ -19,7 +19,6 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
-
 /**
  * Aggregates an ordered HTTP response object sequence into a {@link FullHttpResponse}.
  * <p>

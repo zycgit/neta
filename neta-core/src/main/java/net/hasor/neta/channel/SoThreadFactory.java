@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.channel;
 import java.util.concurrent.ThreadFactory;
-
 /**
  * Strategy interface for creating named {@link ThreadFactory} instances for Neta I/O and worker thread pools.
  * <p>Within each context, Neta calls {@link #newFactory} twice: once for the I/O thread pool using

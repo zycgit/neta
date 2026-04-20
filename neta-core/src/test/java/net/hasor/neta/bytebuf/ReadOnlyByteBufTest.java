@@ -14,11 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
+
+import static org.junit.Assert.*;
+
 import java.nio.ByteBuffer;
 import java.nio.ReadOnlyBufferException;
 import java.nio.charset.StandardCharsets;
+
 import org.junit.Test;
-import static org.junit.Assert.*;
 
 /**
  * Tests for ReadOnlyByteBuf

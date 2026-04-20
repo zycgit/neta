@@ -16,7 +16,6 @@
 package net.hasor.neta.channel;
 import java.io.IOException;
 import java.net.SocketAddress;
-
 /**
  * Transport-provider SPI used to create underlying client and server channels.
  * @author 赵永春 (zyc@hasor.net)

@@ -14,23 +14,24 @@
  * limitations under the License.
  */
 package net.hasor.neta.example.httpserver;
+
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
+
+import net.hasor.nhttp.server.NetaHttpServer;
 import net.hasor.neta.codec.http.cors.CorsConfig;
 import net.hasor.neta.codec.ssl.SslConfig;
 import net.hasor.neta.codec.ssl.SslProtocol;
 import net.hasor.neta.codec.ssl.SslUtils;
-import net.hasor.neta.http.NetaHttpServer;
 
 /**
- * Full-protocol HTTP server example demonstrating all protocol support:
+ * HTTP server example based on the new {@link NetaHttpServer} API.
  * <ul>
  *   <li>HTTP/1.1 on port 8080 (plain text)</li>
  *   <li>HTTPS on port 8443 with ALPN negotiation (HTTP/2, HTTP/1.1)</li>
- *   <li>HTTP/3 over QUIC on UDP port 8443</li>
  * </ul>
  * <p>
  * Access with Google Chrome:
@@ -50,10 +51,13 @@ import net.hasor.neta.http.NetaHttpServer;
 public class HttpServerMain {
     private static final int HTTP_PORT  = 8080;
     private static final int HTTPS_PORT = 8443;
+    private static final int MAX_CONTENT_LENGTH = 10 * 1024 * 1024;
+    private static final int SESSION_TIMEOUT_SECONDS = 1800;
+    private static final String SERVER_NAME = "Neta-Example-HTTP-Server/2.0";
 
     public static void main(String[] args) throws Exception {
         System.out.println("==========================================================");
-        System.out.println("  Neta Full-Protocol HTTP Server");
+        System.out.println("  Neta HTTP Server Example");
         System.out.println("==========================================================");
 
         // Step 1: Load or generate TLS certificate (signed by persistent local CA)
@@ -108,42 +112,20 @@ public class HttpServerMain {
                 .maxAge(3600) //
                 .build();
 
-        // Step 4: Create and configure the server
-        System.out.println("[3/4] Creating HTTP server with all protocols enabled...");
-        NetaHttpServer server = new NetaHttpServer();
-        server.serverName("Neta-FullProtocol-Server/1.0").ssl(sslConfig)              //
-                .cors(corsConfig)            //
-                .http2(true)         // Enable HTTP/2 via ALPN
-                .http3(true)         // Enable HTTP/3 over QUIC
-                .maxContentLength(10 * 1024 * 1024)// 10MB max
-                .sessionTimeout(1800);     // 30 min session timeout
+        // Step 4: Create and configure the servers
+        System.out.println("[3/4] Creating HTTP and HTTPS servers...");
+        NetaHttpServer httpServer = buildServer(corsConfig, null);
+        NetaHttpServer httpsServer = buildServer(corsConfig, sslConfig);
+        configureRoutes(httpServer);
+        configureRoutes(httpsServer);
 
-        // Register static file servlet as default handler
-        server.setDefaultServlet(new StaticFileServlet("static"));
+        registerShutdownHook(httpServer, httpsServer);
 
-        // Register API servlet for protocol info
-        server.addServlet("/api/info", new ProtocolInfoServlet());
-
-        // Register form submission servlet
-        server.addServlet("/api/form", new FormSubmitServlet());
-
-        // Register file upload servlet
-        server.addServlet("/api/upload", new FileUploadServlet());
-
-        // Register WebSocket echo handler
-        server.addWebSocket("/ws/echo", new EchoWebSocketHandler());
-
-        // Step 5: Start all protocol listeners
+        // Step 5: Start listeners
         System.out.println("[4/4] Starting server...");
 
-        // HTTP/1.1 on TCP
-        server.start(HTTP_PORT);
-
-        // HTTPS with ALPN (h2, http/1.1) on TCP
-        server.startSSL(HTTPS_PORT);
-
-        // HTTP/3 over QUIC on UDP (same port as HTTPS)
-        server.startHttp3(HTTPS_PORT);
+        httpServer.start(HTTP_PORT);
+        httpsServer.startSSL(HTTPS_PORT);
 
         System.out.println();
         System.out.println("==========================================================");
@@ -158,7 +140,7 @@ public class HttpServerMain {
         System.out.println("    - HTTPS     (TCP port " + HTTPS_PORT + " with ALPN)");
         System.out.println("      - h2        (HTTP/2)");
         System.out.println("      - http/1.1  (fallback)");
-        System.out.println("    - h3        (HTTP/3 over QUIC, UDP port " + HTTPS_PORT + ")");
+        System.out.println("    - h3        (temporarily disabled)");
         System.out.println();
         System.out.println("  API endpoint:      /api/info");
         System.out.println("  Form submit:       /api/form");
@@ -169,7 +151,35 @@ public class HttpServerMain {
         System.out.println("  Tip: If Chrome shows a cert warning, type 'thisisunsafe'");
         System.out.println("==========================================================");
 
-        // Block until server stops
-        server.await();
+        httpsServer.await();
+    }
+
+    private static NetaHttpServer buildServer(CorsConfig corsConfig, SslConfig sslConfig) {
+        NetaHttpServer server = new NetaHttpServer();
+        server.serverName(SERVER_NAME)
+                .cors(corsConfig)
+                .http2(true)
+                .maxContentLength(MAX_CONTENT_LENGTH)
+                .sessionTimeout(SESSION_TIMEOUT_SECONDS);
+
+        if (sslConfig != null) {
+            server.ssl(sslConfig);
+        }
+        return server;
+    }
+
+    private static void configureRoutes(NetaHttpServer server) {
+        server.setDefaultServlet(new StaticFileServlet("static"));
+        server.addServlet("/api/info", new ProtocolInfoServlet(HTTP_PORT, HTTPS_PORT, true, false));
+        server.addServlet("/api/form", new FormSubmitServlet());
+        server.addServlet("/api/upload", new FileUploadServlet());
+        server.addWebSocket("/ws/echo", new EchoWebSocketHandler());
+    }
+
+    private static void registerShutdownHook(NetaHttpServer httpServer, NetaHttpServer httpsServer) {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            httpsServer.stop();
+            httpServer.stop();
+        }, "neta-http-server-shutdown"));
     }
 }

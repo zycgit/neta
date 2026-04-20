@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
-
 /**
  * Contract for objects whose lifetime is managed through explicit reference
  * counting.

@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http.websocket;
 import net.hasor.neta.channel.ProtoContext;
-
 /**
  * Runtime extension bound to one websocket connection.
  * <p>

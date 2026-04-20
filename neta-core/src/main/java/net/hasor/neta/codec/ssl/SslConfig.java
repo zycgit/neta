@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.ssl;
-
 /**
  * SSL configuration for SSLEngine-based TLS/DTLS pipelines.
  * <p>

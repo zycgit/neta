@@ -56,27 +56,27 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * @see BasicByteBufAllocator
  */
 final class PooledByteBuf extends AbstractByteBuf {
-    static final         int                                         RECYCLE_INDEX    = RecycleObjectPool.registerType();
-    static final         ThreadLocal<java.util.ArrayDeque<Buffer>>   BUFFER_CACHE     = ThreadLocal.withInitial(java.util.ArrayDeque::new);
+    static final int                                       RECYCLE_INDEX    = RecycleObjectPool.registerType();
+    static final ThreadLocal<java.util.ArrayDeque<Buffer>> BUFFER_CACHE     = ThreadLocal.withInitial(java.util.ArrayDeque::new);
     /** Thread-local cache for recently freed pooled Buffers (pages stay allocated). */
-    private static final int                                         MAX_BUFFER_CACHE = 8;
-    static               RecycleObjectPool.ObjHandler<PooledByteBuf> RECYCLE_HANDLER  = new RecycleObjectPool.ObjHandler<PooledByteBuf>() {
-        public PooledByteBuf create() {
-            return new PooledByteBuf();
-        }
+    private static final int                               MAX_BUFFER_CACHE = 8;
+    static RecycleObjectPool.ObjHandler<PooledByteBuf>     RECYCLE_HANDLER  = new RecycleObjectPool.ObjHandler<PooledByteBuf>() {
+                                                                                public PooledByteBuf create() {
+                                                                                    return new PooledByteBuf();
+                                                                                }
 
-        @Override
-        public void free(PooledByteBuf tar) {
-            RecycleObjectPool.free(RECYCLE_INDEX, tar);
-        }
-    };
-    Buffer target;
-    private BufferPool pool;
+                                                                                @Override
+                                                                                public void free(PooledByteBuf tar) {
+                                                                                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
+                                                                                }
+                                                                            };
+    Buffer                                                 target;
+    private BufferPool                                     pool;
     // Cached heap array + offset for fast-path access (null for direct buffers)
-    private byte[]     heapArray;
-    private int        heapOffset;
+    private byte[] heapArray;
+    private int    heapOffset;
     // Cached direct buffer base address for Unsafe off-heap access (0 for heap buffers)
-    private long       directAddress;
+    private long directAddress;
 
     // ------------------------------------------------------------------------
     private int initSize;
@@ -252,6 +252,7 @@ final class PooledByteBuf extends AbstractByteBuf {
             toFreeTarget = this.target;
             this.target = extTarget;
             cacheHeapArray();
+            this.updateMetricCapacity(extTarget.capacity());
 
             int recyclePos = this.markedReaderIndex;
             this.writerIndex = this.writerIndex - recyclePos;
@@ -309,6 +310,7 @@ final class PooledByteBuf extends AbstractByteBuf {
                 toFreeTarget = this.target;
                 this.target = extTarget;
                 cacheHeapArray();
+                this.updateMetricCapacity(extTarget.capacity());
             } finally {
                 if (toFreeTarget != null) {
                     toFreeTarget.free();

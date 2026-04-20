@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-
 /**
  * Default immutable {@link PlayLoad} implementation created by the Neta pipeline.
  * @author 赵永春 (zyc@hasor.net)

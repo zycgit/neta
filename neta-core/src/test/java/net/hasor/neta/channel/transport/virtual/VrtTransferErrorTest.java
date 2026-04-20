@@ -14,11 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.transport.virtual;
+
 import java.net.SocketException;
+
+import org.junit.Test;
+
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.ProtoHelper;
 import net.hasor.neta.channel.ProtoInitializer;
-import org.junit.Test;
 
 /**
  * @author 赵永春 (zyc@hasor.net)

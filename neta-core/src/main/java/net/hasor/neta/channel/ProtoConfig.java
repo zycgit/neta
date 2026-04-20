@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-
 /**
  * Per-layer capacity configuration for the protocol stack.
  * <ul>

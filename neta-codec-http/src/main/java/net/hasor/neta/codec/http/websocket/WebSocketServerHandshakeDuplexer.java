@@ -30,7 +30,6 @@ import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.channel.routing.PartitionKey;
 import net.hasor.neta.codec.http.*;
-
 /**
  * Server opening-handshake duplexer for WebSocket upgrades.
  * <p>

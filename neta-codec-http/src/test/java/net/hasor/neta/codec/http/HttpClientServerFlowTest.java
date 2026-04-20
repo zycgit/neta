@@ -14,11 +14,15 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
-import java.util.List;
-import net.hasor.cobble.ref.Tuple;
-import org.junit.Test;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+
+import java.util.List;
+
+import org.junit.Test;
+
+import net.hasor.cobble.ref.Tuple;
 
 public class HttpClientServerFlowTest extends AbstractHttpTest {
     @Test

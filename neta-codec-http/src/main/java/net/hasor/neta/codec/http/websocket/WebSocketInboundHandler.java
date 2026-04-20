@@ -27,7 +27,6 @@ import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoRcvQueueView;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.codec.http.HttpEvent;
-
 /**
  * Decode inbound websocket frames into message chunks and control events.
  * <p>

@@ -16,7 +16,6 @@
 package net.hasor.neta.channel.transport.virtual;
 import java.io.IOException;
 import net.hasor.neta.channel.*;
-
 /**
  * Application-facing virtual channel object.
  * <p>This type is the channel instance exposed to protocol handlers after a virtual client connect

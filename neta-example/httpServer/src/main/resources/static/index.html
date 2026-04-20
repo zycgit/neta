@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neta Full-Protocol HTTP Server</title>
+    <title>Neta HTTP Server Example</title>
     <link rel="stylesheet" href="/css/style.css">
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
 </head>
 <body>
     <header>
         <div class="container">
-            <h1>🌐 Neta Full-Protocol HTTP Server</h1>
-            <p class="subtitle">A multi-protocol HTTP server built on the Neta AIO framework</p>
+            <h1>🌐 Neta HTTP Server Example</h1>
+            <p class="subtitle">A modern HTTP/1.1 + HTTP/2 server built on the new Neta nHTTP server API</p>
         </div>
     </header>
 
@@ -35,8 +35,8 @@
                 <div class="protocol-card" id="card-h3">
                     <div class="protocol-icon">🚀</div>
                     <h3>HTTP/3 (h3)</h3>
-                    <p class="port">UDP :8443 (QUIC)</p>
-                    <span class="badge badge-active">Active</span>
+                    <p class="port">Temporarily unavailable</p>
+                    <span class="badge badge-inactive">Disabled</span>
                 </div>
                 <div class="protocol-card" id="card-https">
                     <div class="protocol-icon">🔒</div>
@@ -87,33 +87,26 @@
 ┌──────────────────────────────────────────────────────────────────┐
 │                     Neta HTTP Server                             │
 ├──────────────┬───────────────────────────────────────────────────┤
-│              │                                                   │
-│   TCP :8080  │  TCP :8443 (TLS + ALPN)      UDP :8443            │
-│   ┌────────┐ │  ┌───────────────┐         ┌────────────────────┐ │
-│   │HTTP/1.1│ │  │ SslDuplexer   │         │ Http3ServerDuplexe │ │
-│   └───┬────┘ │  │ (TLS 1.2/1.3) │         │ (QUIC+HTTP/3)      │ │
-│       │      │  └──────┬────────┘         └──────┬─────────────┘ │
-│       │      │         │                         │               │
-│       │      │  ┌──────┴──────┐                  │               │
-│       │      │  │ ALPN Router │                  │               │
-│       │      │  └─┬─────┬─────┘                  │               │
-│       │      │    │     │                        │               │
-│       │      │  ┌─▼─┐ ┌─▼────────┐               │               │
-│       │      │  │H2 │ │ HTTP/1.1 │               │               │
-│       │      │  └─┬─┘ └─┬────────┘               │               │
-│       │      │    │     │                        │               │
-│       └──────┼────┴─────┴───┬────────────────────┘               │
-│              │              │                                    │
-│              │    ┌─────────▼────────────┐                       │
-│              │    │ HttpObjectAggregator │                       │
-│              │    └─────────┬────────────┘                       │
-│              │    ┌─────────▼────────────┐                       │
-│              │    │  Dispatch Handler    │                       │
-│              │    └─────────┬────────────┘                       │
-│              │    ┌─────────▼────────────┐                       │
-│              │    │  Servlet/Filter      │                       │
-│              │    │   + WebSocket        │                       │
-│              │    └──────────────────────┘                       │
+│   TCP :8080  │  TCP :8443 (TLS + ALPN)                           │
+│   ┌────────┐ │  ┌───────────────┐                                │
+│   │HTTP/1.1│ │  │ SslDuplexer   │                                │
+│   │  +h2c  │ │  │ (TLS 1.2/1.3) │                                │
+│   └───┬────┘ │  └──────┬────────┘                                │
+│       │      │         │                                         │
+│       │      │  ┌──────┴──────┐                                  │
+│       │      │  │ ALPN Router │                                  │
+│       │      │  └─┬─────┬─────┘                                  │
+│       │      │    │     │                                        │
+│       │      │  ┌─▼─┐ ┌─▼────────┐                               │
+│       │      │  │H2 │ │ HTTP/1.1 │                               │
+│       │      │  └─┬─┘ └─┬────────┘                               │
+│       └──────┼────┴─────┴──────┬─────────────────────────────────┤
+│              │                 │                                 │
+│              │    ┌────────────▼────────────┐                    │
+│              │    │   ServletDispatcher     │                    │
+│              │    │ + HttpServlet / Filter  │                    │
+│              │    │ + WebSocketHandler      │                    │
+│              │    └─────────────────────────┘                    │
 └──────────────┴───────────────────────────────────────────────────┘
                 </pre>
             </div>

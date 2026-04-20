@@ -25,7 +25,6 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
-
 /**
  * TCP receive-side {@link CompletionHandler} that continuously maintains the asynchronous read loop
  * for a single {@link TcpAsyncChannel}.
@@ -64,17 +63,17 @@ import net.hasor.neta.channel.*;
  * @see SoInputCloseException
  */
 class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextService>, Closeable {
-    private static final Logger           logger = Logger.getLogger(TcpRcvCompletionHandler.class);
-    private final        long             channelId;
-    private final        TcpAsyncChannel  channel;
-    private final        SoContextService context;
-    private final        NetMonitor       monitor;
+    private static final Logger    logger = Logger.getLogger(TcpRcvCompletionHandler.class);
+    private final long             channelId;
+    private final TcpAsyncChannel  channel;
+    private final SoContextService context;
+    private final NetMonitor       monitor;
     //
-    private final        Integer          rTimeoutMs;
-    private final        ByteBufAllocator allocator;
-    private final        ByteBuffer       rcvSwapBuffer;
-    private final        int              connectTimeoutMs;
-    private              NetChannel       netChannel; // Direct reference used by the fast path.
+    private final Integer          rTimeoutMs;
+    private final ByteBufAllocator allocator;
+    private final ByteBuffer       rcvSwapBuffer;
+    private final int              connectTimeoutMs;
+    private NetChannel             netChannel; // Direct reference used by the fast path.
 
     /**
      * Create a TCP read-completion handler.

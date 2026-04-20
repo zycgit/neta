@@ -20,6 +20,37 @@
                     <source>1.8</source>
                     <target>1.8</target>
                     <encoding>UTF8</encoding>
+                    <excludes>
+                        <exclude>**/HttpCodecBenchmark.java</exclude>
+                        <exclude>**/Http2CodecBenchmark.java</exclude>
+                        <exclude>**/WebSocketBenchmark.java</exclude>
+                        <exclude>**/StubProtoContext.java</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>**/HttpCodecBenchmark.java</exclude>
+                        <exclude>**/Http2CodecBenchmark.java</exclude>
+                        <exclude>**/WebSocketBenchmark.java</exclude>
+                        <exclude>**/StubProtoContext.java</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <configuration>
+                    <sourceFileExcludes>
+                        <sourceFileExclude>**/HttpCodecBenchmark.java</sourceFileExclude>
+                        <sourceFileExclude>**/Http2CodecBenchmark.java</sourceFileExclude>
+                        <sourceFileExclude>**/WebSocketBenchmark.java</sourceFileExclude>
+                        <sourceFileExclude>**/StubProtoContext.java</sourceFileExclude>
+                        <sourceFileExclude>**/jmh_generated/*.java</sourceFileExclude>
+                    </sourceFileExcludes>
                 </configuration>
             </plugin>
             <plugin>
@@ -74,6 +105,11 @@
         <dependency>
             <groupId>net.hasor</groupId>
             <artifactId>neta-codec-http</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>net.hasor</groupId>
+            <artifactId>nhttp-server</artifactId>
+            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>io.netty</groupId>

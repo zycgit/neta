@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
-
 /**
  * Describes whether the current HTTP semantic flow is connection-scoped or stream-scoped.
  * <p>

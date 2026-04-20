@@ -22,7 +22,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.logging.Logger;
-
 /**
  * Listening socket that accepts inbound connections and binds a new protocol stack to each one.
  * Supports suspend/resume to temporarily stop accepting new connections and provides APIs for
@@ -36,26 +35,26 @@ import net.hasor.cobble.logging.Logger;
  * @version : 2023-09-24
  */
 public abstract class NetListen extends SoAttrChannel<NetListen> {
-    protected static final Logger                                logger = Logger.getLogger(NetListen.class);
-    protected final        AsyncServerChannel                    channel;
+    protected static final Logger      logger = Logger.getLogger(NetListen.class);
+    protected final AsyncServerChannel channel;
     //
-    protected final        AtomicBoolean                         closeStatus;
-    protected final        Future<NetListen>                     closeFuture;
-    private final          List<SoChannelListener<SoChannel<?>>> onAcceptListeners;
-    private final          long                                  channelId;
-    private final          long                                  createdTime;
-    private final          AtomicLong                            acceptCount;
-    private final          Object                                acceptLock;
-    private final          Object                                closeLock;
+    protected final AtomicBoolean                       closeStatus;
+    protected final Future<NetListen>                   closeFuture;
+    private final List<SoChannelListener<SoChannel<?>>> onAcceptListeners;
+    private final long                                  channelId;
+    private final long                                  createdTime;
+    private final AtomicLong                            acceptCount;
+    private final Object                                acceptLock;
+    private final Object                                closeLock;
     //
-    private final          SocketAddress                         listenAddr;
-    private final          int                                   listenPort;
-    private final          ProtoInitializer                      initializer;
-    private final          SoContextService                      context;
-    private final          SoConfig                              soConfig;
-    private volatile       long                                  lastActiveTime;
-    private volatile       long                                  lastAcceptTime;
-    private volatile       boolean                               suspend;
+    private final SocketAddress    listenAddr;
+    private final int              listenPort;
+    private final ProtoInitializer initializer;
+    private final SoContextService context;
+    private final SoConfig         soConfig;
+    private volatile long          lastActiveTime;
+    private volatile long          lastAcceptTime;
+    private volatile boolean       suspend;
 
     protected NetListen(long channelId, SocketAddress listenAddr, int listenPort, AsyncServerChannel channel,//
             ProtoInitializer initializer, SoContextService context, SoConfig soConfig) {

@@ -20,7 +20,6 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoRcvQueueView;
 import net.hasor.neta.channel.data.ProtoSndQueue;
-
 /**
  * HTTP/1.x message aggregation base class built around a receive-side staging queue.
  * <p>

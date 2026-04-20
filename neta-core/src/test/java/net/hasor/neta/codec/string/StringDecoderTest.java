@@ -14,11 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.string;
+
 import java.nio.charset.StandardCharsets;
+
+import org.junit.Test;
+
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.channel.data.ProtoQueue;
-import org.junit.Test;
 
 /**
  * @author 赵永春 (zyc@hasor.net)

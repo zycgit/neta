@@ -5,7 +5,7 @@ import java.util.concurrent.TimeUnit;
 import io.netty.channel.embedded.EmbeddedChannel;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.channel.ProtoQueue;
+import net.hasor.neta.channel.data.ProtoQueue;
 import net.hasor.neta.codec.http.websocket.*;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.runner.Runner;

@@ -18,7 +18,6 @@ import java.util.Objects;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
-
 /**
  * Single node in the doubly linked handler chain of {@link ProtoStackChain}.
  * <p>It wraps one {@link ProtoDuplexer} together with its RCV_UP and SND_UP queues and implements

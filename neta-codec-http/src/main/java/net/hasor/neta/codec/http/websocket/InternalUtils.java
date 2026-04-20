@@ -30,7 +30,6 @@ import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.routing.PartitionKey;
 import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.h2.Http2ResetEvent;
-
 /**
  * Package-private websocket helpers used only by the local codec implementation.
  * @author 赵永春 (zyc@hasor.net)

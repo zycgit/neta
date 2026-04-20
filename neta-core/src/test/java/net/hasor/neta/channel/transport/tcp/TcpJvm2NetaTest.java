@@ -14,14 +14,17 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.transport.tcp;
+
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.junit.Test;
+
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
-import org.junit.Test;
 
 /**
  * @author 赵永春 (zyc@hasor.net)

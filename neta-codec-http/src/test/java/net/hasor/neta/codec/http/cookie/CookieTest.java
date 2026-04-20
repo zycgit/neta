@@ -14,15 +14,19 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.cookie;
+
+import static org.junit.Assert.*;
+
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+
+import org.junit.Test;
+
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.codec.http.DefaultHttpHeaders;
-import org.junit.Test;
-import static org.junit.Assert.*;
 
 /**
  * Tests for the cookie package:

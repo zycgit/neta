@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http.h3;
 import net.hasor.neta.codec.http.HttpProtocolConnectionException;
-
 /**
  * 当压缩后的头块无效，导致 QPACK 解码失败时抛出的异常。
  */

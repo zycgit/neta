@@ -14,9 +14,12 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.transport.virtual;
+
 import java.util.ArrayList;
-import net.hasor.neta.channel.*;
+
 import org.junit.Test;
+
+import net.hasor.neta.channel.*;
 
 /**
  * @author 赵永春 (zyc@hasor.net)

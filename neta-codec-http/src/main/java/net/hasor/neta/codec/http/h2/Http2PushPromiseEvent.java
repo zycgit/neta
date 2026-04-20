@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http.h2;
 import net.hasor.neta.codec.http.HttpHeaders;
-
 /**
  * Event corresponding to an HTTP/2 PUSH_PROMISE frame.
  * <p>

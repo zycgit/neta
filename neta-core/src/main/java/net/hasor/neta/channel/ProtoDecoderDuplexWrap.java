@@ -14,10 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
-
 /**
  * Internal wrapper that adapts a single decoder into a duplexer.
  * <p>When the upper-level API only appends an inbound decoder, this wrapper turns the inbound-only

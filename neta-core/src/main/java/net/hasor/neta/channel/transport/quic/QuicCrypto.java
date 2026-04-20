@@ -19,7 +19,6 @@ import javax.crypto.Cipher;
 import javax.crypto.Mac;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-
 /**
  * Cryptographic utility set related to QUIC packet protection.
  * <p>Covers the HKDF, AES-128-GCM AEAD, and header-protection algorithms required by RFC 9001.

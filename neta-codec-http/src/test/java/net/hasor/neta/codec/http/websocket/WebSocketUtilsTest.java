@@ -15,14 +15,17 @@
  */
 package net.hasor.neta.codec.http.websocket;
 
+import static org.junit.Assert.*;
+
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+
+import org.junit.Test;
+
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.cookie.DefaultCookie;
-import org.junit.Test;
-import static org.junit.Assert.*;
 
 public class WebSocketUtilsTest extends AbstractWebSocketTest {
     private static final String WS_URI     = "ws://example.com/chat";

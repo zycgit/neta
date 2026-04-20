@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http.cookie;
 import net.hasor.cobble.function.Release;
-
 /**
  * HTTP cookie abstraction defined according to
  * <a href="https://tools.ietf.org/html/rfc6265">RFC 6265</a>.

@@ -21,7 +21,6 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import net.hasor.cobble.ObjectUtils;
 import net.hasor.cobble.ref.RecycleObjectPool;
-
 /**
  * Pooled memory manager based on the buddy-allocation algorithm.
  * <p>A {@code BufferPool} partitions memory into fixed-size pages and organises
@@ -49,20 +48,20 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  */
 class BufferPool {
     //
-    protected final  BufferArena          qInit;// 000%~025%
-    protected final  BufferArena          q000; // 001%~050%
-    protected final  BufferArena          q025; // 025%~075%
-    protected final  BufferArena          q050; // 050%~100%
-    protected final  BufferArena          q075; // 075%~100%
-    protected final  BufferArena          q100; // 100%~MAX
-    protected final  BufferArena[]        arenaList;
-    private final    int                  pageSize;
-    private final    int                  buddyTreeHeight;
-    private final    int                  maximumChunkCount;
-    private final    int                  memoryChunkSize;
-    private final    Map<Integer, Buffer> bufferPool;
-    private final    AtomicInteger        memAddressSeq;
-    private volatile long                 memoryCapacity;
+    protected final BufferArena        qInit;// 000%~025%
+    protected final BufferArena        q000; // 001%~050%
+    protected final BufferArena        q025; // 025%~075%
+    protected final BufferArena        q050; // 050%~100%
+    protected final BufferArena        q075; // 075%~100%
+    protected final BufferArena        q100; // 100%~MAX
+    protected final BufferArena[]      arenaList;
+    private final int                  pageSize;
+    private final int                  buddyTreeHeight;
+    private final int                  maximumChunkCount;
+    private final int                  memoryChunkSize;
+    private final Map<Integer, Buffer> bufferPool;
+    private final AtomicInteger        memAddressSeq;
+    private volatile long              memoryCapacity;
 
     public BufferPool(int pageSize) {
         this(pageSize, -1, 12);

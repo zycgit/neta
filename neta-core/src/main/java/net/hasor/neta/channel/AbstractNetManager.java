@@ -18,7 +18,6 @@ import java.io.IOException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 import net.hasor.cobble.logging.Logger;
-
 /**
  * Skeleton base class of {@link NetManager}. It initializes and owns the shared {@link NetConfig},
  * {@link SoContextService}, and shutdown lifecycle state.
@@ -31,10 +30,10 @@ import net.hasor.cobble.logging.Logger;
  * @see SoContextService
  */
 public abstract class AbstractNetManager {
-    private static final Logger           logger = Logger.getLogger(AbstractNetManager.class);
-    protected final      NetConfig        config;
-    protected final      SoContextService context;
-    protected final      AtomicBoolean    shutdown;
+    private static final Logger      logger = Logger.getLogger(AbstractNetManager.class);
+    protected final NetConfig        config;
+    protected final SoContextService context;
+    protected final AtomicBoolean    shutdown;
 
     /**
      * Create the manager skeleton with the given configuration and initialize the shared context.

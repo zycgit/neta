@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.channel;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-
 /**
  * Global configuration bean used by {@link NetManager} during startup.
  * <p>Key properties and their default values:</p>
@@ -48,14 +47,14 @@ public class NetConfig {
     // Buffer allocator.
     private ByteBufAllocator bufAllocator;
     // Internal retry scheduler interval.
-    private int              retryIntervalMs = 50;
+    private int retryIntervalMs = 50;
     // Thread settings.
-    private SoThreadFactory  threadFactory;
-    private ClassLoader      classLoader;
-    private int              ioThreads;
-    private int              taskThreads;
+    private SoThreadFactory threadFactory;
+    private ClassLoader     classLoader;
+    private int             ioThreads;
+    private int             taskThreads;
     // Misc settings.
-    private boolean          printLog        = false;
+    private boolean printLog = false;
 
     /** Return the interval between internal retry scheduler ticks, in milliseconds. */
     public int getRetryIntervalMs() {

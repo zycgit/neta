@@ -14,10 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
-import java.nio.charset.StandardCharsets;
-import net.hasor.cobble.function.Release;
-import org.junit.Test;
+
 import static org.junit.Assert.*;
+
+import java.nio.charset.StandardCharsets;
+
+import org.junit.Test;
+
+import net.hasor.cobble.function.Release;
 
 public class StringViewTest {
     private static ByteBuf toBuf(String s) {

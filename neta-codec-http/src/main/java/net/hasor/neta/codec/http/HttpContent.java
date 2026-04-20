@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http;
 import net.hasor.neta.bytebuf.ByteBuf;
-
 /**
  * Represents a content chunk within an HTTP message body.
  * <p>

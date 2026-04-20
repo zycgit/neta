@@ -18,7 +18,6 @@ import java.util.*;
 import java.util.function.Predicate;
 import net.hasor.neta.channel.ProtoFullException;
 import net.hasor.neta.channel.SoUtils;
-
 /**
  * Queue implementation that simultaneously implements {@link ProtoRcvQueue} and {@link ProtoSndQueue};
  * concrete capacity limits are controlled by the {@code capacity} parameter.
@@ -52,57 +51,57 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     /** Standard immutable empty {@link ProtoRcvQueue} singleton with no ownership obligations. */
     @SuppressWarnings("rawtypes")
     private static final ProtoRcvQueue EMPTY_RCV   = new ProtoRcvQueue() {
-        @Override
-        public int getCapacity() {
-            return 0;
-        }
+                                                       @Override
+                                                       public int getCapacity() {
+                                                           return 0;
+                                                       }
 
-        @Override
-        public int queueSize() {
-            return 0;
-        }
+                                                       @Override
+                                                       public int queueSize() {
+                                                           return 0;
+                                                       }
 
-        @Override
-        public List takeMessage(int cnt) {
-            return Collections.emptyList();
-        }
+                                                       @Override
+                                                       public List takeMessage(int cnt) {
+                                                           return Collections.emptyList();
+                                                       }
 
-        @Override
-        public List peekMessage(int cnt) {
-            return Collections.emptyList();
-        }
+                                                       @Override
+                                                       public List peekMessage(int cnt) {
+                                                           return Collections.emptyList();
+                                                       }
 
-        @Override
-        public void skipMessage(int cnt) {
-        }
+                                                       @Override
+                                                       public void skipMessage(int cnt) {
+                                                       }
 
-        @Override
-        public void drainToQueue(String key, int cnt) {
-        }
+                                                       @Override
+                                                       public void drainToQueue(String key, int cnt) {
+                                                       }
 
-        @Override
-        public void drainToQueue(String key, int cnt, Predicate predicate) {
-        }
+                                                       @Override
+                                                       public void drainToQueue(String key, int cnt, Predicate predicate) {
+                                                       }
 
-        @Override
-        public List<String> queueNames() {
-            return Collections.emptyList();
-        }
+                                                       @Override
+                                                       public List<String> queueNames() {
+                                                           return Collections.emptyList();
+                                                       }
 
-        @Override
-        public boolean hasQueue(String key) {
-            return false;
-        }
+                                                       @Override
+                                                       public boolean hasQueue(String key) {
+                                                           return false;
+                                                       }
 
-        @Override
-        public void discard(String key) {
-        }
+                                                       @Override
+                                                       public void discard(String key) {
+                                                       }
 
-        @Override
-        public ProtoRcvQueueView queueView(String key) {
-            throw new UnsupportedOperationException("empty receive queue does not support queue views.");
-        }
-    };
+                                                       @Override
+                                                       public ProtoRcvQueueView queueView(String key) {
+                                                           throw new UnsupportedOperationException("empty receive queue does not support queue views.");
+                                                       }
+                                                   };
 
     private final int                                   capacity;
     private final List<T>                               linkedList;
@@ -149,8 +148,12 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     /** {@inheritDoc} */
     @Override
     public boolean offerMessage(T[] offerList) {
-        if (offerList == null || offerList.length == 0) {
+        if (offerList == null) {
             return false;
+        }
+
+        if (offerList.length == 0) {
+            return true;
         }
 
         if (this.slotSize() < offerList.length) {
@@ -164,8 +167,12 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     /** {@inheritDoc} */
     @Override
     public boolean offerMessage(List<T> offerList) {
-        if (offerList == null || offerList.isEmpty()) {
+        if (offerList == null) {
             return false;
+        }
+
+        if (offerList.isEmpty()) {
+            return true;
         }
 
         int size = offerList.size();
@@ -206,7 +213,11 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
         }
 
         int size = offerList.queueSize();
-        if (size <= 0 || this.slotSize() < size) {
+        if (size == 0) {
+            return true;
+        }
+
+        if (this.slotSize() < size) {
             return false;
         }
 
@@ -492,9 +503,9 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
 
 class ProtoQueueRcvSubQueue<T> implements ProtoRcvQueueView<T> {
     protected final ProtoQueue<T> owner;
-    private final   String        key;
+    private final String          key;
     protected final List<T>       linkedList;
-    private         boolean       closed;
+    private boolean               closed;
 
     ProtoQueueRcvSubQueue(ProtoQueue<T> owner, String key) {
         this.owner = owner;
@@ -732,7 +743,6 @@ class ProtoQueueSndSubQueue<T> extends ProtoQueueRcvSubQueue<T> implements Proto
         if (moved.isEmpty()) {
             return false;
         }
-
         this.linkedList.addAll(moved);
         return true;
     }

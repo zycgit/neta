@@ -16,7 +16,6 @@
 package net.hasor.neta.channel;
 import java.io.Closeable;
 import java.io.IOException;
-
 /**
  * Transport-layer abstraction behind a server-side channel, typically exposed as a {@link NetListen} listener.
  * @author 赵永春 (zyc@hasor.net)

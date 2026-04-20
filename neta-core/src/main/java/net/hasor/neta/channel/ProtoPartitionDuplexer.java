@@ -22,7 +22,6 @@ import net.hasor.neta.channel.data.ProtoRcvQueueView;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.channel.routing.*;
 import net.hasor.neta.channel.routing.ProtoPartitionPolicy.ReceivePolicy;
-
 /**
  * Partition duplexer that splits one connection's message stream into multiple partition sub-pipelines by partition key.
  * <p>Unlike {@link ProtoRoutingDuplexer}, which selects one branch for the entire connection, this

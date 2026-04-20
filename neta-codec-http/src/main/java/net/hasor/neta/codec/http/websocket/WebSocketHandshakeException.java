@@ -18,7 +18,6 @@ import java.util.Objects;
 import net.hasor.neta.codec.http.HttpHeaders;
 import net.hasor.neta.codec.http.HttpProtocolException;
 import net.hasor.neta.codec.http.HttpStatus;
-
 /**
  * Protocol exception representing a failed WebSocket opening handshake.
  * <p>

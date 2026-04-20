@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import net.hasor.cobble.logging.Logger;
-
 /**
  * Reassembles out-of-order STREAM or CRYPTO fragments into a contiguous byte sequence.
  * <p>
@@ -44,17 +43,17 @@ class QuicStreamReassembler {
     /** Out-of-order fragments buffered by offset, structured as offset → data and sorted by offset. */
     private final TreeMap<Long, byte[]> fragments           = new TreeMap<>();
     /** Byte offset expected next for in-order delivery. */
-    private       long                  nextExpectedOffset  = 0;
+    private long                        nextExpectedOffset  = 0;
     /** Total number of bytes already delivered upstream, equal to nextExpectedOffset. */
-    private       long                  totalBytesDelivered = 0;
+    private long                        totalBytesDelivered = 0;
     /** Maximum buffer size used to prevent unbounded memory growth; defaults to 4 MB. */
-    private       long                  maxBufferSize       = 4 * 1024 * 1024;
+    private long                        maxBufferSize       = 4 * 1024 * 1024;
     /** Total number of bytes currently buffered. */
-    private       long                  currentBufferSize   = 0;
+    private long                        currentBufferSize   = 0;
     /** Whether FIN has already been received. */
-    private       boolean               finReceived         = false;
+    private boolean                     finReceived         = false;
     /** Final byte offset, determined when FIN is received. */
-    private       long                  finalOffset         = -1;
+    private long                        finalOffset         = -1;
 
     /**
      * Sets the maximum buffer size for out-of-order data.

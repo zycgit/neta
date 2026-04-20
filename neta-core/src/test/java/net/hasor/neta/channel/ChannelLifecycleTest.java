@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -21,12 +22,14 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+
+import org.junit.Test;
+
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.channel.transport.virtual.VrtChannel;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.channel.transport.virtual.VrtSocketAddress;
-import org.junit.Test;
 
 /**
  * Tests for channel attributes, context, flash, subscribe, and lifecycle management.

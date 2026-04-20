@@ -1,5 +1,4 @@
 package net.hasor.neta.codec.http;
-
 /**
  * Marks the end of the request or response header section.
  * <p>

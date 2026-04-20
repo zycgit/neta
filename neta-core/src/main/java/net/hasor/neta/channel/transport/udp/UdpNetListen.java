@@ -16,7 +16,6 @@
 package net.hasor.neta.channel.transport.udp;
 import java.net.SocketAddress;
 import net.hasor.neta.channel.*;
-
 /**
  * Listen-handle wrapper for a bound UDP server socket.
  * <p>This class is only the framework-visible {@link NetListen} descriptor. The actual datagram

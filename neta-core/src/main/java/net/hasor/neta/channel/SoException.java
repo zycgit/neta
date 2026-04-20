@@ -16,7 +16,6 @@
 package net.hasor.neta.channel;
 import java.io.IOException;
 import net.hasor.neta.channel.transport.quic.QuicException;
-
 /**
  * Root checked exception for all I/O failures in the Neta channel layer.
  * <p>Within {@code neta-core}, all channel I/O faults that need to be propagated as checked

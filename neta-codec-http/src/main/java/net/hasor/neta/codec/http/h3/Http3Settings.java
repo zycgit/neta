@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h3;
-
 /**
  * RFC 9114 第 7.2.4.1 节定义的 HTTP/3 settings。
  * <p>

@@ -14,15 +14,17 @@
  * limitations under the License.
  */
 package net.hasor.neta.example.httpserver;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
+
+import net.hasor.nhttp.server.HttpServlet;
+import net.hasor.nhttp.server.ServletRequest;
+import net.hasor.nhttp.server.ServletResponse;
 import net.hasor.neta.codec.http.HttpHeaderNames;
 import net.hasor.neta.codec.http.HttpHeaderValues;
-import net.hasor.neta.http.HttpServlet;
-import net.hasor.neta.http.ServletRequest;
-import net.hasor.neta.http.ServletResponse;
 
 /**
  * A simple static file servlet that serves resources from the classpath.
@@ -106,7 +108,7 @@ public class StaticFileServlet extends HttpServlet {
             return;
         }
 
-        try {
+        try (InputStream stream = resourceStream) {
             // Determine content type
             String contentType = getContentType(path);
             response.setContentType(contentType);
@@ -122,11 +124,9 @@ public class StaticFileServlet extends HttpServlet {
             // Read and write the resource
             byte[] buffer = new byte[8192];
             int bytesRead;
-            while ((bytesRead = resourceStream.read(buffer)) != -1) {
+            while ((bytesRead = stream.read(buffer)) != -1) {
                 response.write(buffer, 0, bytesRead);
             }
-        } finally {
-            resourceStream.close();
         }
     }
 

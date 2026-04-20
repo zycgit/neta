@@ -14,9 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.routing;
+
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+
+import org.junit.Assert;
+import org.junit.Test;
+
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.data.ProtoQueue;
@@ -25,8 +30,6 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.channel.transport.virtual.VrtChannel;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.channel.transport.virtual.VrtSocketAddress;
-import org.junit.Assert;
-import org.junit.Test;
 
 public class ProtoRoutingPartitionTest extends AbstractStackTest {
     @Test

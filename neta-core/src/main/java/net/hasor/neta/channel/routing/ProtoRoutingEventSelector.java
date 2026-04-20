@@ -14,11 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.routing;
-
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoRoutingDuplexer;
 import net.hasor.neta.channel.SoEvent;
-
 /**
  * Event-routing selector.
  * <p>When no branch has been selected yet, {@link ProtoRoutingDuplexer} can call this selector to

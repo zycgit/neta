@@ -17,7 +17,6 @@ package net.hasor.neta.channel;
 import net.hasor.neta.channel.transport.quic.QuicSoConfig;
 import net.hasor.neta.channel.transport.tcp.TcpSoConfig;
 import net.hasor.neta.channel.transport.udp.UdpSoConfig;
-
 /**
  * Per-channel socket option configuration, including protocol type, buffer sizes, slot counts,
  * suspend flag, and timeout settings.
@@ -28,11 +27,11 @@ import net.hasor.neta.channel.transport.udp.UdpSoConfig;
  */
 public class SoConfig {
     // Listener settings.
-    private final String  protocol;
+    private final String protocol;
     // Queue slot settings.
-    private       int     rcvSlotSize = -1;
-    private       int     sndSlotSize = -1;
-    private       boolean suspend     = false;
+    private int     rcvSlotSize = -1;
+    private int     sndSlotSize = -1;
+    private boolean suspend     = false;
 
     // Socket settings.
     private Integer soRcvBuf         = null; // SO_RCVBUF in bytes.

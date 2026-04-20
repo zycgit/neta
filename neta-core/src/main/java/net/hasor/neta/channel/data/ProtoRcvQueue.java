@@ -16,7 +16,6 @@
 package net.hasor.neta.channel.data;
 import java.util.List;
 import java.util.function.Predicate;
-
 /**
  * Main receive-side queue interface.
  * <p>On top of the read semantics defined by {@link ProtoRcvData}, it adds capacity management, named views, and the ability to transfer data from the main queue into a view.</p>

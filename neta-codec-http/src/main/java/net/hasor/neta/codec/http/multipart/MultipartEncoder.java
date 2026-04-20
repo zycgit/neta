@@ -23,7 +23,6 @@ import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.codec.http.HttpHeaderValues;
-
 /**
  * Encodes a set of {@link FileUpload} parts into a {@code multipart/form-data} request body.
  * <p>The encoder produces both a directly usable request-body byte array and the matching
@@ -83,7 +82,7 @@ public class MultipartEncoder {
      * @param value the field value, encoded with the current encoder charset
      */
     public MultipartEncoder addField(String name, String value) {
-        parts.add(new PartEntry(name, null, null, ByteBuf.wrap(value.getBytes(charset))));
+        parts.add(PartEntry.forBytes(name, null, null, value.getBytes(charset)));
         return this;
     }
 
@@ -95,7 +94,7 @@ public class MultipartEncoder {
      * @param data the raw file bytes
      */
     public MultipartEncoder addFile(String fieldName, String filename, String contentType, byte[] data) {
-        parts.add(new PartEntry(fieldName, filename, contentType, ByteBuf.wrap(data)));
+        parts.add(PartEntry.forBytes(fieldName, filename, contentType, data));
         return this;
     }
 
@@ -104,7 +103,7 @@ public class MultipartEncoder {
      * The content ByteBuf is referenced directly and is not copied.
      */
     public MultipartEncoder addPart(FileUpload part) {
-        parts.add(new PartEntry(part.name(), part.filename(), part.contentType(), part.content()));
+        parts.add(PartEntry.forBuffer(part.name(), part.filename(), part.contentType(), part.content()));
         return this;
     }
 
@@ -123,7 +122,7 @@ public class MultipartEncoder {
         // Estimate the total size to reduce reallocations as much as possible.
         int estimate = finalBoundaryBytes.length;
         for (PartEntry entry : parts) {
-            estimate += boundaryPrefixBytes.length + 256 + entry.data.readableBytes() + crlfBytes.length * 2;
+            estimate += boundaryPrefixBytes.length + 256 + entry.readableBytes() + crlfBytes.length * 2;
         }
 
         ByteBuf dst = ByteBufAllocator.DEFAULT.buffer(estimate);
@@ -145,9 +144,8 @@ public class MultipartEncoder {
             }
             // Empty line
             dst.writeBytes(crlfBytes);
-            // Body content. getBuffer does not advance the source readerIndex, so repeated encoding is safe.
-            int bodyLen = entry.data.readableBytes();
-            entry.data.getBuffer(0, dst, bodyLen);
+            // Body content is copied without mutating the original part payload.
+            entry.writeTo(dst);
             // CRLF after the body content
             dst.writeBytes(crlfBytes);
         }
@@ -179,13 +177,37 @@ public class MultipartEncoder {
         final String  name;
         final String  filename;
         final String  contentType;
+        final byte[]  bytes;
         final ByteBuf data;
 
-        PartEntry(String name, String filename, String contentType, ByteBuf data) {
+        static PartEntry forBytes(String name, String filename, String contentType, byte[] bytes) {
+            return new PartEntry(name, filename, contentType, bytes, null);
+        }
+
+        static PartEntry forBuffer(String name, String filename, String contentType, ByteBuf data) {
+            return new PartEntry(name, filename, contentType, null, data);
+        }
+
+        PartEntry(String name, String filename, String contentType, byte[] bytes, ByteBuf data) {
             this.name = name;
             this.filename = filename;
             this.contentType = contentType;
+            this.bytes = bytes;
             this.data = data;
+        }
+
+        int readableBytes() {
+            return this.bytes != null ? this.bytes.length : this.data.readableBytes();
+        }
+
+        void writeTo(ByteBuf dst) {
+            if (this.bytes != null) {
+                dst.writeBytes(this.bytes);
+                return;
+            }
+
+            int bodyLen = this.data.readableBytes();
+            this.data.getBuffer(0, dst, bodyLen);
         }
     }
 }

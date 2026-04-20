@@ -33,7 +33,6 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
-
 /**
  * Selector-driven server-side transport implementation built on the JDK SCTP API.
  * <p>The server owns a listening {@link SctpServerChannel}, accepts native SCTP sockets,
@@ -61,16 +60,16 @@ import net.hasor.neta.channel.*;
  * @see SctpSoConfig
  */
 class SctpAsyncServerChannel implements AsyncServerChannel {
-    private static final Logger            logger = Logger.getLogger(SctpAsyncServerChannel.class);
-    private final        long              channelId;
-    private final        SctpServerChannel channel;
-    private final        Selector          selector;
-    private final        SoContextService  context;
-    private final        InetSocketAddress listenAddr;
-    private final        SctpSoConfig      soConfig;
+    private static final Logger     logger = Logger.getLogger(SctpAsyncServerChannel.class);
+    private final long              channelId;
+    private final SctpServerChannel channel;
+    private final Selector          selector;
+    private final SoContextService  context;
+    private final InetSocketAddress listenAddr;
+    private final SctpSoConfig      soConfig;
     //
-    private final        ByteBufAllocator  bufAllocator;
-    private final        ByteBuffer        receiveBuffer;
+    private final ByteBufAllocator bufAllocator;
+    private final ByteBuffer       receiveBuffer;
 
     SctpAsyncServerChannel(long channelId, SctpServerChannel channel, SoContext context, SocketAddress listenAddr, SoConfig soConfig) throws IOException {
         this.channelId = channelId;

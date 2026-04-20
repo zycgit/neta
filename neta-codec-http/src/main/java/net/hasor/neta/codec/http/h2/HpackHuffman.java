@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h2;
-
 /**
  * HPACK Huffman coding implementation defined by RFC 7541 Appendix B.
  * <p>

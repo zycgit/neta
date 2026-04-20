@@ -18,7 +18,6 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.bytebuf.CompositeByteBuf;
 import net.hasor.neta.codec.http.*;
-
 /**
  * Incremental aggregator for HTTP request and response fragments used during websocket handshake.
  * <p>

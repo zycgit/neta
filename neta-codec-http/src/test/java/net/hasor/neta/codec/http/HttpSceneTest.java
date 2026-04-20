@@ -14,12 +14,16 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
-import java.util.List;
-import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
-import org.junit.Test;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+
+import java.util.List;
+
+import org.junit.Test;
+
+import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 
 public class HttpSceneTest extends AbstractHttpTest {
     @Test

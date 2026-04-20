@@ -14,19 +14,14 @@
     <!-- Project Info -->
     <name>neta-example-http-server</name>
     <description>
-        A full-protocol HTTP server example using Neta nHTTP.
-        Demonstrates HTTP/1.1, HTTP/2, HTTP/3 (QUIC), HTTPS with ALPN, and static file serving.
+        An HTTP server example using the new nHTTP server API.
+        Demonstrates HTTP/1.1, HTTP/2, HTTPS with ALPN, WebSocket, and static file serving.
     </description>
 
     <dependencies>
         <dependency>
             <groupId>net.hasor</groupId>
-            <artifactId>nhttp</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>net.hasor</groupId>
-            <artifactId>neta-core</artifactId>
+            <artifactId>nhttp-server</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
@@ -52,6 +47,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.2</version>
                 <configuration>
                     <archive>
                         <manifest>

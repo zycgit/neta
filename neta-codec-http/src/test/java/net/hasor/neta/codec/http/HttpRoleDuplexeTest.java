@@ -14,12 +14,16 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
+
+import static org.junit.Assert.*;
+
 import java.util.List;
+
+import org.junit.Test;
+
 import net.hasor.cobble.ref.Tuple;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
-import org.junit.Test;
-import static org.junit.Assert.*;
 
 public class HttpRoleDuplexeTest extends AbstractHttpTest {
     @Test

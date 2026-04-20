@@ -22,7 +22,6 @@ import net.hasor.neta.channel.AsyncChannel;
 import net.hasor.neta.channel.NetChannel;
 import net.hasor.neta.channel.SoConnectException;
 import net.hasor.neta.channel.SoContextService;
-
 /**
  * Completion handler for TCP client connection completion.
  * <p>When the connection succeeds, it initializes the channel, starts the read flow, and completes
@@ -48,10 +47,10 @@ import net.hasor.neta.channel.SoContextService;
  * @version : 2023-09-24
  */
 class TcpConnectCompletionHandler implements CompletionHandler<Void, SoContextService> {
-    private static final Logger             logger = Logger.getLogger(TcpConnectCompletionHandler.class);
-    private final        TcpChannel         channel;
-    private final        AsyncChannel       asyncChannel;
-    private final        Future<NetChannel> future;
+    private static final Logger      logger = Logger.getLogger(TcpConnectCompletionHandler.class);
+    private final TcpChannel         channel;
+    private final AsyncChannel       asyncChannel;
+    private final Future<NetChannel> future;
 
     /**
      * Create a connect-completion handler.

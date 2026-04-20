@@ -347,7 +347,8 @@
 
 ### 7.4 连接迁移（Connection Migration）
 
-- **文件**: `QuicAsyncServerChannel.java#handleConnectionMigration()`, `QuicChannelAsync.java#migrate()`, `QuicChannel.java#migrate()`
+- **文件**: `QuicAsyncServerChannel.java#handleConnectionMigration()`, `QuicChannelAsync.java#migrate()`,
+  `QuicChannel.java#migrate()`
 - **RFC**: RFC 9000 §9
 
 | 测试点                                                       | 状态    |
@@ -633,7 +634,10 @@ neta-core/src/test/java/net/hasor/neta/channel/quic/
 
 ---
 
-*最后更新: 2026-03-01（补充 §10.1 TLS 1.3 密钥推导状态：Initial/Handshake/1-RTT/HeaderProtection/AEAD-128-GCM/每级独立密钥对 → `[x]`；补充 §2.1 包头格式：Long Header/Header Protection → `[x]`，Short Header → `[~]`；修正 §10.1 文件引用 QuicCrypto→QuicTlsEngine；共 68 个 QUIC 测试通过）*
+*最后更新: 2026-03-01（补充 §10.1 TLS 1.3
+密钥推导状态：Initial/Handshake/1-RTT/HeaderProtection/AEAD-128-GCM/每级独立密钥对 → `[x]`；补充 §2.1 包头格式：Long
+Header/Header Protection → `[x]`，Short Header → `[~]`；修正 §10.1 文件引用 QuicCrypto→QuicTlsEngine；共 68 个 QUIC
+测试通过）*
 
 ---
 

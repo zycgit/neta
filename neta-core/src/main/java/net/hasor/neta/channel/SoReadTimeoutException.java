@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-
 /**
  * Thrown when a channel hits its read-idle timeout condition.
  * <p>Unlike {@link SoRcvException}, this does not necessarily mean the transport has failed. It is

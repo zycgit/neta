@@ -1,5 +1,4 @@
 package net.hasor.neta.codec.http;
-
 /**
  * Represents a trailer header block emitted after a chunked message body.
  * <p>

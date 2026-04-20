@@ -17,7 +17,6 @@ package net.hasor.neta.codec.http.cookie;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import net.hasor.neta.bytebuf.ByteBuf;
-
 /**
  * Encodes one or more {@link Cookie} objects into an HTTP request-side {@code Cookie} header value.
  * <p>Request cookies contain only {@code name=value} pairs separated by {@code "; "}, as defined by

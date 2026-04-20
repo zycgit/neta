@@ -15,13 +15,16 @@
  */
 package net.hasor.neta.codec.http.websocket;
 
+import static org.junit.Assert.*;
+
 import java.util.List;
+
+import org.junit.Test;
+
 import net.hasor.neta.channel.SoChannel;
 import net.hasor.neta.channel.SoEvent;
 import net.hasor.neta.channel.transport.virtual.VrtTransfer;
 import net.hasor.neta.codec.http.HttpObject;
-import org.junit.Test;
-import static org.junit.Assert.*;
 
 public class WebSocketClientServerFlowTest extends AbstractWebSocketTest {
     private static final String WS_PATH = "/chat";

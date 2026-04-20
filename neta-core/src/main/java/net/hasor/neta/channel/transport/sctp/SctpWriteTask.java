@@ -23,7 +23,6 @@ import com.sun.nio.sctp.MessageInfo;
 import com.sun.nio.sctp.SctpChannel;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.channel.*;
-
 /**
  * Task that synchronously sends SCTP messages on a framework task thread and drains the
  * {@link SoSndContext} queue for a single channel.
@@ -62,14 +61,14 @@ import net.hasor.neta.channel.*;
  */
 class SctpWriteTask extends DefaultSoTask {
     protected final SoContextService context;
-    private final   NetChannel       netChannel;
-    private final   NetMonitor       monitor;
-    private final   SctpChannel      channel;
-    private final   SoSndContext     wContext;
+    private final NetChannel         netChannel;
+    private final NetMonitor         monitor;
+    private final SctpChannel        channel;
+    private final SoSndContext       wContext;
     //
-    private         SctpMessage      sendData;
-    private         ByteBuffer       sndSwapBuf;
-    private         int              timeoutRetryCnt = 0;
+    private SctpMessage sendData;
+    private ByteBuffer  sndSwapBuf;
+    private int         timeoutRetryCnt = 0;
 
     /**
      * Create an SCTP send task.

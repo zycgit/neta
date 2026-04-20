@@ -27,7 +27,6 @@ import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.channel.transport.quic.QuicStreamChannel;
 import net.hasor.neta.channel.transport.quic.QuicVarInt;
-
 /**
  * Encodes {@link Http3Frame} objects into HTTP/3 wire bytes.
  * <p>

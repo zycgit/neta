@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.transport.tcp;
+
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -23,6 +24,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+
+import org.junit.Test;
+
 import net.hasor.cobble.RandomUtils;
 import net.hasor.cobble.SystemUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
@@ -31,7 +35,6 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
-import org.junit.Test;
 
 /**
  * @author 赵永春 (zyc@hasor.net)

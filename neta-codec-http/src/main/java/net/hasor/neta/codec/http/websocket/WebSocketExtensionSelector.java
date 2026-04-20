@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
-
 /**
  * Server-side selector for websocket extension negotiation results.
  * @author 赵永春 (zyc@hasor.net)

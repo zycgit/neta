@@ -16,7 +16,6 @@
 package net.hasor.neta.codec.http.websocket;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.codec.http.AbstractHttpObject;
-
 /**
  * Base implementation for application-visible websocket message chunks.
  * <p>

@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http.h2;
 import net.hasor.neta.codec.http.HttpProtocolConnectionException;
-
 /**
  * Exception thrown when an invalid compressed header block causes HPACK decoding to fail.
  * @author 赵永春 (zyc@hasor.net)

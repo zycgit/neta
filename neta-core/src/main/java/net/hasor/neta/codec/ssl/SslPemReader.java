@@ -28,7 +28,6 @@ import java.util.regex.Pattern;
 import net.hasor.cobble.codec.Base64;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
-
 /**
  * Reads a PEM file and converts it into a list of DERs so that they are imported into a {@link KeyStore} easily.
  * Netty's ByteBuf is replaced with cobble.bytebuf
@@ -54,7 +53,7 @@ class SslPemReader {
         List<ByteBuf> certs = new ArrayList<>();
         Matcher m = CERT_HEADER.matcher(content);
         int start = 0;
-        for (; ; ) {
+        for (;;) {
             if (!m.find(start)) {
                 break;
             }
@@ -121,7 +120,7 @@ class SslPemReader {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         try {
             byte[] buf = new byte[8192];
-            for (; ; ) {
+            for (;;) {
                 int ret = in.read(buf);
                 if (ret < 0) {
                     break;

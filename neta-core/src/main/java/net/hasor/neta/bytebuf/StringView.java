@@ -18,7 +18,6 @@ import java.nio.charset.StandardCharsets;
 import net.hasor.cobble.function.Release;
 import net.hasor.cobble.ref.RecycleObjectPool;
 import net.hasor.cobble.ref.RecycleObjectPool.ObjHandler;
-
 /**
  * A lightweight {@link CharSequence} view over a visible range of a {@link ByteBuf}.
  * <p>
@@ -34,17 +33,18 @@ import net.hasor.cobble.ref.RecycleObjectPool.ObjHandler;
  */
 public class StringView implements CharSequence, Release {
     private static final int                    RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    private static final ObjHandler<StringView> RECYCLE_HANDLER = new ObjHandler<StringView>() {
-        @Override
-        public StringView create() {
-            return new StringView();
-        }
+    private static final ObjHandler<StringView> RECYCLE_HANDLER = //
+            new ObjHandler<StringView>() {
+                @Override
+                public StringView create() {
+                    return new StringView();
+                }
 
-        @Override
-        public void free(StringView tar) {
-            RecycleObjectPool.free(RECYCLE_INDEX, tar);
-        }
-    };
+                @Override
+                public void free(StringView tar) {
+                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
+                }
+            };
 
     private int     offset;
     private int     length;

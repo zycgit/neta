@@ -23,7 +23,6 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndData;
 import net.hasor.neta.channel.data.ProtoSndQueue;
-
 /**
  * Central registry for the {@link ByteBufAllocator}s pre-wired in Neta and
  * a set of utility methods used by the framework internally.
@@ -287,7 +286,7 @@ public class ByteBufUtils {
 
     /** Releases every non-null buffer in the array. */
     public static void releaseAll(ByteBuf... buffers) {
-        if (buffers == null || buffers.length == 0) {
+        if (buffers == null) {
             return;
         }
 

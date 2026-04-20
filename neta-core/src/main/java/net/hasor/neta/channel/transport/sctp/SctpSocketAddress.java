@@ -18,7 +18,6 @@ import java.net.SocketAddress;
 import java.util.Set;
 import com.sun.nio.sctp.Association;
 import net.hasor.cobble.StringUtils;
-
 /**
  * Wrapper object for SCTP address information.
  * <p>This type holds both the {@link Association} and a set of bound addresses so that

@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http;
 import net.hasor.cobble.StringUtils;
-
 /**
  * Default implementation of a single HTTP header entry.
  * @author 赵永春 (zyc@hasor.net)

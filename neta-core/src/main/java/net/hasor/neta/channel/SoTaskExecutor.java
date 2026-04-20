@@ -25,7 +25,6 @@ import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.concurrent.timer.HashedWheelTimer;
 import net.hasor.cobble.logging.Logger;
-
 /**
  * Low-latency fixed-thread-pool task dispatcher used by {@link SoContextService} to execute all
  * Neta pipeline and subscription tasks.
@@ -49,13 +48,13 @@ import net.hasor.cobble.logging.Logger;
  * @see SoContextService
  */
 class SoTaskExecutor implements Closeable {
-    private static final Logger               logger = Logger.getLogger(SoTaskExecutor.class);
-    private final        HashedWheelTimer     timer;
-    private final        Queue<TaskWorker<?>> tasks;
+    private static final Logger        logger = Logger.getLogger(SoTaskExecutor.class);
+    private final HashedWheelTimer     timer;
+    private final Queue<TaskWorker<?>> tasks;
     //
-    private final        AtomicBoolean        runTag;
-    private final        Thread[]             workerThreads;
-    private final        AtomicInteger        wakeIndex;
+    private final AtomicBoolean runTag;
+    private final Thread[]      workerThreads;
+    private final AtomicInteger wakeIndex;
 
     public SoTaskExecutor(ClassLoader classLoader, SoThreadFactory soThreadFactory, int taskThreads, HashedWheelTimer timer) {
         this.timer = timer;

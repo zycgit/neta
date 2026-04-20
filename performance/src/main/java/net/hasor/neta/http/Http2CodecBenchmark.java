@@ -1,19 +1,13 @@
-package net.hasor.neta.http;
+package net.hasor.neta.codec.http.h2;
 
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http2.*;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.ProtoQueue;
+import net.hasor.neta.channel.data.ProtoQueue;
 import net.hasor.neta.codec.http.*;
-import net.hasor.neta.codec.http.constant.HttpMethod;
-import net.hasor.neta.codec.http.constant.HttpStatus;
-import net.hasor.neta.codec.http.constant.HttpVersion;
-import net.hasor.neta.codec.http2.HpackDecoder;
-import net.hasor.neta.codec.http2.HpackEncoder;
-import net.hasor.neta.codec.http2.Http2FrameDecoder;
-import net.hasor.neta.codec.http2.Http2FrameEncoder;
+import net.hasor.neta.http.StubProtoContext;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
@@ -37,7 +31,7 @@ public class Http2CodecBenchmark {
     @Benchmark
     public byte[] neta_hpackEncodeSimpleHeaders() {
         HpackEncoder encoder = new HpackEncoder(4096, true);
-        HttpHeaders headers = new HttpHeaders();
+        HttpHeaders headers = new DefaultHttpHeaders();
         headers.add(":method", "GET");
         headers.add(":path", "/index.html");
         headers.add(":scheme", "https");
@@ -67,7 +61,7 @@ public class Http2CodecBenchmark {
     @Benchmark
     public byte[] neta_hpackEncodeManyHeaders() {
         HpackEncoder encoder = new HpackEncoder(4096, true);
-        HttpHeaders headers = new HttpHeaders();
+        HttpHeaders headers = new DefaultHttpHeaders();
         headers.add(":method", "POST");
         headers.add(":path", "/api/v2/users");
         headers.add(":scheme", "https");
@@ -117,7 +111,7 @@ public class Http2CodecBenchmark {
         // Encode with Neta
         HpackEncoder netaEncoder = new HpackEncoder(4096, true);
 
-        HttpHeaders simpleHeaders = new HttpHeaders();
+        HttpHeaders simpleHeaders = new DefaultHttpHeaders();
         simpleHeaders.add(":method", "GET");
         simpleHeaders.add(":path", "/index.html");
         simpleHeaders.add(":scheme", "https");
@@ -126,7 +120,7 @@ public class Http2CodecBenchmark {
         simpleHeaders.add("accept-language", "en-US,en;q=0.9");
         simpleHpackBytes = netaEncoder.encode(simpleHeaders);
 
-        HttpHeaders manyHeaders = new HttpHeaders();
+        HttpHeaders manyHeaders = new DefaultHttpHeaders();
         manyHeaders.add(":method", "POST");
         manyHeaders.add(":path", "/api/v2/users");
         manyHeaders.add(":scheme", "https");
@@ -418,7 +412,7 @@ public class Http2CodecBenchmark {
     @Benchmark
     public byte[] neta_qpackEncodeSimpleHeaders() {
         net.hasor.neta.codec.http3.QpackEncoder encoder = new net.hasor.neta.codec.http3.QpackEncoder(4096, false);
-        HttpHeaders headers = new HttpHeaders();
+        HttpHeaders headers = new DefaultHttpHeaders();
         headers.add(":method", "GET");
         headers.add(":path", "/index.html");
         headers.add(":scheme", "https");
@@ -430,7 +424,7 @@ public class Http2CodecBenchmark {
     @Benchmark
     public byte[] neta_qpackEncodeManyHeaders() {
         net.hasor.neta.codec.http3.QpackEncoder encoder = new net.hasor.neta.codec.http3.QpackEncoder(4096, false);
-        HttpHeaders headers = new HttpHeaders();
+        HttpHeaders headers = new DefaultHttpHeaders();
         headers.add(":method", "POST");
         headers.add(":path", "/api/v2/users");
         headers.add(":scheme", "https");
@@ -452,7 +446,7 @@ public class Http2CodecBenchmark {
     public void setupQpack() {
         net.hasor.neta.codec.http3.QpackEncoder encoder = new net.hasor.neta.codec.http3.QpackEncoder(4096, false);
 
-        HttpHeaders simpleHeaders = new HttpHeaders();
+        HttpHeaders simpleHeaders = new DefaultHttpHeaders();
         simpleHeaders.add(":method", "GET");
         simpleHeaders.add(":path", "/index.html");
         simpleHeaders.add(":scheme", "https");
@@ -460,7 +454,7 @@ public class Http2CodecBenchmark {
         simpleHeaders.add("accept", "text/html");
         simpleQpackBytes = encoder.encode(simpleHeaders);
 
-        HttpHeaders manyHeaders = new HttpHeaders();
+        HttpHeaders manyHeaders = new DefaultHttpHeaders();
         manyHeaders.add(":method", "POST");
         manyHeaders.add(":path", "/api/v2/users");
         manyHeaders.add(":scheme", "https");
@@ -491,7 +485,7 @@ public class Http2CodecBenchmark {
     @Benchmark
     public byte[] neta_hpackVsQpack_hpackEncode() {
         HpackEncoder encoder = new HpackEncoder(4096, true);
-        HttpHeaders headers = new HttpHeaders();
+        HttpHeaders headers = new DefaultHttpHeaders();
         headers.add(":method", "GET");
         headers.add(":path", "/api/resource");
         headers.add(":scheme", "https");
@@ -504,7 +498,7 @@ public class Http2CodecBenchmark {
     @Benchmark
     public byte[] neta_hpackVsQpack_qpackEncode() {
         net.hasor.neta.codec.http3.QpackEncoder encoder = new net.hasor.neta.codec.http3.QpackEncoder(4096, false);
-        HttpHeaders headers = new HttpHeaders();
+        HttpHeaders headers = new DefaultHttpHeaders();
         headers.add(":method", "GET");
         headers.add(":path", "/api/resource");
         headers.add(":scheme", "https");

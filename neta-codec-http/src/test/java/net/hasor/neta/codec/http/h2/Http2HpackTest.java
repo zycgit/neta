@@ -1,10 +1,12 @@
 package net.hasor.neta.codec.http.h2;
 
+import static org.junit.Assert.*;
+
+import org.junit.Test;
+
 import net.hasor.neta.codec.http.DefaultHttpHeaders;
 import net.hasor.neta.codec.http.HttpHeaderNames;
 import net.hasor.neta.codec.http.HttpHeaders;
-import org.junit.Test;
-import static org.junit.Assert.*;
 
 /**
  * HTTP/2 support tests that are not tied to a specific encoder/decoder handler.

@@ -16,7 +16,6 @@
 package net.hasor.neta.channel;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-
 /**
  * Protocol runtime context for a single channel and its branch sub-pipelines.
  * <p>A connection has one root {@code ProtoContext} attached to the public channel, and may also

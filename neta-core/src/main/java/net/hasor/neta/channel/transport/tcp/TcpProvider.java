@@ -21,7 +21,6 @@ import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
-
 /**
  * TCP transport provider for Neta.
  * <p>This provider owns one shared {@link AsynchronousChannelGroup} driven by the framework I/O
@@ -34,9 +33,9 @@ import net.hasor.neta.channel.*;
  * @version 2025-08-07
  */
 public class TcpProvider implements AsyncChannelProvider {
-    public static final  String                   NAME   = "TCP";
-    private static final Logger                   logger = Logger.getLogger(TcpProvider.class);
-    private final        AsynchronousChannelGroup channelGroup;
+    public static final String             NAME   = "TCP";
+    private static final Logger            logger = Logger.getLogger(TcpProvider.class);
+    private final AsynchronousChannelGroup channelGroup;
 
     /**
      * Create the TCP provider.

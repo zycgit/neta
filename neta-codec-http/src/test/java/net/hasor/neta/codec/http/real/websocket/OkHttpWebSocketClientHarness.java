@@ -14,15 +14,18 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.real.websocket;
+
+import static org.junit.Assert.*;
+
 import java.io.Closeable;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+
 import okhttp3.*;
 import okio.ByteString;
-import static org.junit.Assert.*;
 
 public class OkHttpWebSocketClientHarness implements Closeable {
     private final OkHttpClient               client;

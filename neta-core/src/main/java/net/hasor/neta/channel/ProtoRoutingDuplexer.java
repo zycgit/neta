@@ -20,7 +20,6 @@ import net.hasor.neta.channel.data.ProtoQueue;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.channel.routing.*;
-
 /**
  * Routing duplexer.
  * <p>It splits the protocol stack at the current position into multiple named branches and, at
@@ -49,23 +48,23 @@ import net.hasor.neta.channel.routing.*;
  * @version : 2024-01-15
  */
 public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, Object, OUT> {
-    private static final Logger                            logger = Logger.getLogger(ProtoRoutingDuplexer.class);
-    private final        ProtoRoutingDataSelector<IN, OUT> routing4Data;
-    private final        ProtoRoutingEventSelector         routing4Event;
-    private final        Map<String, BranchEntry>          branches;
-    private final        List<String>                      branchOrder;
-    private final        Set<String>                       activatedBranches;
-    private final        ProtoRoutingControl               routingControl;
-    private final        ProtoRoutingMode                  routingMode;
-    private final        String                            recoveryOwnerId;
-    private              String                            selectedRoute;
-    private              String                            pendingRoute;
-    private              Object                            pendingRouteSeed;
-    private              boolean                           pendingRouteImmediate;
-    private              long                              pendingRouteApplyEntry;
-    private              Object                            deliveredSeed;
-    private              long                              routingEntrySeq;
-    private              long                              currentRoutingEntry;
+    private static final Logger                     logger = Logger.getLogger(ProtoRoutingDuplexer.class);
+    private final ProtoRoutingDataSelector<IN, OUT> routing4Data;
+    private final ProtoRoutingEventSelector         routing4Event;
+    private final Map<String, BranchEntry>          branches;
+    private final List<String>                      branchOrder;
+    private final Set<String>                       activatedBranches;
+    private final ProtoRoutingControl               routingControl;
+    private final ProtoRoutingMode                  routingMode;
+    private final String                            recoveryOwnerId;
+    private String                                  selectedRoute;
+    private String                                  pendingRoute;
+    private Object                                  pendingRouteSeed;
+    private boolean                                 pendingRouteImmediate;
+    private long                                    pendingRouteApplyEntry;
+    private Object                                  deliveredSeed;
+    private long                                    routingEntrySeq;
+    private long                                    currentRoutingEntry;
 
     /** Create a static data-routing duplexer. */
     public ProtoRoutingDuplexer(ProtoRoutingDataSelector<IN, OUT> routing) {
@@ -760,8 +759,8 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
         final String           branchName;
         final ProtoInitializer initializer;
         final Deque<Object>    pendingSnd;
-        ProtoStackChain     chainRoot;
-        ProtoContextService branchCtx;
+        ProtoStackChain        chainRoot;
+        ProtoContextService    branchCtx;
 
         BranchEntry(String name, ProtoInitializer initializer) {
             this.branchName = name;

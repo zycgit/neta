@@ -16,7 +16,6 @@
 package net.hasor.neta.channel;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
-
 /**
  * Per-channel outbound queue that temporarily stores {@link SoSndData} waiting to be sent.
  * <h3>Thread model: multiple producers, single consumer</h3>

@@ -17,7 +17,6 @@ package net.hasor.neta.channel;
 import java.net.SocketAddress;
 import java.util.function.Predicate;
 import net.hasor.cobble.concurrent.future.Future;
-
 /**
  * Common abstraction for all Neta channel types, including listening endpoints ({@link NetListen})
  * and active connections ({@link NetChannel}).

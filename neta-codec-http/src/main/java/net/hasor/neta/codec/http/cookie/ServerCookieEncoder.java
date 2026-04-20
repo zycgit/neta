@@ -17,7 +17,6 @@ package net.hasor.neta.codec.http.cookie;
 import java.nio.charset.StandardCharsets;
 import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
-
 /**
  * Encodes a single {@link Cookie} as the value of one HTTP response-side {@code Set-Cookie} header.
  * <p>The current implementation emits {@code name=value} and appends {@code Domain}, {@code Path},
