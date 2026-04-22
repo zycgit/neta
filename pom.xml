@@ -239,6 +239,7 @@
                             <releaseProfiles>release</releaseProfiles>
                             <tagNameFormat>v@{project.version}</tagNameFormat>
                             <goals>deploy</goals>
+                            <preparationGoals>clean dependency:purge-local-repository verify</preparationGoals>
                         </configuration>
                     </plugin>
                 </plugins>

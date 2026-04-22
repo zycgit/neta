@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
-import java.util.List;
 import java.util.concurrent.Future;
 import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufUtils;
-import net.hasor.neta.bytebuf.CompositeByteBuf;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoRcvQueueView;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 /**
  * Aggregates an ordered HTTP request object sequence into a {@link FullHttpRequest}.
@@ -35,6 +34,8 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * @version : 2026-04-11
  */
 public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
+    private static final int PREALLOCATE_COPY_THRESHOLD = 1024;
+
     /**
      * Creates a request aggregator with the default maximum content length.
      */
@@ -63,26 +64,51 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
      */
     @Override
     protected void emitAggregated(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<HttpObject> dst) {
-        List<HttpObject> parts = this.takeStagedParts(src);
-        if (parts == null || parts.isEmpty()) {
+        ProtoRcvQueueView<HttpObject> staged = this.stagedView(src);
+        if (staged == null) {
             this.resetAggregation(src);
             return;
         }
 
-        HttpRequest request = (HttpRequest) parts.get(0);
-        DefaultHttpHeaders mergedHeaders = new DefaultLastHttpHeaders();
-        mergedHeaders.streamId(request.streamId());
-        CompositeByteBuf aggregatedContent = null;
+        HttpObject first = staged.takeMessage();
+        if (!(first instanceof HttpRequest)) {
+            if (first != null) {
+                first.release();
+            }
+            this.resetAggregation(src);
+            return;
+        }
+
+        HttpRequest request = (HttpRequest) first;
+        HttpRequest requestToRelease = request;
+        DefaultHttpHeaders mergedHeaders = null;
+        DefaultHttpRequest requestLine = this.requestLineForFull(request);
+        if (requestLine == request) {
+            requestToRelease = null;
+        }
         DefaultFullHttpRequest fullReq = null;
+        ByteBuf aggregatedContent = ByteBuf.EMPTY;
+        ByteBuf contiguousContent = null;
+        HttpObject current = null;
         boolean handled = false;
         boolean success = false;
         try {
+            HttpContext.RequestDecodeState reqCtx = HttpContext.getOrCreate(context).req;
             int contentLength = 0;
-            for (HttpObject part : parts) {
+            long declaredLength = reqCtx.contentLength;
+            while ((current = staged.takeMessage()) != null) {
+                HttpObject part = current;
+                current = null;
+                boolean releasePart = true;
                 if (part instanceof HttpHeaders) {
-                    mergedHeaders.appendHeaders((HttpHeaders) part);
+                    mergedHeaders = this.mergeHeadersBlock(mergedHeaders, (HttpHeaders) part, request.streamId());
+                    if (declaredLength < 0) {
+                        declaredLength = mergedHeaders.getLong(HttpHeaderNames.CONTENT_LENGTH, -1);
+                    }
+                    if (part == mergedHeaders) {
+                        releasePart = false;
+                    }
                     if (part instanceof LastHttpHeaders && !this.isHeadersClosedHandled()) {
-                        long declaredLength = mergedHeaders.getLong(HttpHeaderNames.CONTENT_LENGTH, -1);
                         this.onHeadersClosed(context, request, mergedHeaders, declaredLength);
                         if (mergedHeaders.isBad() || this.isDiscardMode()) {
                             handled = true;
@@ -96,6 +122,7 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
                     int readable = content.readableBytes();
                     int newLength = contentLength + readable;
                     if (newLength > this.maxContentLength()) {
+                        mergedHeaders = this.ensureMergedHeaders(mergedHeaders, request.streamId());
                         if (this.onContentTooLarge(context, request, mergedHeaders, newLength) && this.isDiscardMode()) {
                             handled = true;
                             return;
@@ -105,40 +132,52 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
 
                     contentLength = newLength;
                     if (readable > 0) {
-                        aggregatedContent = this.appendContent(aggregatedContent, part, content);
+                        if (contiguousContent == null && this.shouldPreallocateContentBuffer(declaredLength, contentLength - readable)) {
+                            contiguousContent = this.allocateContentBuffer(content, declaredLength);
+                            aggregatedContent = contiguousContent;
+                        }
+
+                        if (contiguousContent != null) {
+                            contiguousContent.writeBuffer(content, readable);
+                        } else {
+                            aggregatedContent = this.appendContent(aggregatedContent, part);
+                        }
                     }
+                }
+
+                if (releasePart) {
+                    part.release();
                 }
             }
 
-            fullReq = new DefaultFullHttpRequest(new DefaultHttpRequest(request.protocolVersion(), request.method(), request.uri()), new HttpHeaders[] { mergedHeaders }, aggregatedContent == null ? ByteBuf.EMPTY : aggregatedContent);
+            mergedHeaders = this.ensureMergedHeaders(mergedHeaders, request.streamId());
+            fullReq = new DefaultFullHttpRequest(requestLine, mergedHeaders, aggregatedContent);
             this.completeFullRequest(request, fullReq, contentLength);
             dst.offerMessage(fullReq);
 
             this.logAggregatedRequest(context, request, contentLength);
             success = true;
         } finally {
-            this.releaseAggregatedRequest(parts, fullReq, aggregatedContent, success);
+            this.releaseAggregatedRequest(requestToRelease, current, fullReq, aggregatedContent, mergedHeaders, success);
             this.finishAggregation(src, success, handled);
         }
     }
 
     @Override
     protected void onHeadersStaged(ProtoContext context, ProtoRcvQueue<HttpObject> src) {
-        List<HttpObject> parts = this.peekStagedParts(src);
-        if (parts == null || parts.isEmpty()) {
+        ProtoRcvQueueView<HttpObject> staged = this.stagedView(src);
+        if (staged == null) {
             return;
         }
 
-        HttpRequest request = (HttpRequest) parts.get(0);
-        DefaultHttpHeaders headers = new DefaultLastHttpHeaders();
-        for (HttpObject part : parts) {
-            if (part instanceof HttpHeaders) {
-                headers.appendHeaders((HttpHeaders) part);
-            }
+        HttpObject first = staged.peekMessage();
+        if (!(first instanceof HttpRequest)) {
+            return;
         }
 
-        long declaredLength = headers.getLong(HttpHeaderNames.CONTENT_LENGTH, -1);
-        this.onHeadersClosed(context, request, headers, declaredLength);
+        HttpRequest request = (HttpRequest) first;
+        HttpContext.RequestDecodeState reqCtx = HttpContext.getOrCreate(context).req;
+        this.onHeadersClosed(context, request, reqCtx.contentLength, reqCtx.expectHeader, reqCtx.connectionHeader);
     }
 
     /**
@@ -163,21 +202,58 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
         return null;
     }
 
-    private CompositeByteBuf appendContent(CompositeByteBuf aggregatedContent, HttpObject part, ByteBuf content) {
-        if (aggregatedContent == null) {
-            aggregatedContent = ByteBufUtils.compositeBuffer();
+    private DefaultHttpRequest requestLineForFull(HttpRequest request) {
+        if (request instanceof DefaultHttpRequest) {
+            return (DefaultHttpRequest) request;
         }
+        return new DefaultHttpRequest(request.protocolVersion(), request.method(), request.uri());
+    }
 
+    private ByteBuf appendContent(ByteBuf current, HttpObject part) {
         if (part instanceof HttpContent) {
-            aggregatedContent.addComponent(((HttpContent) part).transferContent());
-            return aggregatedContent;
+            return DefaultFullHttpRequest.appendContent(current, ((HttpContent) part).transferContent());
         }
         if (part instanceof DefaultHttpByteBuf) {
-            aggregatedContent.addComponent(((DefaultHttpByteBuf) part).transferContent());
-            return aggregatedContent;
+            return DefaultFullHttpRequest.appendContent(current, ((DefaultHttpByteBuf) part).transferContent());
         }
-        aggregatedContent.addComponent(content.retain());
-        return aggregatedContent;
+        throw new IllegalStateException("unexpected content-bearing request part: " + part.getClass().getName());
+    }
+
+    private DefaultHttpHeaders mergeHeadersBlock(DefaultHttpHeaders mergedHeaders, HttpHeaders headers, long streamId) {
+        if (mergedHeaders == null) {
+            if (headers instanceof DefaultHttpHeaders) {
+                DefaultHttpHeaders adopted = (DefaultHttpHeaders) headers;
+                adopted.streamId(streamId);
+                return adopted;
+            }
+            mergedHeaders = new DefaultLastHttpHeaders();
+            mergedHeaders.streamId(streamId);
+        }
+
+        mergedHeaders.appendOrTransferHeaders(headers);
+        return mergedHeaders;
+    }
+
+    private DefaultHttpHeaders ensureMergedHeaders(DefaultHttpHeaders mergedHeaders, long streamId) {
+        if (mergedHeaders != null) {
+            return mergedHeaders;
+        }
+
+        DefaultHttpHeaders headers = new DefaultLastHttpHeaders();
+        headers.streamId(streamId);
+        return headers;
+    }
+
+    private boolean shouldPreallocateContentBuffer(long declaredLength, int accumulatedLength) {
+        return declaredLength >= PREALLOCATE_COPY_THRESHOLD && declaredLength <= this.maxContentLength() && accumulatedLength == 0;
+    }
+
+    private ByteBuf allocateContentBuffer(ByteBuf content, long declaredLength) {
+        ByteBufAllocator allocator = content.alloc();
+        if (allocator == null) {
+            allocator = ByteBufAllocator.DEFAULT;
+        }
+        return allocator.buffer((int) declaredLength, (int) declaredLength);
     }
 
     /**
@@ -193,17 +269,21 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
     /**
      * Releases the staged request parts and, on failure, also releases the not-yet-emitted full request.
      */
-    private void releaseAggregatedRequest(List<HttpObject> parts, DefaultFullHttpRequest fullReq, CompositeByteBuf aggregatedContent, boolean success) {
+    private void releaseAggregatedRequest(HttpRequest request, HttpObject current, DefaultFullHttpRequest fullReq, ByteBuf aggregatedContent, DefaultHttpHeaders mergedHeaders, boolean success) {
         if (!success && fullReq != null) {
             fullReq.release();
         }
-        if (!success && fullReq == null && aggregatedContent != null) {
+        if (!success && fullReq == null && aggregatedContent != null && aggregatedContent != ByteBuf.EMPTY) {
             aggregatedContent.release();
         }
-        for (HttpObject part : parts) {
-            if (part != null) {
-                part.release();
-            }
+        if (!success && fullReq == null && mergedHeaders != null) {
+            mergedHeaders.release();
+        }
+        if (current != null) {
+            current.release();
+        }
+        if (request != null) {
+            request.release();
         }
     }
 
@@ -232,12 +312,17 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
      */
     @Override
     protected void onHeadersClosed(ProtoContext context, HttpRequest message, HttpHeaders headers, long contentLength) {
+        HttpContext.RequestDecodeState reqCtx = HttpContext.getOrCreate(context).req;
+        this.onHeadersClosed(context, message, contentLength, reqCtx.expectHeader, reqCtx.connectionHeader);
+    }
+
+    private void onHeadersClosed(ProtoContext context, HttpRequest message, long contentLength, String expect, String connection) {
         if (contentLength > this.maxContentLength()) {
-            this.sendAutoResponse(context, message, HttpStatus.REQUEST_ENTITY_TOO_LARGE, headers);
+            this.sendAutoResponse(context, message.protocolVersion(), message.streamId(), HttpStatus.REQUEST_ENTITY_TOO_LARGE, this.isKeepAlive(message, connection));
             this.enterDiscardMode();
             return;
         }
-        this.handleExpectation(context, message, headers, contentLength);
+        this.handleExpectation(context, message, expect, connection, contentLength);
     }
 
     /**
@@ -276,8 +361,7 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
     /**
      * Processes the {@code Expect} header after the request head has been fully assembled.
      */
-    private boolean handleExpectation(ProtoContext context, HttpRequest request, HttpHeaders headers, long contentLength) {
-        String expect = headers != null ? headers.getString(HttpHeaderNames.EXPECT) : null;
+    private boolean handleExpectation(ProtoContext context, HttpRequest request, String expect, String connection, long contentLength) {
         if (expect == null) {
             return false;
         }
@@ -287,7 +371,7 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
             return false;
         }
         if (!StringUtils.equalsIgnoreCase(expectValue, HttpHeaderValues.CONTINUE)) {
-            this.sendAutoResponse(context, request, HttpStatus.EXPECTATION_FAILED, headers);
+            this.sendAutoResponse(context, request.protocolVersion(), request.streamId(), HttpStatus.EXPECTATION_FAILED, this.isKeepAlive(request, connection));
             this.enterDiscardMode();
             return true;
         }
@@ -302,7 +386,19 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
      * Sends an automatic response that reuses the current request version and keep-alive policy.
      */
     private void sendAutoResponse(ProtoContext context, HttpRequest request, HttpStatus status, HttpHeaders headers) {
-        this.sendAutoResponse(context, request.protocolVersion(), request.streamId(), status, this.isKeepAlive(request, headers));
+        this.sendAutoResponse(context, request.protocolVersion(), request.streamId(), status, this.isKeepAlive(request, headerValue(headers, HttpHeaderNames.CONNECTION)));
+    }
+
+    private boolean isKeepAlive(HttpRequest request, String connection) {
+        if (connection != null) {
+            if (StringUtils.containsIgnoreCase(connection, HttpHeaderValues.CLOSE)) {
+                return false;
+            }
+            if (StringUtils.containsIgnoreCase(connection, HttpHeaderValues.KEEP_ALIVE)) {
+                return true;
+            }
+        }
+        return request.protocolVersion().isKeepAliveDefault();
     }
 
     /**
@@ -331,19 +427,7 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
         }
     }
 
-    /**
-     * Resolves the effective keep-alive policy from the request version and the current connection header.
-     */
-    private boolean isKeepAlive(HttpRequest request, HttpHeaders headers) {
-        String connection = headers != null ? headers.getString(HttpHeaderNames.CONNECTION) : null;
-        if (connection != null) {
-            if (StringUtils.containsIgnoreCase(connection, HttpHeaderValues.CLOSE)) {
-                return false;
-            }
-            if (StringUtils.containsIgnoreCase(connection, HttpHeaderValues.KEEP_ALIVE)) {
-                return true;
-            }
-        }
-        return request.protocolVersion().isKeepAliveDefault();
+    private static String headerValue(HttpHeaders headers, String name) {
+        return headers != null ? headers.getString(name) : null;
     }
 }

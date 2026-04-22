@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.channel.data;
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import net.hasor.neta.channel.ProtoFullException;
 import net.hasor.neta.channel.SoUtils;
@@ -106,6 +107,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     private final int                                   capacity;
     private final List<T>                               linkedList;
     private final Map<String, ProtoQueueSndSubQueue<T>> subQueueMap;
+    private int                                         totalOwned;
 
     /**
      * Create a queue with the given capacity.
@@ -115,6 +117,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
         this.capacity = capacity < 0 ? Integer.MAX_VALUE : capacity;
         this.linkedList = new ArrayList<>();
         this.subQueueMap = new LinkedHashMap<>();
+        this.totalOwned = 0;
     }
 
     /**
@@ -142,7 +145,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     /** {@inheritDoc} */
     @Override
     public int slotSize() {
-        return Math.max(0, this.capacity - this.totalOwnedSize());
+        return Math.max(0, this.capacity - this.totalOwned);
     }
 
     /** {@inheritDoc} */
@@ -161,6 +164,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
         }
 
         this.linkedList.addAll(Arrays.asList(offerList));
+        this.totalOwned += offerList.length;
         return true;
     }
 
@@ -183,6 +187,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
         for (int i = 0; i < size; i++) {
             this.linkedList.add(offerList.get(i));
         }
+        this.totalOwned += size;
         return true;
     }
 
@@ -194,6 +199,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
         }
 
         this.linkedList.add(offerMessage);
+        this.totalOwned++;
         return true;
     }
 
@@ -231,7 +237,9 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
             return null;
         }
 
-        return this.linkedList.remove(0);
+        T item = this.linkedList.remove(0);
+        this.totalOwned--;
+        return item;
     }
 
     /** {@inheritDoc} */
@@ -252,6 +260,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
 
         List<T> result = new ArrayList<>(this.linkedList.subList(0, fixCnt));
         this.linkedList.subList(0, fixCnt).clear();
+        this.totalOwned -= fixCnt;
         return result;
     }
 
@@ -263,6 +272,27 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
         }
 
         return this.linkedList.get(0);
+    }
+
+    @Override
+    public void peekEachMessage(Consumer<? super T> consumer) {
+        if (consumer == null || this.linkedList.isEmpty()) {
+            return;
+        }
+        for (T item : this.linkedList) {
+            consumer.accept(item);
+        }
+    }
+
+    @Override
+    public void peekEachMessage(int startIndex, Consumer<? super T> consumer) {
+        if (consumer == null || this.linkedList.isEmpty()) {
+            return;
+        }
+        int begin = Math.max(0, startIndex);
+        for (int i = begin; i < this.linkedList.size(); i++) {
+            consumer.accept(this.linkedList.get(i));
+        }
     }
 
     /** {@inheritDoc} */
@@ -285,6 +315,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
                 SoUtils.release(this.linkedList.get(i));
             }
             this.linkedList.subList(0, fixCnt).clear();
+            this.totalOwned -= fixCnt;
         }
     }
 
@@ -303,6 +334,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
             }
             this.subQueueMap.clear();
         }
+        this.totalOwned = 0;
     }
 
     /**
@@ -401,7 +433,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
             return subQueue;
         }
 
-        ProtoQueueSndSubQueue<T> created = new ProtoQueueSndSubQueue<T>(this, key);
+        ProtoQueueSndSubQueue<T> created = new ProtoQueueSndSubQueue<>(this, key);
         this.subQueueMap.put(key, created);
         return created;
     }
@@ -450,6 +482,20 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
         List<T> result = new ArrayList<T>(this.linkedList.subList(0, fixCnt));
         this.linkedList.subList(0, fixCnt).clear();
         return result;
+    }
+
+    T mainTakeOne() {
+        if (this.linkedList.isEmpty()) {
+            return null;
+        }
+        return this.linkedList.remove(0);
+    }
+
+    void adjustOwnedSize(int delta) {
+        if (delta == 0) {
+            return;
+        }
+        this.totalOwned += delta;
     }
 
     void mainAddToHead(List<T> items) {
@@ -571,8 +617,31 @@ class ProtoQueueRcvSubQueue<T> implements ProtoRcvQueueView<T> {
 
         List<T> result = new ArrayList<T>(this.linkedList.subList(0, fixCnt));
         this.linkedList.subList(0, fixCnt).clear();
+        this.owner.adjustOwnedSize(-fixCnt);
         this.closeIfEmpty();
         return result;
+    }
+
+    @Override
+    public T takeMessage() {
+        if (this.closed || this.linkedList.isEmpty()) {
+            this.closeIfEmpty();
+            return null;
+        }
+
+        T item = this.linkedList.remove(0);
+        this.owner.adjustOwnedSize(-1);
+        this.closeIfEmpty();
+        return item;
+    }
+
+    @Override
+    public T peekMessage() {
+        if (this.closed || this.linkedList.isEmpty()) {
+            this.closeIfEmpty();
+            return null;
+        }
+        return this.linkedList.get(0);
     }
 
     @Override
@@ -589,6 +658,27 @@ class ProtoQueueRcvSubQueue<T> implements ProtoRcvQueueView<T> {
     }
 
     @Override
+    public void peekEachMessage(Consumer<? super T> consumer) {
+        if (consumer == null || this.closed || this.linkedList.isEmpty()) {
+            return;
+        }
+        for (T item : this.linkedList) {
+            consumer.accept(item);
+        }
+    }
+
+    @Override
+    public void peekEachMessage(int startIndex, Consumer<? super T> consumer) {
+        if (consumer == null || this.closed || this.linkedList.isEmpty()) {
+            return;
+        }
+        int begin = Math.max(0, startIndex);
+        for (int i = begin; i < this.linkedList.size(); i++) {
+            consumer.accept(this.linkedList.get(i));
+        }
+    }
+
+    @Override
     public void skipMessage(int cnt) {
         if (this.closed) {
             return;
@@ -599,6 +689,7 @@ class ProtoQueueRcvSubQueue<T> implements ProtoRcvQueueView<T> {
                 SoUtils.release(this.linkedList.get(i));
             }
             this.linkedList.subList(0, fixCnt).clear();
+            this.owner.adjustOwnedSize(-fixCnt);
         }
         this.closeIfEmpty();
     }
@@ -608,6 +699,15 @@ class ProtoQueueRcvSubQueue<T> implements ProtoRcvQueueView<T> {
             return;
         }
         if (cnt == 0) {
+            this.closeIfEmpty();
+            return;
+        }
+
+        if (cnt == 1) {
+            T moved = this.owner.mainTakeOne();
+            if (moved != null) {
+                this.linkedList.add(moved);
+            }
             this.closeIfEmpty();
             return;
         }
@@ -694,6 +794,7 @@ class ProtoQueueSndSubQueue<T> extends ProtoQueueRcvSubQueue<T> implements Proto
         }
 
         this.linkedList.addAll(Arrays.asList(offerList));
+        this.owner.adjustOwnedSize(offerList.length);
         return true;
     }
 
@@ -706,6 +807,7 @@ class ProtoQueueSndSubQueue<T> extends ProtoQueueRcvSubQueue<T> implements Proto
             return false;
         }
         this.linkedList.add(offerMessage);
+        this.owner.adjustOwnedSize(1);
         return true;
     }
 
@@ -722,6 +824,7 @@ class ProtoQueueSndSubQueue<T> extends ProtoQueueRcvSubQueue<T> implements Proto
         }
 
         this.linkedList.addAll(offerList);
+        this.owner.adjustOwnedSize(offerList.size());
         return true;
     }
 
@@ -744,6 +847,7 @@ class ProtoQueueSndSubQueue<T> extends ProtoQueueRcvSubQueue<T> implements Proto
             return false;
         }
         this.linkedList.addAll(moved);
+        this.owner.adjustOwnedSize(moved.size());
         return true;
     }
 

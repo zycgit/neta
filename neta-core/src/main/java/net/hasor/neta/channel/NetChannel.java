@@ -21,9 +21,7 @@ import java.nio.channels.ClosedChannelException;
 import java.nio.channels.ShutdownChannelGroupException;
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.hasor.cobble.concurrent.future.BasicFuture;
@@ -47,7 +45,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
 public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<NetChannel> {
     private static final Logger                         logger              = Logger.getLogger(NetChannel.class);
     private static final ByteBuf[]                      EMPTY_BYTEBUF_ARRAY = new ByteBuf[0];
-    private static final Map<Thread, Deque<NetChannel>> PIPELINE_CALL_CHAIN = new ConcurrentHashMap<>();
+    private static final ThreadLocal<Deque<NetChannel>> PIPELINE_CALL_CHAIN = new ThreadLocal<>();
     protected final AsyncChannel                        asyncChannel;
     protected final NetListen                           forListen;
     protected final SoSndContext                        wContext;
@@ -90,26 +88,30 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
 
     /** Return true when the current thread is executing inside the pipeline call chain of any NetChannel. */
     public static boolean isCurrentThreadInPipeline() {
-        Deque<NetChannel> callChain = PIPELINE_CALL_CHAIN.get(Thread.currentThread());
+        Deque<NetChannel> callChain = PIPELINE_CALL_CHAIN.get();
         return callChain != null && !callChain.isEmpty();
     }
 
     /** Return true when the current thread is executing inside the pipeline call chain of the target channel. */
     public static boolean isCurrentThreadInPipeline(NetChannel channel) {
         Objects.requireNonNull(channel, "channel is null.");
-        Deque<NetChannel> callChain = PIPELINE_CALL_CHAIN.get(Thread.currentThread());
+        Deque<NetChannel> callChain = PIPELINE_CALL_CHAIN.get();
         return callChain != null && callChain.contains(channel);
     }
 
     static void enterPipeline(NetChannel channel) {
         Objects.requireNonNull(channel, "channel is null.");
-        PIPELINE_CALL_CHAIN.computeIfAbsent(Thread.currentThread(), key -> new ArrayDeque<>()).push(channel);
+        Deque<NetChannel> callChain = PIPELINE_CALL_CHAIN.get();
+        if (callChain == null) {
+            callChain = new ArrayDeque<>(4);
+            PIPELINE_CALL_CHAIN.set(callChain);
+        }
+        callChain.push(channel);
     }
 
     static void exitPipeline(NetChannel channel) {
         Objects.requireNonNull(channel, "channel is null.");
-        Thread currentThread = Thread.currentThread();
-        Deque<NetChannel> callChain = PIPELINE_CALL_CHAIN.get(currentThread);
+        Deque<NetChannel> callChain = PIPELINE_CALL_CHAIN.get();
         if (callChain == null || callChain.isEmpty()) {
             return;
         }
@@ -118,10 +120,6 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
             callChain.pop();
         } else {
             callChain.removeFirstOccurrence(channel);
-        }
-
-        if (callChain.isEmpty()) {
-            PIPELINE_CALL_CHAIN.remove(currentThread);
         }
     }
 
@@ -220,7 +218,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
      * <pre>
      *   Main: [A] → [router1] → [Z]
      *                   │
-     *         Branch "tls": [SslDuplexer] → [router2]
+     *         Branch "tls": [SslDuplex] → [router2]
      *                                           │
      *                                  Branch "http2": [Http2Handler]
      *   // Read the SslContext stored in the "tls" branch context:
@@ -242,11 +240,11 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
             String routerName = path[i];
             String branchName = path[i + 1];
             Object router = ctx.getHandler(routerName);
-            if (!(router instanceof ProtoRoutingDuplexer)) {
+            if (!(router instanceof ProtoRoutingDuplex)) {
                 return null;
             }
 
-            ctx = ((ProtoRoutingDuplexer<?, ?>) router).getBranchCtx(branchName);
+            ctx = ((ProtoRoutingDuplex<?, ?>) router).getBranchCtx(branchName);
             if (ctx == null) {
                 return null;
             }

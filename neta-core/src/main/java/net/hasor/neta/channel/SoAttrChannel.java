@@ -96,13 +96,9 @@ public abstract class SoAttrChannel<T> implements SoChannel<T> {
      */
     @Override
     public SubscribeHolder subscribe(Predicate<PlayLoad> select, SubscribeMode mode, PlayLoadListener listener) {
-        Predicate<PlayLoad> baseSelect = select == null ? new Predicate<PlayLoad>() {
-            @Override
-            public boolean test(PlayLoad playLoad) {
-                return true;
-            }
-        } : select;
-        Predicate<PlayLoad> predicate = baseSelect.and(t -> t.getSource().getChannelId() == this.getChannelId());
+        final Predicate<PlayLoad> baseSelect = select;
+        final long channelId = this.getChannelId();
+        Predicate<PlayLoad> predicate = p -> p.getSource().getChannelId() == channelId && (baseSelect == null || baseSelect.test(p));
         return this.getContext().subscribe(predicate, mode, listener);
     }
 }

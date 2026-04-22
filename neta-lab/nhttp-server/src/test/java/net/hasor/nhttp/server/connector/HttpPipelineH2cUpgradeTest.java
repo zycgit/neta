@@ -42,7 +42,7 @@ import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.channel.transport.virtual.VrtSocketAddress;
 import net.hasor.neta.codec.http.DefaultFullHttpRequest;
 import net.hasor.neta.codec.http.DefaultFullHttpResponse;
-import net.hasor.neta.codec.http.HttpClientDuplexeAggregator;
+import net.hasor.neta.codec.http.HttpClientDuplexAggregator;
 import net.hasor.neta.codec.http.DefaultHttpHeaders;
 import net.hasor.neta.codec.http.FullHttpResponse;
 import net.hasor.neta.codec.http.HttpHeaderNames;
@@ -51,8 +51,8 @@ import net.hasor.neta.codec.http.HttpMethod;
 import net.hasor.neta.codec.http.HttpObject;
 import net.hasor.neta.codec.http.HttpRequest;
 import net.hasor.neta.codec.http.HttpStatus;
-import net.hasor.neta.codec.http.h2.Http2FrameDuplexe;
-import net.hasor.neta.codec.http.h2.Http2ObjectDuplexe;
+import net.hasor.neta.codec.http.h2.Http2FrameDuplex;
+import net.hasor.neta.codec.http.h2.Http2ObjectDuplex;
 import net.hasor.neta.codec.http.HttpVersion;
 import net.hasor.neta.codec.http.websocket.WebSocketHandshakeAuthorizer;
 import net.hasor.neta.codec.http.websocket.WebSocketHandshakeEvent;
@@ -106,9 +106,9 @@ public class HttpPipelineH2cUpgradeTest {
 
             VirtualPipe serverPipe = openVirtualPipe(neta, PipelineFactory.createHttpPipeline(config, callback, false, wsAuthorizer), VrtSoConfig.asServer());
                 VirtualPipe clientDecoder = openVirtualPipe(neta, ctx -> ProtoHelper.standard()
-                    .nextDuplex("h2-frame", new Http2FrameDuplexe(false))
-                    .nextDuplex("h2-message", new Http2ObjectDuplexe(false))
-                    .nextDuplex("h2-client-aggregator", new HttpClientDuplexeAggregator(MAX_CONTENT_LENGTH))
+                    .nextDuplex("h2-frame", new Http2FrameDuplex(false))
+                    .nextDuplex("h2-message", new Http2ObjectDuplex(false))
+                    .nextDuplex("h2-client-aggregator", new HttpClientDuplexAggregator(MAX_CONTENT_LENGTH))
                     .config(ctx), VrtSoConfig.asClient());
 
             serverPipe.channel().receiveData(ByteBuf.wrap(ascii("GET /upgrade HTTP/1.1\r\n" + "Host: example.com\r\n" + "Connection: Upgrade, HTTP2-Settings\r\n" + "Upgrade: h2c\r\n" + "HTTP2-Settings: " + ENCODED_SETTINGS + "\r\n" + "\r\n")));

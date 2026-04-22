@@ -30,7 +30,7 @@ import net.hasor.neta.bytebuf.CompositeByteBuf;
 public class DefaultFullHttpResponse extends AbstractHttpObject<FullHttpResponse> implements FullHttpResponse {
     private final HttpResponse responseLine;
     private final HttpHeaders  headers;
-    private CompositeByteBuf   contentBuffer;
+    private ByteBuf            contentBuffer;
 
     /**
      * Create an aggregated response with empty content and empty headers.
@@ -51,6 +51,20 @@ public class DefaultFullHttpResponse extends AbstractHttpObject<FullHttpResponse
         this(new DefaultHttpResponse(version, status), content);
     }
 
+    DefaultFullHttpResponse(DefaultHttpResponse responseLine, DefaultHttpHeaders headers, ByteBuf content) {
+        if (responseLine == null) {
+            throw new IllegalArgumentException("responseLine must not be null");
+        }
+
+        this.responseLine = responseLine;
+        this.headers = headers != null ? headers : new DefaultHttpHeaders();
+        this.contentBuffer = normalizeContent(content);
+        this.inheritHttpObjectState(responseLine);
+        if (this.headers.isBad()) {
+            this.setBadState(this.headers.badReason());
+        }
+    }
+
     /**
      * Create an aggregated response from a status line, body payload, and zero or more header blocks.
      * Header blocks are merged internally in-order.
@@ -59,28 +73,17 @@ public class DefaultFullHttpResponse extends AbstractHttpObject<FullHttpResponse
      * @param headerBlocks header blocks to merge into the final header view
      */
     public DefaultFullHttpResponse(DefaultHttpResponse responseLine, ByteBuf content, HttpHeaders... headerBlocks) {
-        if (responseLine == null) {
-            throw new IllegalArgumentException("responseLine must not be null");
-        }
-        if (content == null) {
-            throw new IllegalArgumentException("content must not be null");
-        }
-
-        this.responseLine = responseLine;
-        this.headers = mergeHeaders(this, headerBlocks);
-        this.contentBuffer = ByteBufUtils.compositeBuffer();
-        this.contentBuffer.addComponent(content);
-        this.inheritHttpObjectState(responseLine);
+        this(responseLine, mergeHeaders(headerBlocks), content);
     }
 
-    private static HttpHeaders mergeHeaders(DefaultFullHttpResponse response, HttpHeaders[] headers) {
+    private static DefaultHttpHeaders mergeHeaders(HttpHeaders[] headers) {
         DefaultHttpHeaders merged = new DefaultHttpHeaders();
         if (headers == null) {
             return merged;
         }
         for (HttpHeaders headerBlock : headers) {
             if (headerBlock != null && headerBlock.isBad()) {
-                response.setBadState(headerBlock.badReason());
+                merged.markBad(headerBlock.badReason());
             }
 
             merged.appendHeaders(headerBlock);
@@ -243,9 +246,9 @@ public class DefaultFullHttpResponse extends AbstractHttpObject<FullHttpResponse
 
     @Override
     public ByteBuf transferContent() {
-        CompositeByteBuf current = this.contentBuffer;
-        this.contentBuffer = ByteBufUtils.compositeBuffer();
-        return current;
+        ByteBuf current = this.contentBuffer;
+        this.contentBuffer = ByteBuf.EMPTY;
+        return current == null ? ByteBuf.EMPTY : current;
     }
 
     /**
@@ -260,7 +263,7 @@ public class DefaultFullHttpResponse extends AbstractHttpObject<FullHttpResponse
             return;
         }
 
-        this.contentBuffer.addComponent(content.transferContent());
+        this.contentBuffer = appendContent(this.contentBuffer, content.transferContent());
     }
 
     public void appendContent(ByteBuf content) {
@@ -268,7 +271,50 @@ public class DefaultFullHttpResponse extends AbstractHttpObject<FullHttpResponse
             throw new IllegalArgumentException("content must not be null");
         }
 
-        this.contentBuffer.addComponent(content);
+        this.contentBuffer = appendContent(this.contentBuffer, content);
+    }
+
+    private static ByteBuf normalizeContent(ByteBuf content) {
+        if (content == null) {
+            return ByteBuf.EMPTY;
+        }
+        if (content.readableBytes() == 0) {
+            if (content != ByteBuf.EMPTY) {
+                content.release();
+            }
+            return ByteBuf.EMPTY;
+        }
+        return content;
+    }
+
+    static ByteBuf appendContent(ByteBuf current, ByteBuf incoming) {
+        if (incoming == null) {
+            return current == null ? ByteBuf.EMPTY : current;
+        }
+        if (incoming.readableBytes() == 0) {
+            if (incoming != ByteBuf.EMPTY) {
+                incoming.release();
+            }
+            return current == null ? ByteBuf.EMPTY : current;
+        }
+        if (current == null || current == ByteBuf.EMPTY) {
+            return incoming;
+        }
+        if (current.readableBytes() == 0) {
+            if (current != ByteBuf.EMPTY) {
+                current.release();
+            }
+            return incoming;
+        }
+        if (current instanceof CompositeByteBuf) {
+            ((CompositeByteBuf) current).addComponent(incoming);
+            return current;
+        }
+
+        CompositeByteBuf composite = ByteBufUtils.compositeBuffer(current.alloc() != null ? current.alloc() : incoming.alloc());
+        composite.addComponent(current);
+        composite.addComponent(incoming);
+        return composite;
     }
 
     //

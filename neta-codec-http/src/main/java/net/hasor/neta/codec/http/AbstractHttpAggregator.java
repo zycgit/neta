@@ -199,9 +199,6 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
         this.headersClosedHandled = false;
     }
 
-    /**
-     * Clears the staging queue from the current receive queue and returns the state machine to idle.
-     */
     protected final void resetAggregation(ProtoRcvQueue<HttpObject> src) {
         this.clearAggregationQueue(src);
         this.state = AggregateState.IDLE;
@@ -270,6 +267,14 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
             return null;
         }
         return staged.peekMessage(-1);
+    }
+
+    protected final ProtoRcvQueueView<HttpObject> stagedView(ProtoRcvQueue<HttpObject> src) {
+        ProtoRcvQueueView<HttpObject> staged = src.queueView(this.stagingQueueKey);
+        if (staged == null || !staged.hasMore()) {
+            return null;
+        }
+        return staged;
     }
 
     protected void onHeadersStaged(ProtoContext context, ProtoRcvQueue<HttpObject> src) {

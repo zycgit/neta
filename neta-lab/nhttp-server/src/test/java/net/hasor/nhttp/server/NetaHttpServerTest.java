@@ -271,7 +271,7 @@ public class NetaHttpServerTest {
         clientConf.setAppProtocol(new String[] { "http/1.1" });
 
         ProtoInitializer clientInit = ctx -> {
-            ctx.addLast("SSL", new SslDuplexer(clientConf));
+            ctx.addLast("SSL", new SslDuplex(clientConf));
         };
 
         NetManager neta = new NetManager();
@@ -332,7 +332,7 @@ public class NetaHttpServerTest {
         clientConf.setAppProtocol(new String[] { "h2", "http/1.1" });
 
         ProtoInitializer clientInit = ctx -> {
-            ctx.addLast("SSL", new SslDuplexer(clientConf));
+            ctx.addLast("SSL", new SslDuplex(clientConf));
         };
 
         NetManager neta = new NetManager();
@@ -386,7 +386,7 @@ public class NetaHttpServerTest {
         clientConf.setAppProtocol(new String[] { "spdy/3.1", "http/1.1" });
 
         ProtoInitializer clientInit = ctx -> {
-            ctx.addLast("SSL", new SslDuplexer(clientConf));
+            ctx.addLast("SSL", new SslDuplex(clientConf));
         };
 
         NetManager neta = new NetManager();
@@ -433,7 +433,7 @@ public class NetaHttpServerTest {
         clientConf.setAppProtocol(new String[] { "http/1.1" });
 
         ProtoInitializer clientInit = ctx -> {
-            ctx.addLast("SSL", new SslDuplexer(clientConf));
+            ctx.addLast("SSL", new SslDuplex(clientConf));
         };
 
         NetManager neta = new NetManager();
@@ -572,7 +572,7 @@ public class NetaHttpServerTest {
         clientConf.setAppProtocol(new String[] { "http/1.1", "h2" });
 
         ProtoInitializer clientInit = ctx -> {
-            ctx.addLast("SSL", new SslDuplexer(clientConf));
+            ctx.addLast("SSL", new SslDuplex(clientConf));
         };
 
         NetManager neta = new NetManager();
@@ -624,7 +624,7 @@ public class NetaHttpServerTest {
         clientConf.setAppProtocol(new String[] { "http/1.1" });
 
         ProtoInitializer clientInit = ctx -> {
-            ctx.addLast("SSL", new SslDuplexer(clientConf));
+            ctx.addLast("SSL", new SslDuplex(clientConf));
         };
 
         NetManager neta = new NetManager();

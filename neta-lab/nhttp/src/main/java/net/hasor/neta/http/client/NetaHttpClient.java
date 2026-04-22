@@ -40,7 +40,7 @@ import net.hasor.neta.codec.http.routing.HttpRouteKey;
 import net.hasor.neta.codec.http.websocket.*;
 import net.hasor.neta.codec.ssl.SslConfig;
 import net.hasor.neta.codec.ssl.SslContext;
-import net.hasor.neta.codec.ssl.SslDuplexer;
+import net.hasor.neta.codec.ssl.SslDuplex;
 import net.hasor.nhttp.request.HttpObjectWriter;
 import net.hasor.nhttp.request.HttpWriter;
 import net.hasor.nhttp.request.Request;
@@ -348,27 +348,27 @@ public class NetaHttpClient implements Closeable {
             if (plan.secure) {
                 if (plan.versionPolicy == HttpVersionPolicy.AUTO) {
                     ProtoHelper.standard()//
-                            .nextDuplex("ssl", new SslDuplexer(plan.sslConfig))//
+                            .nextDuplex("ssl", new SslDuplex(plan.sslConfig))//
                             .nextRouteAsStatic("alpn", new Http2OverTlsRoute(), routing -> {
                                 routing.branch(HttpRouteKey.BRANCH_H1, branch -> branch//
-                                        .nextDuplex("http-codec", new HttpClientDuplexe())//
+                                        .nextDuplex("http-codec", new HttpClientDuplex())//
                                         .nextDecoder("http-aggregator", new HttpResponseAggregator(this.config.getMaxContentLength())));
                                 routing.branch(HttpRouteKey.BRANCH_H2, branch -> branch//
-                                        .nextDuplex("h2-frame", new Http2FrameDuplexe(false))//
-                                        .nextDuplex("h2-message", new Http2ObjectDuplexe(false))//
-                                        .nextDuplex("h2-aggregator", new HttpClientDuplexeAggregator(this.config.getMaxContentLength())));
+                                        .nextDuplex("h2-frame", new Http2FrameDuplex(false))//
+                                        .nextDuplex("h2-message", new Http2ObjectDuplex(false))//
+                                        .nextDuplex("h2-aggregator", new HttpClientDuplexAggregator(this.config.getMaxContentLength())));
                             }).config(ctx);
                 } else if (plan.versionPolicy == HttpVersionPolicy.HTTP_2) {
                     ProtoHelper.standard()//
-                            .nextDuplex("ssl", new SslDuplexer(plan.sslConfig))//
-                            .nextDuplex("h2-frame", new Http2FrameDuplexe(false))//
-                            .nextDuplex("h2-message", new Http2ObjectDuplexe(false))//
-                            .nextDuplex("h2-aggregator", new HttpClientDuplexeAggregator(this.config.getMaxContentLength()))//
+                            .nextDuplex("ssl", new SslDuplex(plan.sslConfig))//
+                            .nextDuplex("h2-frame", new Http2FrameDuplex(false))//
+                            .nextDuplex("h2-message", new Http2ObjectDuplex(false))//
+                            .nextDuplex("h2-aggregator", new HttpClientDuplexAggregator(this.config.getMaxContentLength()))//
                             .config(ctx);
                 } else {
                     ProtoHelper.standard()//
-                            .nextDuplex("ssl", new SslDuplexer(plan.sslConfig))//
-                            .nextDuplex("http-codec", new HttpClientDuplexe())//
+                            .nextDuplex("ssl", new SslDuplex(plan.sslConfig))//
+                            .nextDuplex("http-codec", new HttpClientDuplex())//
                             .nextDecoder("http-aggregator", new HttpResponseAggregator(this.config.getMaxContentLength()))//
                             .config(ctx);
                 }
@@ -377,13 +377,13 @@ public class NetaHttpClient implements Closeable {
 
             if (plan.versionPolicy == HttpVersionPolicy.HTTP_2) {
                 ProtoHelper.standard()//
-                        .nextDuplex("h2-frame", new Http2FrameDuplexe(false))//
-                        .nextDuplex("h2-message", new Http2ObjectDuplexe(false))//
-                        .nextDuplex("h2-aggregator", new HttpClientDuplexeAggregator(this.config.getMaxContentLength()))//
+                        .nextDuplex("h2-frame", new Http2FrameDuplex(false))//
+                        .nextDuplex("h2-message", new Http2ObjectDuplex(false))//
+                        .nextDuplex("h2-aggregator", new HttpClientDuplexAggregator(this.config.getMaxContentLength()))//
                         .config(ctx);
             } else {
                 ProtoHelper.standard()//
-                        .nextDuplex("http-codec", new HttpClientDuplexe())//
+                        .nextDuplex("http-codec", new HttpClientDuplex())//
                         .nextDecoder("http-aggregator", new HttpResponseAggregator(this.config.getMaxContentLength()))//
                         .config(ctx);
             }
@@ -394,14 +394,14 @@ public class NetaHttpClient implements Closeable {
         return ctx -> {
             if (plan.secure && plan.versionPolicy == HttpVersionPolicy.AUTO) {
                 ProtoHelper.standard()//
-                        .nextDuplex("ssl", new SslDuplexer(plan.sslConfig))//
+                        .nextDuplex("ssl", new SslDuplex(plan.sslConfig))//
                         .nextRouteAsStatic("alpn", new Http2OverTlsRoute(), routing -> {
                             routing.branch(HttpRouteKey.BRANCH_H1, branch -> branch//
-                                    .nextDuplex("http-client", new HttpClientDuplexe())//
+                                    .nextDuplex("http-client", new HttpClientDuplex())//
                                     .nextDuplex("client-route", this.newHttp1WebSocketRoute()));
                             routing.branch(HttpRouteKey.BRANCH_H2, branch -> branch//
-                                    .nextDuplex("h2-frame", new Http2FrameDuplexe(false))//
-                                    .nextDuplex("h2-message", new Http2ObjectDuplexe(false))//
+                                    .nextDuplex("h2-frame", new Http2FrameDuplex(false))//
+                                    .nextDuplex("h2-message", new Http2ObjectDuplex(false))//
                                     .nextPartition("h2-stream", new Http2ObjectPartitionSelector(), this::configureHttp2WebSocketPartitions));
                         }).config(ctx);
                 return;
@@ -410,15 +410,15 @@ public class NetaHttpClient implements Closeable {
             if (plan.secure) {
                 if (plan.versionPolicy == HttpVersionPolicy.HTTP_2) {
                     ProtoHelper.standard()//
-                            .nextDuplex("ssl", new SslDuplexer(plan.sslConfig))//
-                            .nextDuplex("h2-frame", new Http2FrameDuplexe(false))//
-                            .nextDuplex("h2-message", new Http2ObjectDuplexe(false))//
+                            .nextDuplex("ssl", new SslDuplex(plan.sslConfig))//
+                            .nextDuplex("h2-frame", new Http2FrameDuplex(false))//
+                            .nextDuplex("h2-message", new Http2ObjectDuplex(false))//
                             .nextPartition("h2-stream", new Http2ObjectPartitionSelector(), partition -> this.configureHttp2WebSocketPartitions(partition))//
                             .config(ctx);
                 } else {
                     ProtoHelper.standard()//
-                            .nextDuplex("ssl", new SslDuplexer(plan.sslConfig))//
-                            .nextDuplex("http-client", new HttpClientDuplexe())//
+                            .nextDuplex("ssl", new SslDuplex(plan.sslConfig))//
+                            .nextDuplex("http-client", new HttpClientDuplex())//
                             .nextDuplex("client-route", this.newHttp1WebSocketRoute())//
                             .config(ctx);
                 }
@@ -427,13 +427,13 @@ public class NetaHttpClient implements Closeable {
 
             if (plan.versionPolicy == HttpVersionPolicy.HTTP_2) {
                 ProtoHelper.standard()//
-                        .nextDuplex("h2-frame", new Http2FrameDuplexe(false))//
-                        .nextDuplex("h2-message", new Http2ObjectDuplexe(false))//
+                        .nextDuplex("h2-frame", new Http2FrameDuplex(false))//
+                        .nextDuplex("h2-message", new Http2ObjectDuplex(false))//
                         .nextPartition("h2-stream", new Http2ObjectPartitionSelector(), partition -> this.configureHttp2WebSocketPartitions(partition))//
                         .config(ctx);
             } else {
                 ProtoHelper.standard()//
-                        .nextDuplex("http-client", new HttpClientDuplexe())//
+                        .nextDuplex("http-client", new HttpClientDuplex())//
                         .nextDuplex("client-route", this.newHttp1WebSocketRoute())//
                         .config(ctx);
             }
@@ -447,25 +447,25 @@ public class NetaHttpClient implements Closeable {
         }).byInitializer(partitionCtx -> {
             final ProtoRoutingControl[] routingControl = new ProtoRoutingControl[1];
             ProtoRoutingBuilder<HttpObject, HttpObject> routing = ProtoHelper.<HttpObject, HttpObject>typedRoutingAsDefault(HttpRouteKey.BRANCH_H1, branchCtx -> {
-                branchCtx.addLast("ws-over-http", new WebSocketClientUpgradeRouteDuplexer(routingControl[0], this.config.getWebSocketVersion(), HttpRouteKey.BRANCH_SOCKET));
-                branchCtx.addLast("http-agg", new HttpClientDuplexeAggregator(this.config.getMaxContentLength()));
+                branchCtx.addLast("ws-over-http", new WebSocketClientUpgradeRouteDuplex(routingControl[0], this.config.getWebSocketVersion(), HttpRouteKey.BRANCH_SOCKET));
+                branchCtx.addLast("http-agg", new HttpClientDuplexAggregator(this.config.getMaxContentLength()));
             }).branchByInitializer(HttpRouteKey.BRANCH_SOCKET, branchCtx -> {
-                branchCtx.addLast("ws-frame", new WebSocketFrameDuplexer(this.config.getWebSocketVersion()));
-                branchCtx.addLast("ws-message", new WebSocketMessageDuplexer());
+                branchCtx.addLast("ws-frame", new WebSocketFrameDuplex(this.config.getWebSocketVersion()));
+                branchCtx.addLast("ws-message", new WebSocketMessageDuplex());
             });
             routingControl[0] = routing.control();
             partitionCtx.addLast("client-route", routing.build());
         });
     }
 
-    private ProtoDuplexer<HttpObject, ?, ?, HttpObject> newHttp1WebSocketRoute() {
+    private ProtoDuplex<HttpObject, ?, ?, HttpObject> newHttp1WebSocketRoute() {
         final ProtoRoutingControl[] routingControl = new ProtoRoutingControl[1];
         ProtoRoutingBuilder<HttpObject, HttpObject> routing = ProtoHelper.<HttpObject, HttpObject>typedRoutingAsDefault(HttpRouteKey.BRANCH_H1, branchCtx -> {
-            branchCtx.addLast("ws-over-http", new WebSocketClientUpgradeRouteDuplexer(routingControl[0], this.config.getWebSocketVersion(), HttpRouteKey.BRANCH_SOCKET));
+            branchCtx.addLast("ws-over-http", new WebSocketClientUpgradeRouteDuplex(routingControl[0], this.config.getWebSocketVersion(), HttpRouteKey.BRANCH_SOCKET));
             branchCtx.addLastDecoder("http-aggregator", new HttpResponseAggregator(this.config.getMaxContentLength()));
         }).branchByInitializer(HttpRouteKey.BRANCH_SOCKET, branchCtx -> {
-            branchCtx.addLast("ws-frame", new WebSocketFrameDuplexer(this.config.getWebSocketVersion()));
-            branchCtx.addLast("ws-message", new WebSocketMessageDuplexer());
+            branchCtx.addLast("ws-frame", new WebSocketFrameDuplex(this.config.getWebSocketVersion()));
+            branchCtx.addLast("ws-message", new WebSocketMessageDuplex());
         });
         routingControl[0] = routing.control();
         return routing.build();

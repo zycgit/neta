@@ -21,14 +21,27 @@ import java.util.*;
  * @version : 2026-03-10
  */
 public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implements HttpHeaders {
-    private final List<DefaultHttpHeaderEntry> entries;
-    private boolean                            releasableEntries;
+    private final HeaderEntryStore entries;
+    private boolean                releasableEntries;
 
     /**
      * Create an empty header block.
      */
     public DefaultHttpHeaders() {
-        this.entries = new ArrayList<>();
+        this(4);
+    }
+
+    DefaultHttpHeaders(int initialCapacity) {
+        this(new HeaderEntryStore(Math.max(0, initialCapacity)), false);
+    }
+
+    DefaultHttpHeaders(List<DefaultHttpHeaderEntry> entries, boolean releasableEntries) {
+        this(entries instanceof HeaderEntryStore ? (HeaderEntryStore) entries : new HeaderEntryStore(entries), releasableEntries);
+    }
+
+    DefaultHttpHeaders(HeaderEntryStore entries, boolean releasableEntries) {
+        this.entries = entries != null ? entries : new HeaderEntryStore();
+        this.releasableEntries = releasableEntries || !this.entries.isEmpty();
     }
 
     @Override
@@ -43,7 +56,9 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
     public void release() {
         if (this.releasableEntries) {
             for (DefaultHttpHeaderEntry entry : this.entries) {
-                entry.release();
+                if (entry != null) {
+                    entry.release();
+                }
             }
         }
         this.entries.clear();
@@ -54,28 +69,58 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
     // write
 
     public DefaultHttpHeaders addHeader(String name, String value) {
-        return this.addHeader((CharSequence) name, (CharSequence) value);
+        return this.addHeader(name, (CharSequence) value);
     }
 
     public DefaultHttpHeaders addHeader(CharSequence name, CharSequence value) {
-        if (name == null || name.isEmpty()) {
+        if (name == null) {
             throw new IllegalArgumentException("name must not be empty");
         }
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
 
-        DefaultHttpHeaderEntry entry = new DefaultHttpHeaderEntry(name, value);
+        DefaultHttpHeaderEntry entry = DefaultHttpHeaderEntry.newEntry(name, value);
         this.entries.add(entry);
-        this.releasableEntries = this.releasableEntries || entry.requiresRelease();
+        this.releasableEntries = true;
         return this;
     }
 
     public void addHeaderEntry(DefaultHttpHeaderEntry header) {
         if (header != null) {
             this.entries.add(header);
-            this.releasableEntries = this.releasableEntries || header.requiresRelease();
+            this.releasableEntries = true;
         }
+    }
+
+    DefaultHttpHeaders appendOrTransferHeaders(HttpHeaders headers) {
+        if (headers == null || headers.headerSize() == 0) {
+            return this;
+        }
+        if (headers instanceof DefaultHttpHeaders && headers != this) {
+            return this.transferHeaders((DefaultHttpHeaders) headers);
+        }
+        return this.appendHeaders(headers);
+    }
+
+    DefaultHttpHeaders transferHeaders(DefaultHttpHeaders source) {
+        if (source == null || source.entries.isEmpty()) {
+            return this;
+        }
+        if (source == this) {
+            return this.appendHeaders(source);
+        }
+
+        this.ensureEntryCapacity(source.entries.size());
+        this.entries.addAll(source.entries);
+        this.releasableEntries = this.releasableEntries || !source.entries.isEmpty();
+        if (source.isBad()) {
+            this.setBadState(source.badReason());
+        }
+
+        source.entries.clear();
+        source.releasableEntries = false;
+        return this;
     }
 
     public DefaultHttpHeaders appendHeaders(HttpHeaders headers) {
@@ -90,17 +135,26 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
                 for (DefaultHttpHeaderEntry entry : source.entries) {
                     copies.add(entry.materializeCopy());
                 }
+                this.ensureEntryCapacity(copies.size());
                 this.entries.addAll(copies);
+                this.releasableEntries = true;
             } else {
+                this.ensureEntryCapacity(source.entries.size());
                 for (DefaultHttpHeaderEntry entry : source.entries) {
                     this.entries.add(entry.materializeCopy());
+                }
+                if (!source.entries.isEmpty()) {
+                    this.releasableEntries = true;
                 }
             }
         } else {
             for (String name : headers.headerNames()) {
                 for (String value : headers.getValues(name)) {
-                    this.entries.add(new DefaultHttpHeaderEntry(name, value));
+                    this.entries.add(DefaultHttpHeaderEntry.newEntry(name, value));
                 }
+            }
+            if (headers.headerSize() > 0) {
+                this.releasableEntries = true;
             }
         }
 
@@ -115,8 +169,31 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
             throw new IllegalArgumentException("value must not be null");
         }
 
-        this.removeHeader(name);
-        return this.addHeader(name, value);
+        DefaultHttpHeaderEntry replacement;
+        boolean replaced = false;
+        for (int i = this.entries.size() - 1; i >= 0; i--) {
+            DefaultHttpHeaderEntry entry = this.entries.get(i);
+            if (!entry.matchesName(name)) {
+                continue;
+            }
+
+            if (!replaced) {
+                replacement = DefaultHttpHeaderEntry.newEntry(name, value);
+                this.entries.set(i, replacement);
+                this.releasableEntries = true;
+                replaced = true;
+            } else {
+                this.entries.remove(i);
+            }
+
+            if (this.releasableEntries) {
+                entry.release();
+            }
+        }
+        if (!replaced) {
+            this.addHeader(name, value);
+        }
+        return this;
     }
 
     public DefaultHttpHeaders clearHeader() {
@@ -233,6 +310,13 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
 
     List<DefaultHttpHeaderEntry> headerEntries() {
         return this.entries;
+    }
+
+    private void ensureEntryCapacity(int additional) {
+        if (additional <= 0) {
+            return;
+        }
+        this.entries.ensureAppendCapacity(additional);
     }
 
     @Override

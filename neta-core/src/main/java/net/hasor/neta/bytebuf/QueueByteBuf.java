@@ -17,7 +17,6 @@ package net.hasor.neta.bytebuf;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 /**
  * A read-only {@link ByteBuf} view over a {@link ProtoRcvQueue ProtoRcvQueue&lt;ByteBuf&gt;},
@@ -71,9 +70,9 @@ import net.hasor.neta.channel.data.ProtoRcvQueue;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2025-07-08
  */
-final class QueueByteBuf extends AbstractByteBuf {
+public final class QueueByteBuf extends AbstractByteBuf {
     private final ProtoRcvQueue<ByteBuf> queue;
-    private final List<Component>        components = new ArrayList<>();
+    private final ArrayList<Component>   components = new ArrayList<>();
     private int                          totalCapacity;
     private int                          lastAccessedComponentIndex;
     private int                          queuePeekCount;
@@ -92,8 +91,9 @@ final class QueueByteBuf extends AbstractByteBuf {
         if (queue == null) {
             throw new NullPointerException("queue must not be null");
         }
+
         this.queue = queue;
-        refresh();
+        this.refresh();
     }
 
     /**
@@ -106,22 +106,8 @@ final class QueueByteBuf extends AbstractByteBuf {
         checkFree();
         int currentQueueSize = this.queue.queueSize();
         if (currentQueueSize > this.queuePeekCount) {
-            List<ByteBuf> allMessages = this.queue.peekMessage(currentQueueSize);
-            for (int i = this.queuePeekCount; i < allMessages.size(); i++) {
-                ByteBuf buf = allMessages.get(i);
-                int readable = buf.readableBytes();
-                if (readable == 0) {
-                    continue;
-                }
-
-                Component c = new Component();
-                c.buf = buf;
-                c.compositeOffset = this.totalCapacity;
-                c.length = readable;
-
-                this.components.add(c);
-                this.totalCapacity += readable;
-            }
+            this.components.ensureCapacity(this.components.size() + (currentQueueSize - this.queuePeekCount));
+            this.queue.peekEachMessage(this.queuePeekCount, this::appendReadableComponent);
             this.queuePeekCount = currentQueueSize;
 
             // Make new data immediately readable
@@ -129,6 +115,31 @@ final class QueueByteBuf extends AbstractByteBuf {
             this.markedWriterIndex = this.totalCapacity;
         }
         return this;
+    }
+
+    private void appendReadableComponent(ByteBuf buf) {
+        if (buf == null) {
+            return;
+        }
+        int readable = buf.readableBytes();
+        if (readable == 0) {
+            return;
+        }
+
+        Component c = new Component();
+        c.buf = buf;
+        c.compositeOffset = this.totalCapacity;
+        c.length = readable;
+        if (buf instanceof WrapArrayBuffer) {
+            c.cachedArray = ((WrapArrayBuffer) buf).target;
+            c.cachedArrayBase = buf.readerIndex();
+        } else if (buf instanceof AutoArrayByteBuf) {
+            c.cachedArray = ((AutoArrayByteBuf) buf).target;
+            c.cachedArrayBase = buf.readerIndex();
+        }
+
+        this.components.add(c);
+        this.totalCapacity += readable;
     }
 
     /** Returns the underlying receive queue. */
@@ -210,7 +221,159 @@ final class QueueByteBuf extends AbstractByteBuf {
         checkFree();
         Component c = findComponent(offset);
         int localOffset = offset - c.compositeOffset;
+        if (c.cachedArray != null) {
+            return c.cachedArray[c.cachedArrayBase + localOffset];
+        }
         return c.buf.getByte(localOffset);
+    }
+
+    @Override
+    public int expect(byte expected, int maxScanBytes) {
+        int scanLength = Math.min(this.readableBytes(), Math.max(0, maxScanBytes));
+        if (scanLength <= 0) {
+            return -1;
+        }
+        if (this.components.size() == 1) {
+            Component c = this.components.get(0);
+            int start = this.readerIndex;
+            byte[] directArray = directArray(c.buf);
+            if (directArray != null) {
+                int arrayOffset = c.buf.readerIndex() + start;
+                for (int i = 0; i < scanLength; i++) {
+                    if (directArray[arrayOffset + i] == expected) {
+                        return i;
+                    }
+                }
+                return -1;
+            }
+            int end = start + scanLength;
+            for (int i = start; i < end; i++) {
+                if (c.buf.getUInt8(i) == expected) {
+                    return i - start;
+                }
+            }
+            return -1;
+        }
+
+        byte[] scratch = ByteBuf.expectScratch(ByteBuf.DEFAULT_EXPECT_SCAN_SIZE);
+        int scanned = 0;
+        while (scanned < scanLength) {
+            int copyLength = Math.min(scanLength - scanned, scratch.length);
+            this.getBytes(scanned, scratch, 0, copyLength);
+            for (int i = 0; i < copyLength; i++) {
+                if (scratch[i] == expected) {
+                    return scanned + i;
+                }
+            }
+            scanned += copyLength;
+        }
+        return -1;
+    }
+
+    @Override
+    public int expectLast(byte expected, int maxScanBytes) {
+        int scanLength = Math.min(this.readableBytes(), Math.max(0, maxScanBytes));
+        if (scanLength <= 0) {
+            return -1;
+        }
+        if (this.components.size() == 1) {
+            Component c = this.components.get(0);
+            int start = this.readerIndex;
+            byte[] directArray = directArray(c.buf);
+            if (directArray != null) {
+                int arrayOffset = c.buf.readerIndex() + start;
+                for (int i = scanLength - 1; i >= 0; i--) {
+                    if (directArray[arrayOffset + i] == expected) {
+                        return i;
+                    }
+                }
+                return -1;
+            }
+            for (int i = start + scanLength - 1; i >= start; i--) {
+                if (c.buf.getUInt8(i) == expected) {
+                    return i - start;
+                }
+            }
+            return -1;
+        }
+
+        byte[] scratch = ByteBuf.expectScratch(ByteBuf.DEFAULT_EXPECT_SCAN_SIZE);
+        int scanned = 0;
+        int lastMatch = -1;
+        while (scanned < scanLength) {
+            int copyLength = Math.min(scanLength - scanned, scratch.length);
+            this.getBytes(scanned, scratch, 0, copyLength);
+            for (int i = 0; i < copyLength; i++) {
+                if (scratch[i] == expected) {
+                    lastMatch = scanned + i;
+                }
+            }
+            scanned += copyLength;
+        }
+        return lastMatch;
+    }
+
+    @Override
+    public ByteBuf readLineBuffer(int maxScanBytes) {
+        int lineFeedIndex = this.expect((byte) '\n', maxScanBytes);
+        if (lineFeedIndex < 0) {
+            return null;
+        }
+
+        if (this.components.size() == 1) {
+            Component c = this.components.get(0);
+            boolean hasCarriageReturn = lineFeedIndex > 0 && c.buf.getUInt8(this.readerIndex + lineFeedIndex - 1) == '\r';
+            int lineLength = hasCarriageReturn ? lineFeedIndex - 1 : lineFeedIndex;
+            ByteBuf line = lineLength <= 0 ? ByteBuf.EMPTY : ByteBufUtils.lineSlice(c.buf, this.readerIndex, lineLength);
+            this.skipReadableBytes(lineLength + (hasCarriageReturn ? 2 : 1));
+            return line;
+        }
+
+        boolean hasCarriageReturn = lineFeedIndex > 0 && this.getUInt8(lineFeedIndex - 1) == '\r';
+        int lineLength = hasCarriageReturn ? lineFeedIndex - 1 : lineFeedIndex;
+        ByteBuf line = this.sliceLineView(lineLength);
+        this.skipReadableBytes(lineLength + (hasCarriageReturn ? 2 : 1));
+        return line;
+    }
+
+    private ByteBuf sliceLineView(int length) {
+        if (length <= 0) {
+            return ByteBuf.EMPTY;
+        }
+
+        int startOffset = this.readerIndex;
+        int endOffset = startOffset + length;
+        CompositeByteBuf result = null;
+
+        for (int i = 0; i < this.components.size(); i++) {
+            Component c = this.components.get(i);
+            int cStart = c.compositeOffset;
+            int cEnd = c.compositeOffset + c.length;
+
+            if (cEnd <= startOffset) {
+                continue;
+            }
+            if (cStart >= endOffset) {
+                break;
+            }
+
+            int overlapStart = Math.max(cStart, startOffset) - cStart;
+            int overlapEnd = Math.min(cEnd, endOffset) - cStart;
+            int overlapLen = overlapEnd - overlapStart;
+
+            if (result == null && overlapLen == length) {
+                return ByteBufUtils.lineSlice(c.buf, overlapStart, overlapLen);
+            }
+            if (result == null) {
+                result = ByteBufUtils.compositeBuffer(alloc());
+            }
+            if (overlapStart == 0 && overlapLen == c.length) {
+                result.addComponent(c.buf.retain());
+            } else {
+                result.addComponent(ByteBufUtils.lineSlice(c.buf, overlapStart, overlapLen));
+            }
+        }
+        return result == null ? ByteBuf.EMPTY : result;
     }
 
     /**
@@ -228,18 +391,19 @@ final class QueueByteBuf extends AbstractByteBuf {
             throw new IndexOutOfBoundsException("read out of range. length: 1 (expected: 0 ~ 0)");
         }
         this.readerIndex = idx + 1;
+        int absoluteIdx = idx;
 
         // Inline findComponent cache hit path
         int ci = this.lastAccessedComponentIndex;
         Component c;
         if (ci < this.components.size()) {
             c = this.components.get(ci);
-            if (idx < c.compositeOffset || idx >= c.compositeOffset + c.length) {
+            if (absoluteIdx < c.compositeOffset || absoluteIdx >= c.compositeOffset + c.length) {
                 // Try next component (common sequential read crossing boundary)
                 int ni = ci + 1;
                 if (ni < this.components.size()) {
                     c = this.components.get(ni);
-                    if (idx >= c.compositeOffset && idx < c.compositeOffset + c.length) {
+                    if (absoluteIdx >= c.compositeOffset && absoluteIdx < c.compositeOffset + c.length) {
                         this.lastAccessedComponentIndex = ni;
                     } else {
                         c = findComponent(idx);
@@ -252,7 +416,10 @@ final class QueueByteBuf extends AbstractByteBuf {
             c = findComponent(idx);
         }
 
-        int localOffset = idx - c.compositeOffset;
+        int localOffset = absoluteIdx - c.compositeOffset;
+        if (c.cachedArray != null) {
+            return c.cachedArray[c.cachedArrayBase + localOffset];
+        }
         return c.buf.getByte(localOffset);
     }
 
@@ -269,7 +436,11 @@ final class QueueByteBuf extends AbstractByteBuf {
             int available = c.length - localOffset;
             int toRead = Math.min(remaining, available);
 
-            c.buf.getBytes(localOffset, dst, currentDstOffset, toRead);
+            if (c.cachedArray != null) {
+                System.arraycopy(c.cachedArray, c.cachedArrayBase + localOffset, dst, currentDstOffset, toRead);
+            } else {
+                c.buf.getBytes(localOffset, dst, currentDstOffset, toRead);
+            }
 
             remaining -= toRead;
             currentDstOffset += toRead;
@@ -392,6 +563,16 @@ final class QueueByteBuf extends AbstractByteBuf {
         return this;
     }
 
+    /**
+     * Marks the current reader position but defers queue consumption until {@link #markReader()}.
+     * This keeps {@code markedReaderIndex} in sync for follow-up {@link #sliceOff(int)} calls
+     * without repeatedly compacting the underlying queue during line-by-line parsing.
+     */
+    public QueueByteBuf markReaderDeferred() {
+        super.markReader();
+        return this;
+    }
+
     // ---- Discard & Consume ----
 
     /**
@@ -409,47 +590,63 @@ final class QueueByteBuf extends AbstractByteBuf {
             return;
         }
 
+        if (this.components.size() == 1) {
+            Component c = this.components.get(0);
+            int discardOffset = this.readerIndex;
+            if (discardOffset >= c.length) {
+                this.queue.skipMessage(1);
+                this.queuePeekCount--;
+                this.components.clear();
+                this.totalCapacity = 0;
+            } else {
+                c.buf.skipReadableBytes(discardOffset);
+                c.cachedArrayBase += discardOffset;
+                c.length -= discardOffset;
+                c.compositeOffset = 0;
+                this.totalCapacity = c.length;
+            }
+
+            this.lastAccessedComponentIndex = 0;
+            this.markedReaderIndex = 0;
+            this.readerIndex = 0;
+            this.markedWriterIndex = this.totalCapacity;
+            this.writerIndex = this.totalCapacity;
+            return;
+        }
+
         int discardOffset = this.readerIndex;
         int skipCount = 0;
 
-        // Remove fully consumed components and handle partial consumption
         Iterator<Component> it = this.components.iterator();
         while (it.hasNext()) {
             Component c = it.next();
-            int endOffset = c.compositeOffset + c.length;
-            if (endOffset <= discardOffset) {
-                // Fully consumed — remove from component list
+            if (c.length <= discardOffset) {
+                discardOffset -= c.length;
                 skipCount++;
                 it.remove();
-            } else if (c.compositeOffset < discardOffset) {
-                // Partially consumed — advance component's reader position
-                int consumed = discardOffset - c.compositeOffset;
-                c.buf.skipReadableBytes(consumed);
-                c.length -= consumed;
-                break;
             } else {
+                if (discardOffset > 0) {
+                    c.buf.skipReadableBytes(discardOffset);
+                    c.cachedArrayBase += discardOffset;
+                    c.length -= discardOffset;
+                }
                 break;
             }
         }
 
-        // Skip consumed messages from queue
         if (skipCount > 0) {
             this.queue.skipMessage(skipCount);
             this.queuePeekCount -= skipCount;
         }
 
-        // Recompute composite offsets
-        int offset = 0;
+        int currentOffset = 0;
         for (Component c : this.components) {
-            c.compositeOffset = offset;
-            offset += c.length;
+            c.compositeOffset = currentOffset;
+            currentOffset += c.length;
         }
-        this.totalCapacity = offset;
 
-        // Reset component cache
+        this.totalCapacity = currentOffset;
         this.lastAccessedComponentIndex = 0;
-
-        // Adjust indices
         this.markedReaderIndex = 0;
         this.readerIndex = 0;
         this.markedWriterIndex = this.totalCapacity;
@@ -478,19 +675,31 @@ final class QueueByteBuf extends AbstractByteBuf {
             return ByteBuf.EMPTY;
         }
 
-        int absoluteSplit = this.markedReaderIndex + splitOffset;
-        if (absoluteSplit > this.markedWriterIndex) {
-            absoluteSplit = this.markedWriterIndex;
+        int splitReaderIndex = this.markedReaderIndex + splitOffset;
+        if (splitReaderIndex > this.markedWriterIndex) {
+            splitReaderIndex = this.markedWriterIndex;
         }
 
-        int frontLen = absoluteSplit - this.markedReaderIndex;
+        int frontLen = splitReaderIndex - this.markedReaderIndex;
         if (frontLen <= 0) {
             return ByteBuf.EMPTY;
         }
 
-        CompositeByteBuf result = ByteBufUtils.compositeBuffer(alloc());
+        if (this.components.size() == 1) {
+            Component c = this.components.get(0);
+            int localStart = this.markedReaderIndex - c.compositeOffset;
+            ByteBuf result = localStart == 0 && frontLen == c.length ? c.buf.retain() : ByteBufUtils.lineSlice(c.buf, localStart, frontLen);
+
+            this.readerIndex = splitReaderIndex;
+            this.markedReaderIndex = splitReaderIndex;
+            discardReadBytes();
+            return result;
+        }
+
+        ByteBuf result = null;
+        CompositeByteBuf composite = null;
         int startOffset = this.markedReaderIndex;
-        int endOffset = absoluteSplit;
+        int endOffset = splitReaderIndex;
 
         for (Component c : this.components) {
             int cStart = c.compositeOffset;
@@ -508,24 +717,25 @@ final class QueueByteBuf extends AbstractByteBuf {
             int overlapEnd = Math.min(cEnd, endOffset) - cStart;
             int overlapLen = overlapEnd - overlapStart;
 
-            if (overlapStart == 0 && overlapLen == c.length) {
-                // Entire component is in front portion — zero-copy shared view.
-                result.addComponent(c.buf.retain());
-            } else {
-                // Partial component — copy the overlap portion and transfer ownership to the result.
-                byte[] partial = new byte[overlapLen];
-                c.buf.getBytes(overlapStart, partial, 0, overlapLen);
-                ByteBuf partialBuf = ByteBuf.wrap(partial);
-                result.addComponent(partialBuf);
+            ByteBuf overlap = overlapStart == 0 && overlapLen == c.length ? c.buf.retain() : ByteBufUtils.lineSlice(c.buf, overlapStart, overlapLen);
+
+            if (result == null && overlapLen == frontLen) {
+                result = overlap;
+                break;
             }
+            if (composite == null) {
+                composite = ByteBufUtils.compositeBuffer(alloc());
+                result = composite;
+            }
+            composite.addComponent(overlap);
         }
 
         // Advance readerIndex past the sliced-off portion and discard
-        this.readerIndex = absoluteSplit;
-        this.markedReaderIndex = absoluteSplit;
+        this.readerIndex = splitReaderIndex;
+        this.markedReaderIndex = splitReaderIndex;
         discardReadBytes();
 
-        return result;
+        return result == null ? ByteBuf.EMPTY : result;
     }
 
     // ---- Copy ----
@@ -558,6 +768,16 @@ final class QueueByteBuf extends AbstractByteBuf {
         this.queuePeekCount = 0;
     }
 
+    private static byte[] directArray(ByteBuf buf) {
+        if (buf instanceof WrapArrayBuffer) {
+            return ((WrapArrayBuffer) buf).target;
+        }
+        if (buf instanceof AutoArrayByteBuf) {
+            return ((AutoArrayByteBuf) buf).target;
+        }
+        return null;
+    }
+
     @Override
     protected String getSimpleName() {
         return "QueueByteBuf";
@@ -568,5 +788,7 @@ final class QueueByteBuf extends AbstractByteBuf {
         ByteBuf buf;
         int     compositeOffset; // start offset within the composite
         int     length;          // number of bytes contributed by this component
+        byte[]  cachedArray;
+        int     cachedArrayBase;
     }
 }

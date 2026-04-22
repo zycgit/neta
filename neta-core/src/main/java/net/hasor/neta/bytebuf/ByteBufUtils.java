@@ -218,7 +218,7 @@ public class ByteBufUtils {
      * @return a new read-only ByteBuf wrapping the queue
      * @throws NullPointerException if queue is null
      */
-    public static ByteBuf queueBuffer(ProtoRcvQueue<ByteBuf> queue) {
+    public static QueueByteBuf queueBuffer(ProtoRcvQueue<ByteBuf> queue) {
         return new QueueByteBuf(queue);
     }
 
@@ -241,6 +241,24 @@ public class ByteBufUtils {
      */
     public static CompositeByteBuf compositeBuffer(ByteBufAllocator alloc) {
         return new CompositeByteBuf(alloc);
+    }
+
+    static ByteBuf lineSlice(ByteBuf buffer, int offset, int length) {
+        if (buffer == null || length <= 0) {
+            return ByteBuf.EMPTY;
+        }
+
+        int baseOffset = buffer.readerIndex() + offset;
+        if (buffer instanceof WrapArrayBuffer) {
+            return new ArraySliceByteBuf(null, ((WrapArrayBuffer) buffer).target, baseOffset, length);
+        }
+        if (buffer instanceof AutoArrayByteBuf) {
+            return new ArraySliceByteBuf(buffer, ((AutoArrayByteBuf) buffer).target, baseOffset, length);
+        }
+
+        byte[] copy = new byte[length];
+        buffer.getBytes(offset, copy, 0, length);
+        return ByteBuf.wrap(copy);
     }
 
     /**

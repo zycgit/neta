@@ -15,13 +15,9 @@
  */
 package net.hasor.neta.codec.http;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
-import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufUtils;
-import net.hasor.neta.bytebuf.StringView;
+import net.hasor.neta.bytebuf.QueueByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
@@ -150,7 +146,7 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         boolean printLog = context.getConfig().isPrintLog();
         long channelID = context.getChannel().getChannelId();
         HttpContext.RequestDecodeState reqCtx = httpCtx.req;
-        ByteBuf accumulator = ByteBufUtils.queueBuffer(src);
+        QueueByteBuf accumulator = reqCtx.prepareAccumulator(src);
 
         try {
             while (true) {
@@ -174,7 +170,6 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                             return ProtoStatus.Next;
                         }
                         this.offerRequestObject(context, dst, reqCtx, headers, channelID, printLog);
-                        this.updateRequestTransferMode(headers, reqCtx);
 
                         reqCtx.decoderPhase = this.nextState(reqCtx);
                         break;
@@ -254,8 +249,7 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
             }
             throw e;
         } finally {
-            accumulator.markReader();
-            accumulator.free();
+            reqCtx.markAccumulatorReader();
         }
     }
 
@@ -277,6 +271,14 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
             logger.error("[HTTP-REQ] channel=" + channelID + " decoder error, request state reset. cause=" + e.getClass().getSimpleName() + ": " + e.getMessage());
         }
         return ProtoStatus.Next;
+    }
+
+    @Override
+    public void onClose(ProtoContext context) {
+        HttpContext httpCtx = context.context(HttpContext.class);
+        if (httpCtx != null) {
+            httpCtx.req.releaseAndReset();
+        }
     }
 
     //
@@ -342,72 +344,66 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
     }
 
     // line-part
-    private HttpRequest decodeInitialLine(ProtoContext context, HttpContext.RequestDecodeState reqCtx, ByteBuf accumulator) {
-        ByteBuf line;
-        while ((line = accumulator.readLineBuffer(this.maxInitialLineLength + 2)) != null) {
-            try {
-                if (line.readableBytes() == 0) {
-                    accumulator.markReader();
-                    continue;
-                }
-
-                if (line.readableBytes() > maxInitialLineLength) {
-                    String logMessage = "request line too long: " + line.readableBytes() + " > " + maxInitialLineLength;
-                    throw new HttpInitialLineTooLongException(logMessage, maxInitialLineLength, line.readableBytes());
-                }
-
-                int lineLength = line.readableBytes();
-                int firstSpace = line.expect((byte) ' ', lineLength);
-                if (firstSpace <= 0) {
-                    throw new HttpBadRequestException("invalid request line");
-                }
-
-                int secondSpace = -1;
-                for (int i = firstSpace + 1; i < lineLength; i++) {
-                    if (line.getUInt8(i) == ' ') {
-                        secondSpace = i;
-                        break;
-                    }
-                }
-                if (secondSpace <= firstSpace + 1 || secondSpace >= lineLength - 1) {
-                    throw new HttpBadRequestException("invalid request line");
-                }
-
-                StringView methodView = StringView.request(line, 0, firstSpace);
-                StringView uriView = StringView.request(line, firstSpace + 1, secondSpace - firstSpace - 1);
-                StringView versionView = StringView.request(line, secondSpace + 1, lineLength - secondSpace - 1);
-                try {
-                    HttpMethod method = HttpMethod.valueOf(methodView);
-                    HttpVersion version = HttpVersion.valueOf(versionView);
-
-                    accumulator.markReader();
-                    reqCtx.currentMessage = new DefaultHttpRequest(version, method, uriView);
-                    uriView = null;
-                    return reqCtx.currentMessage;
-                } finally {
-                    methodView.release();
-                    if (uriView != null) {
-                        uriView.release();
-                    }
-                    versionView.release();
-                }
-            } finally {
-                line.free();
+    private HttpRequest decodeInitialLine(ProtoContext context, HttpContext.RequestDecodeState reqCtx, QueueByteBuf accumulator) {
+        while (true) {
+            int lineFeedIndex = accumulator.expect((byte) '\n', this.maxInitialLineLength + 2);
+            if (lineFeedIndex < 0) {
+                return null;
             }
-        }
 
-        return null;
+            boolean hasCarriageReturn = lineFeedIndex > 0 && accumulator.getUInt8(lineFeedIndex - 1) == '\r';
+            int lineLength = hasCarriageReturn ? lineFeedIndex - 1 : lineFeedIndex;
+            int consumedBytes = lineLength + (hasCarriageReturn ? 2 : 1);
+            if (lineLength == 0) {
+                accumulator.skipReadableBytes(consumedBytes);
+                accumulator.markReaderDeferred();
+                continue;
+            }
+
+            if (lineLength > this.maxInitialLineLength) {
+                throw new HttpInitialLineTooLongException("request line too long: " + lineLength + " > " + maxInitialLineLength, maxInitialLineLength, lineLength);
+            }
+
+            int firstSpace = accumulator.expect((byte) ' ', lineLength);
+            if (firstSpace <= 0) {
+                throw new HttpBadRequestException("invalid request line");
+            }
+
+            int secondSpace = -1;
+            for (int i = firstSpace + 1; i < lineLength; i++) {
+                if (accumulator.getUInt8(i) == ' ') {
+                    secondSpace = i;
+                    break;
+                }
+            }
+            if (secondSpace <= firstSpace + 1 || secondSpace >= lineLength - 1) {
+                throw new HttpBadRequestException("invalid request line");
+            }
+
+            HttpMethod method = this.resolveHttpMethod(accumulator, 0, firstSpace);
+            String uri = this.materializeAscii(accumulator, firstSpace + 1, secondSpace - firstSpace - 1);
+            HttpVersion version = this.resolveHttpVersion(accumulator, secondSpace + 1, lineLength - secondSpace - 1);
+
+            accumulator.skipReadableBytes(consumedBytes);
+            accumulator.markReaderDeferred();
+            reqCtx.currentMessage = new DefaultHttpRequest(version, method, uri);
+            return reqCtx.currentMessage;
+        }
     }
 
     // header
-    private HttpHeaders decodeHeaders(ProtoContext context, HttpContext.RequestDecodeState reqCtx, ByteBuf accumulator) {
-        List<DefaultHttpHeaderEntry> headerEntries = null;
+    private HttpHeaders decodeHeaders(ProtoContext context, HttpContext.RequestDecodeState reqCtx, QueueByteBuf accumulator) {
+        HeaderEntryStore headerEntries = null;
         boolean endOfHeaders = false;
+        boolean needsContentLength = reqCtx.contentLength < 0;
+        boolean needsExpectHeader = reqCtx.expectHeader == null;
+        boolean needsConnectionHeader = reqCtx.connectionHeader == null;
         ByteBuf line;
         while ((line = accumulator.readLineBuffer(this.maxHeaderSize + 2)) != null) {
+            boolean releaseLine = true;
             try {
                 int lineLength = line.readableBytes();
-                reqCtx.headerBytes += lineLength + 2; // +2 for CRLF
+                reqCtx.headerBytes += lineLength + 2;
                 if (reqCtx.headerBytes > this.maxHeaderSize) {
                     throw new HttpHeaderTooLargeException("HTTP headers too large: " + reqCtx.headerBytes + " > " + maxHeaderSize, this.maxHeaderSize, reqCtx.headerBytes);
                 }
@@ -431,6 +427,9 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                 while (nameEnd > nameStart && isHorizontalWhitespace(line.getUInt8(nameEnd - 1))) {
                     nameEnd--;
                 }
+                if (nameStart >= nameEnd) {
+                    throw new HttpBadRequestException("empty header name");
+                }
 
                 int valueStart = colonIdx + 1;
                 while (valueStart < lineLength && isHorizontalWhitespace(line.getUInt8(valueStart))) {
@@ -442,92 +441,64 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                 }
 
                 if (headerEntries == null) {
-                    headerEntries = new ArrayList<>();
+                    headerEntries = new HeaderEntryStore(8);
                 }
 
-                StringView name = StringView.request(line, nameStart, nameEnd - nameStart);
-                StringView value = StringView.request(line, valueStart, valueEnd - valueStart);
-                try {
-                    headerEntries.add(new DefaultHttpHeaderEntry(name, value));
-                    name = null;
-                    value = null;
-                } finally {
-                    if (name != null) {
-                        name.release();
+                int nameLength = nameEnd - nameStart;
+                int valueLength = valueEnd - valueStart;
+                String headerName = this.resolveHeaderName(line, nameStart, nameLength);
+                boolean isTransferEncoding = headerName == HttpHeaderNames.TRANSFER_ENCODING;
+                boolean isContentLength = headerName == HttpHeaderNames.CONTENT_LENGTH;
+                boolean isExpect = headerName == HttpHeaderNames.EXPECT;
+                boolean isConnection = headerName == HttpHeaderNames.CONNECTION;
+
+                if (!reqCtx.chunked && isTransferEncoding && HttpCharSequences.containsIgnoreCase(line, valueStart, valueLength, HttpHeaderValues.CHUNKED)) {
+                    reqCtx.chunked = true;
+                    reqCtx.contentLength = -1;
+                    needsContentLength = false;
+                } else if (needsContentLength && !reqCtx.chunked && isContentLength && !HttpCharSequences.isBlank(line, valueStart, valueLength)) {
+                    try {
+                        reqCtx.contentLength = HttpCharSequences.parseLong(line, valueStart, valueLength);
+                        if (reqCtx.contentLength < 0) {
+                            throw new HttpContentTooLargeException("negative Content-Length: " + reqCtx.contentLength);
+                        }
+                        needsContentLength = false;
+                    } catch (NumberFormatException e) {
+                        throw new HttpBadRequestException("invalid Content-Length", e);
                     }
-                    if (value != null) {
-                        value.release();
-                    }
+                }
+                if (needsExpectHeader && isExpect && valueLength > 0) {
+                    reqCtx.expectHeader = line.getString(valueStart, valueLength, StandardCharsets.US_ASCII);
+                    needsExpectHeader = false;
+                }
+                if (needsConnectionHeader && isConnection && valueLength > 0) {
+                    reqCtx.connectionHeader = line.getString(valueStart, valueLength, StandardCharsets.US_ASCII);
+                    needsConnectionHeader = false;
+                }
+
+                headerEntries.add(DefaultHttpHeaderEntry.newOwnedEntry(headerName, line, valueStart, valueLength));
+                if (valueLength > 0) {
+                    releaseLine = false;
                 }
                 accumulator.markReader();
             } finally {
-                line.free();
+                if (releaseLine) {
+                    line.free();
+                }
             }
         }
 
         if (headerEntries == null) {
             reqCtx.currentHeaders = endOfHeaders ? new DefaultLastHttpHeaders() : null;
         } else {
-            reqCtx.currentHeaders = endOfHeaders ? new DefaultLastHttpHeaders() : new DefaultHttpHeaders();
-            for (DefaultHttpHeaderEntry entry : headerEntries) {
-                reqCtx.currentHeaders.addHeaderEntry(entry);
-            }
+            reqCtx.currentHeaders = endOfHeaders ? new DefaultLastHttpHeaders(headerEntries, false) : new DefaultHttpHeaders(headerEntries, false);
+        }
+
+        if (reqCtx.currentHeaders != null && reqCtx.currentMessage != null) {
+            reqCtx.currentHeaders.streamId(reqCtx.currentMessage.streamId());
         }
 
         return reqCtx.currentHeaders;
-    }
-
-    private void updateRequestTransferMode(HttpHeaders headers, HttpContext.RequestDecodeState reqCtx) {
-        if (headers instanceof DefaultHttpHeaders) {
-            boolean needsContentLength = reqCtx.contentLength < 0;
-            for (DefaultHttpHeaderEntry entry : ((DefaultHttpHeaders) headers).headerEntries()) {
-                if (!reqCtx.chunked && entry.matchesName(HttpHeaderNames.TRANSFER_ENCODING)) {
-                    if (HttpCharSequences.containsIgnoreCase(entry.valueText(), HttpHeaderValues.CHUNKED)) {
-                        reqCtx.chunked = true;
-                        reqCtx.contentLength = -1;
-                        needsContentLength = false;
-                    }
-                    continue;
-                }
-                if (needsContentLength && !reqCtx.chunked && entry.matchesName(HttpHeaderNames.CONTENT_LENGTH)) {
-                    CharSequence cl = entry.valueText();
-                    if (!HttpCharSequences.isBlank(cl)) {
-                        try {
-                            reqCtx.contentLength = HttpCharSequences.parseLong(cl);
-                            if (reqCtx.contentLength < 0) {
-                                throw new HttpContentTooLargeException("negative Content-Length: " + reqCtx.contentLength);
-                            }
-                            needsContentLength = false;
-                        } catch (NumberFormatException e) {
-                            throw new HttpBadRequestException("invalid Content-Length: " + cl, e);
-                        }
-                    }
-                }
-            }
-            return;
-        }
-
-        if (headers.containsHeader(HttpHeaderNames.TRANSFER_ENCODING)) {
-            String te = headers.getString(HttpHeaderNames.TRANSFER_ENCODING);
-            if (StringUtils.containsIgnoreCase(te, HttpHeaderValues.CHUNKED)) {
-                reqCtx.chunked = true;
-                reqCtx.contentLength = -1;
-            }
-        }
-
-        if (!reqCtx.chunked && reqCtx.contentLength < 0 && headers.containsHeader(HttpHeaderNames.CONTENT_LENGTH)) {
-            String cl = headers.getString(HttpHeaderNames.CONTENT_LENGTH);
-            if (!StringUtils.isBlank(cl)) {
-                try {
-                    reqCtx.contentLength = Long.parseLong(cl.trim());
-                    if (reqCtx.contentLength < 0) {
-                        throw new HttpContentTooLargeException("negative Content-Length: " + reqCtx.contentLength);
-                    }
-                } catch (NumberFormatException e) {
-                    throw new HttpBadRequestException("invalid Content-Length: " + cl, e);
-                }
-            }
-        }
     }
 
     // body
@@ -543,7 +514,7 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
 
             remaining = reqCtx.contentLength - reqCtx.bytesRead;
             if (remaining == 0) {
-                return new DefaultLastHttpContent(content);// Last chunk
+                return new DefaultLastHttpContent(content);
             } else {
                 return new DefaultHttpContent(content);
             }
@@ -552,25 +523,24 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         }
     }
 
-    private boolean decodeChunkSize(ByteBuf accumulator, HttpContext.RequestDecodeState reqCtx) {
-        // chunk for chunk-size. (RFC 7230 §4.1)
-        ByteBuf line = accumulator.readLineBuffer(this.maxHeaderSize + 2);
-        if (line == null) {
+    private boolean decodeChunkSize(QueueByteBuf accumulator, HttpContext.RequestDecodeState reqCtx) {
+        int lineFeedIndex = accumulator.expect((byte) '\n', this.maxHeaderSize + 2);
+        if (lineFeedIndex < 0) {
             return false;
         }
-        try {
-            reqCtx.currentChunkSize = this.parseChunkSize(line);
-            reqCtx.bytesRead = 0;
-            reqCtx.chunkSizeReady = true;
-            accumulator.markReader();
-            return true;
-        } finally {
-            line.free();
-        }
+
+        boolean hasCarriageReturn = lineFeedIndex > 0 && accumulator.getUInt8(lineFeedIndex - 1) == '\r';
+        int lineLength = hasCarriageReturn ? lineFeedIndex - 1 : lineFeedIndex;
+        int consumedBytes = lineLength + (hasCarriageReturn ? 2 : 1);
+        reqCtx.currentChunkSize = parseChunkSize(accumulator, lineLength);
+        reqCtx.bytesRead = 0;
+        reqCtx.chunkSizeReady = true;
+        accumulator.skipReadableBytes(consumedBytes);
+        accumulator.markReaderDeferred();
+        return true;
     }
 
-    private int parseChunkSize(ByteBuf line) {
-        int lineLength = line.readableBytes();
+    private static int parseChunkSize(ByteBuf line, int lineLength) {
         int sizeEnd = line.expect((byte) ';', lineLength);
         if (sizeEnd < 0) {
             sizeEnd = lineLength;
@@ -616,26 +586,24 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         return null;
     }
 
-    private boolean decodeChunkDelimiter(ProtoContext context, HttpContext.RequestDecodeState reqCtx, ByteBuf accumulator) {
-        // Reads the CRLF delimiter after chunk-data.
-        ByteBuf line = accumulator.readLineBuffer(this.maxHeaderSize + 2);
-        if (line == null) {
+    private boolean decodeChunkDelimiter(ProtoContext context, HttpContext.RequestDecodeState reqCtx, QueueByteBuf accumulator) {
+        int lineFeedIndex = accumulator.expect((byte) '\n', this.maxHeaderSize + 2);
+        if (lineFeedIndex < 0) {
             return false;
         }
 
-        try {
-            if (line.readableBytes() != 0) {
-                throw new HttpBadRequestException("invalid chunk delimiter");
-            }
-            accumulator.markReader();
-            reqCtx.chunkDelimiterReady = true;
-            return true;
-        } finally {
-            line.free();
+        boolean hasCarriageReturn = lineFeedIndex > 0 && accumulator.getUInt8(lineFeedIndex - 1) == '\r';
+        int lineLength = hasCarriageReturn ? lineFeedIndex - 1 : lineFeedIndex;
+        if (lineLength != 0) {
+            throw new HttpBadRequestException("invalid chunk delimiter");
         }
+        accumulator.skipReadableBytes(hasCarriageReturn ? 2 : 1);
+        accumulator.markReaderDeferred();
+        reqCtx.chunkDelimiterReady = true;
+        return true;
     }
 
-    private boolean recoverBadRequest(ProtoContext context, HttpContext.RequestDecodeState reqCtx, ProtoSndQueue<HttpObject> dst, ByteBuf accumulator, long channelID, boolean printLog, HttpBadRequestException e) {
+    private boolean recoverBadRequest(ProtoContext context, HttpContext.RequestDecodeState reqCtx, ProtoSndQueue<HttpObject> dst, QueueByteBuf accumulator, long channelID, boolean printLog, HttpBadRequestException e) {
         if (reqCtx.currentMessage == null) {
             return false;
         }
@@ -655,8 +623,7 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
     }
 
     // trailer
-    private TrailerHttpHeaders decodeChunkTrailer(ProtoContext context, HttpContext.RequestDecodeState reqCtx, ByteBuf accumulator) {
-        // eads trailing headers after the last chunk (chunk-size = 0). (RFC 7230 §4.1.2)
+    private TrailerHttpHeaders decodeChunkTrailer(ProtoContext context, HttpContext.RequestDecodeState reqCtx, QueueByteBuf accumulator) {
         if (!reqCtx.currentHeadersTrailer) {
             reqCtx.currentHeaders = new DefaultTrailerHttpHeaders();
             reqCtx.currentHeadersTrailer = true;
@@ -664,14 +631,18 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
 
         ByteBuf line;
         while ((line = accumulator.readLineBuffer(this.maxHeaderSize + 2)) != null) {
+            boolean releaseLine = true;
             try {
                 int lineLength = line.readableBytes();
                 if (lineLength == 0) {
                     DefaultTrailerHttpHeaders trailers = (DefaultTrailerHttpHeaders) reqCtx.currentHeaders;
+                    if (reqCtx.currentMessage != null) {
+                        trailers.streamId(reqCtx.currentMessage.streamId());
+                    }
                     reqCtx.currentHeaders = null;
                     reqCtx.currentHeadersTrailer = false;
                     reqCtx.trailerComplete = true;
-                    accumulator.markReader();
+                    accumulator.markReaderDeferred();
                     return trailers;
                 }
 
@@ -701,26 +672,19 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                     valueEnd--;
                 }
 
-                StringView name = StringView.request(line, nameStart, nameEnd - nameStart);
-                StringView value = StringView.request(line, valueStart, valueEnd - valueStart);
-                try {
-                    ((DefaultHttpHeaders) reqCtx.currentHeaders).addHeaderEntry(new DefaultHttpHeaderEntry(name, value));
-                    name = null;
-                    value = null;
-                } finally {
-                    if (name != null) {
-                        name.release();
-                    }
-                    if (value != null) {
-                        value.release();
-                    }
+                String headerName = this.resolveHeaderName(line, nameStart, nameEnd - nameStart);
+                int valueLength = valueEnd - valueStart;
+                reqCtx.currentHeaders.addHeaderEntry(this.materializeHeaderEntry(headerName, line, valueStart, valueLength));
+                if (valueLength > 0) {
+                    releaseLine = false;
                 }
-                accumulator.markReader();
+                accumulator.markReaderDeferred();
             } finally {
-                line.free();
+                if (releaseLine) {
+                    line.free();
+                }
             }
         }
-
         return null;
     }
 
@@ -739,6 +703,121 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
 
     // utils
 
+    private HttpMethod resolveHttpMethod(ByteBuf line, int offset, int length) {
+        switch (length) {
+            case 3:
+                if (matchesAsciiIgnoreCase(line, offset, HttpMethod.GET.name())) {
+                    return HttpMethod.GET;
+                }
+                if (matchesAsciiIgnoreCase(line, offset, HttpMethod.PUT.name())) {
+                    return HttpMethod.PUT;
+                }
+                break;
+            case 4:
+                if (matchesAsciiIgnoreCase(line, offset, HttpMethod.POST.name())) {
+                    return HttpMethod.POST;
+                }
+                if (matchesAsciiIgnoreCase(line, offset, HttpMethod.HEAD.name())) {
+                    return HttpMethod.HEAD;
+                }
+                break;
+            case 5:
+                if (matchesAsciiIgnoreCase(line, offset, HttpMethod.PATCH.name())) {
+                    return HttpMethod.PATCH;
+                }
+                if (matchesAsciiIgnoreCase(line, offset, HttpMethod.TRACE.name())) {
+                    return HttpMethod.TRACE;
+                }
+                break;
+            case 6:
+                if (matchesAsciiIgnoreCase(line, offset, HttpMethod.DELETE.name())) {
+                    return HttpMethod.DELETE;
+                }
+                break;
+            case 7:
+                if (matchesAsciiIgnoreCase(line, offset, HttpMethod.OPTIONS.name())) {
+                    return HttpMethod.OPTIONS;
+                }
+                if (matchesAsciiIgnoreCase(line, offset, HttpMethod.CONNECT.name())) {
+                    return HttpMethod.CONNECT;
+                }
+                break;
+            default:
+                break;
+        }
+        return HttpMethod.valueOf(this.materializeAscii(line, offset, length));
+    }
+
+    private HttpVersion resolveHttpVersion(ByteBuf line, int offset, int length) {
+        if (length == 8 && matchesAsciiIgnoreCase(line, offset, "HTTP/1.1")) {
+            return HttpVersion.HTTP_1_1;
+        }
+        if (length == 8 && matchesAsciiIgnoreCase(line, offset, "HTTP/1.0")) {
+            return HttpVersion.HTTP_1_0;
+        }
+        if (length == 8 && matchesAsciiIgnoreCase(line, offset, "HTTP/2.0")) {
+            return HttpVersion.HTTP_2_0;
+        }
+        if (length == 8 && matchesAsciiIgnoreCase(line, offset, "HTTP/3.0")) {
+            return HttpVersion.HTTP_3_0;
+        }
+        return HttpVersion.valueOf(this.materializeAscii(line, offset, length));
+    }
+
+    private DefaultHttpHeaderEntry materializeHeaderEntry(String headerName, ByteBuf source, int valueOffset, int valueLength) {
+        return DefaultHttpHeaderEntry.newOwnedEntry(headerName, source, valueOffset, valueLength);
+    }
+
+    private String materializeAscii(ByteBuf source, int offset, int length) {
+        return length == 0 ? "" : source.getString(offset, length, StandardCharsets.US_ASCII);
+    }
+
+    private String resolveHeaderName(ByteBuf source, int offset, int length) {
+        switch (length) {
+            case 4:
+                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.HOST)) {
+                    return HttpHeaderNames.HOST;
+                }
+                break;
+            case 6:
+                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.ACCEPT)) {
+                    return HttpHeaderNames.ACCEPT;
+                }
+                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.EXPECT)) {
+                    return HttpHeaderNames.EXPECT;
+                }
+                break;
+            case 10:
+                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.CONNECTION)) {
+                    return HttpHeaderNames.CONNECTION;
+                }
+                break;
+            case 12:
+                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.CONTENT_TYPE)) {
+                    return HttpHeaderNames.CONTENT_TYPE;
+                }
+                break;
+            case 13:
+                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.AUTHORIZATION)) {
+                    return HttpHeaderNames.AUTHORIZATION;
+                }
+                break;
+            case 14:
+                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.CONTENT_LENGTH)) {
+                    return HttpHeaderNames.CONTENT_LENGTH;
+                }
+                break;
+            case 17:
+                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.TRANSFER_ENCODING)) {
+                    return HttpHeaderNames.TRANSFER_ENCODING;
+                }
+                break;
+            default:
+                break;
+        }
+        return this.materializeAscii(source, offset, length);
+    }
+
     private static int hexValue(int value) {
         if (value >= '0' && value <= '9') {
             return value - '0';
@@ -754,6 +833,26 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
 
     private static boolean isHorizontalWhitespace(int value) {
         return value == ' ' || value == '\t';
+    }
+
+    private static boolean matchesAsciiIgnoreCase(ByteBuf source, int offset, CharSequence expected) {
+        for (int i = 0; i < expected.length(); i++) {
+            int actual = source.getUInt8(offset + i);
+            int target = expected.charAt(i);
+            if (actual == target) {
+                continue;
+            }
+            if (actual >= 'a' && actual <= 'z') {
+                actual -= 32;
+            }
+            if (target >= 'a' && target <= 'z') {
+                target -= 32;
+            }
+            if (actual != target) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static String packetType(HttpObject httpObject) {

@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
-import java.util.List;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
+import net.hasor.neta.channel.data.ProtoRcvQueueView;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 /**
  * Aggregates an ordered HTTP response object sequence into a {@link FullHttpResponse}.
@@ -31,6 +32,8 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * @version : 2026-04-11
  */
 public class HttpResponseAggregator extends AbstractHttpAggregator<HttpResponse> {
+    private static final int PREALLOCATE_COPY_THRESHOLD = 1024;
+
     /**
      * Creates a response aggregator with the default maximum content length.
      */
@@ -59,25 +62,51 @@ public class HttpResponseAggregator extends AbstractHttpAggregator<HttpResponse>
      */
     @Override
     protected void emitAggregated(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<HttpObject> dst) {
-        List<HttpObject> parts = this.takeStagedParts(src);
-        if (parts == null || parts.isEmpty()) {
+        ProtoRcvQueueView<HttpObject> staged = this.stagedView(src);
+        if (staged == null) {
             this.resetAggregation(src);
             return;
         }
 
-        HttpResponse response = (HttpResponse) parts.get(0);
-        DefaultFullHttpResponse fullResp = new DefaultFullHttpResponse(response.protocolVersion(), response.status(), ByteBuf.EMPTY);
+        HttpObject first = staged.takeMessage();
+        if (!(first instanceof HttpResponse)) {
+            if (first != null) {
+                first.release();
+            }
+            this.resetAggregation(src);
+            return;
+        }
+
+        HttpResponse response = (HttpResponse) first;
+        HttpResponse responseToRelease = response;
+        DefaultHttpHeaders mergedHeaders = null;
+        DefaultHttpResponse responseLine = this.responseLineForFull(response);
+        if (responseLine == response) {
+            responseToRelease = null;
+        }
+        DefaultFullHttpResponse fullResp = null;
+        ByteBuf aggregatedContent = ByteBuf.EMPTY;
+        ByteBuf contiguousContent = null;
+        HttpObject current = null;
         boolean handled = false;
         boolean success = false;
         try {
+            HttpContext.ResponseDecodeState respCtx = HttpContext.getOrCreate(context).resp;
             int contentLength = 0;
-            for (HttpObject part : parts) {
+            long declaredLength = respCtx.contentLength;
+            while ((current = staged.takeMessage()) != null) {
+                HttpObject part = current;
+                current = null;
+                boolean releasePart = true;
                 if (part instanceof HttpHeaders) {
-                    fullResp.appendHeaders((HttpHeaders) part);
+                    mergedHeaders = this.mergeHeadersBlock(mergedHeaders, (HttpHeaders) part, response.streamId());
+                    if (part == mergedHeaders) {
+                        releasePart = false;
+                    }
                     if (part instanceof LastHttpHeaders && !this.isHeadersClosedHandled()) {
-                        long declaredLength = fullResp.getLong(HttpHeaderNames.CONTENT_LENGTH, -1);
-                        this.onHeadersClosed(context, response, fullResp, declaredLength);
-                        if (fullResp.isBad() || this.isDiscardMode()) {
+                        declaredLength = mergedHeaders.getLong(HttpHeaderNames.CONTENT_LENGTH, -1);
+                        this.onHeadersClosed(context, response, mergedHeaders, declaredLength);
+                        if (mergedHeaders.isBad() || this.isDiscardMode()) {
                             handled = true;
                             return;
                         }
@@ -89,26 +118,42 @@ public class HttpResponseAggregator extends AbstractHttpAggregator<HttpResponse>
                     int readable = content.readableBytes();
                     int newLength = contentLength + readable;
                     if (newLength > this.maxContentLength()) {
-                        if (this.onContentTooLarge(context, response, fullResp, newLength) && this.isDiscardMode()) {
+                        mergedHeaders = this.ensureMergedHeaders(mergedHeaders, response.streamId());
+                        if (this.onContentTooLarge(context, response, mergedHeaders, newLength) && this.isDiscardMode()) {
                             handled = true;
                             return;
                         }
                         throw new HttpContentTooLargeException("content length exceeds maximum: " + newLength + " > " + this.maxContentLength(), this.maxContentLength(), newLength);
                     }
-                    contentLength = newLength;
                     if (readable > 0) {
-                        this.appendContent(fullResp, part);
+                        if (contiguousContent == null && this.shouldPreallocateContentBuffer(declaredLength, contentLength)) {
+                            contiguousContent = this.allocateContentBuffer(content, declaredLength);
+                            aggregatedContent = contiguousContent;
+                        }
+
+                        if (contiguousContent != null) {
+                            contiguousContent.writeBuffer(content, readable);
+                        } else {
+                            aggregatedContent = this.appendContent(aggregatedContent, part);
+                        }
                     }
+                    contentLength = newLength;
+                }
+
+                if (releasePart) {
+                    part.release();
                 }
             }
 
+            mergedHeaders = this.ensureMergedHeaders(mergedHeaders, response.streamId());
+            fullResp = new DefaultFullHttpResponse(responseLine, mergedHeaders, aggregatedContent);
             this.completeFullResponse(response, fullResp, contentLength);
             dst.offerMessage(fullResp);
 
             this.logAggregatedResponse(context, response, contentLength);
             success = true;
         } finally {
-            this.releaseAggregatedResponse(parts, fullResp, success);
+            this.releaseAggregatedResponse(responseToRelease, current, fullResp, aggregatedContent, mergedHeaders, success);
             this.finishAggregation(src, success, handled);
         }
     }
@@ -125,6 +170,13 @@ public class HttpResponseAggregator extends AbstractHttpAggregator<HttpResponse>
         }
     }
 
+    private DefaultHttpResponse responseLineForFull(HttpResponse response) {
+        if (response instanceof DefaultHttpResponse) {
+            return (DefaultHttpResponse) response;
+        }
+        return new DefaultHttpResponse(response.protocolVersion(), response.status());
+    }
+
     private ByteBuf contentOf(HttpObject part) {
         if (part instanceof HttpContent) {
             return ((HttpContent) part).content();
@@ -135,14 +187,51 @@ public class HttpResponseAggregator extends AbstractHttpAggregator<HttpResponse>
         }
     }
 
-    private void appendContent(DefaultFullHttpResponse fullResp, HttpObject part) {
+    private ByteBuf appendContent(ByteBuf current, HttpObject part) {
         if (part instanceof HttpContent) {
-            fullResp.appendContent(((HttpContent) part).transferContent());
+            return DefaultFullHttpResponse.appendContent(current, ((HttpContent) part).transferContent());
         } else if (part instanceof HttpByteBuf) {
-            fullResp.appendContent(((HttpByteBuf) part).transferContent());
+            return DefaultFullHttpResponse.appendContent(current, ((HttpByteBuf) part).transferContent());
         } else {
             throw new IllegalStateException("unexpected content-bearing response part: " + part.getClass().getName());
         }
+    }
+
+    private DefaultHttpHeaders mergeHeadersBlock(DefaultHttpHeaders mergedHeaders, HttpHeaders headers, long streamId) {
+        if (mergedHeaders == null) {
+            if (headers instanceof DefaultHttpHeaders) {
+                DefaultHttpHeaders adopted = (DefaultHttpHeaders) headers;
+                adopted.streamId(streamId);
+                return adopted;
+            }
+            mergedHeaders = new DefaultLastHttpHeaders();
+            mergedHeaders.streamId(streamId);
+        }
+
+        mergedHeaders.appendOrTransferHeaders(headers);
+        return mergedHeaders;
+    }
+
+    private DefaultHttpHeaders ensureMergedHeaders(DefaultHttpHeaders mergedHeaders, long streamId) {
+        if (mergedHeaders != null) {
+            return mergedHeaders;
+        }
+
+        DefaultHttpHeaders headers = new DefaultLastHttpHeaders();
+        headers.streamId(streamId);
+        return headers;
+    }
+
+    private boolean shouldPreallocateContentBuffer(long declaredLength, int contentLength) {
+        return declaredLength >= PREALLOCATE_COPY_THRESHOLD && declaredLength <= this.maxContentLength() && contentLength == 0;
+    }
+
+    private ByteBuf allocateContentBuffer(ByteBuf content, long declaredLength) {
+        ByteBufAllocator allocator = content.alloc();
+        if (allocator == null) {
+            allocator = ByteBufAllocator.DEFAULT;
+        }
+        return allocator.buffer((int) declaredLength, (int) declaredLength);
     }
 
     /**
@@ -158,15 +247,21 @@ public class HttpResponseAggregator extends AbstractHttpAggregator<HttpResponse>
     /**
      * Releases the staged response parts and, on failure, also releases the not-yet-emitted full response.
      */
-    private void releaseAggregatedResponse(List<HttpObject> parts, DefaultFullHttpResponse fullResp, boolean success) {
-        if (!success) {
+    private void releaseAggregatedResponse(HttpResponse response, HttpObject current, DefaultFullHttpResponse fullResp, ByteBuf aggregatedContent, DefaultHttpHeaders mergedHeaders, boolean success) {
+        if (!success && fullResp != null) {
             fullResp.release();
         }
-
-        for (HttpObject part : parts) {
-            if (part != null) {
-                part.release();
-            }
+        if (!success && fullResp == null && aggregatedContent != null && aggregatedContent != ByteBuf.EMPTY) {
+            aggregatedContent.release();
+        }
+        if (!success && fullResp == null && mergedHeaders != null) {
+            mergedHeaders.release();
+        }
+        if (current != null) {
+            current.release();
+        }
+        if (response != null) {
+            response.release();
         }
     }
 

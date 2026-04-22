@@ -18,7 +18,6 @@ import static net.hasor.neta.bytebuf.Bits.*;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.concurrent.atomic.AtomicInteger;
 import net.hasor.cobble.ObjectUtils;
 /**
  * Base implementation of {@link ByteBuf} index management.
@@ -40,8 +39,7 @@ import net.hasor.cobble.ObjectUtils;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
-    private final AtomicInteger               refCnt    = new AtomicInteger(1);
+public abstract class AbstractByteBuf extends AbstractReferenceHolder implements ByteBuf, AutoCloseable {
     protected ByteBufAllocator                alloc;
     protected int                             markedReaderIndex;
     protected int                             markedWriterIndex;
@@ -63,7 +61,7 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
         this.markedWriterIndex = 0;
         this.readerIndex = 0;
         this.writerIndex = 0;
-        this.refCnt.lazySet(1);
+        this.resetRefCnt();
         this.freed = false;
         this.leak = LeakDetectorHolder.leakDetector.open(this);
         this.byteOrder = ByteOrder.BIG_ENDIAN;
@@ -119,69 +117,19 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
 
     @Override
     public final boolean isFree() {
-        return this.refCnt.get() == 0;
-    }
-
-    @Override
-    public final int refCnt() {
-        return this.refCnt.get();
+        return this.isReleased();
     }
 
     @Override
     public ByteBuf retain() {
-        return retain(1);
-    }
-
-    @Override
-    public ByteBuf retain(int increment) {
-        if (increment <= 0) {
-            throw new IllegalArgumentException("increment: " + increment + " (expected: > 0)");
-        }
-        for (;;) {
-            int refCnt = this.refCnt.get();
-            if (refCnt == 0) {
-                throw new IllegalStateException("has been released.");
-            }
-            if (refCnt > Integer.MAX_VALUE - increment) {
-                throw new IllegalStateException("refCnt overflow: " + refCnt);
-            }
-            if (this.refCnt.compareAndSet(refCnt, refCnt + increment)) {
-                break;
-            }
-        }
+        super.retain();
         return this;
     }
 
     @Override
-    public boolean release() {
-        return release(1);
-    }
-
-    @Override
-    public boolean release(int decrement) {
-        if (decrement <= 0) {
-            throw new IllegalArgumentException("decrement: " + decrement + " (expected: > 0)");
-        }
-        for (;;) {
-            int refCnt = this.refCnt.get();
-            if (refCnt < decrement) {
-                throw new IllegalStateException("refCnt: " + refCnt + " (expected: >= " + decrement + ")");
-            }
-
-            if (this.refCnt.compareAndSet(refCnt, refCnt - decrement)) {
-                if (refCnt == decrement) {
-                    this.freed = true;
-                    closeLeak();
-                    try {
-                        this._free();
-                    } finally {
-                        this.releaseMetricTracking();
-                    }
-                    return true;
-                }
-                return false;
-            }
-        }
+    public ByteBuf retain(int increment) {
+        super.retain(increment);
+        return this;
     }
 
     private void closeLeak() {
@@ -203,6 +151,17 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
     @Override
     public void free() {
         release();
+    }
+
+    @Override
+    protected final void deallocate() {
+        this.freed = true;
+        closeLeak();
+        try {
+            this._free();
+        } finally {
+            this.releaseMetricTracking();
+        }
     }
 
     @Override

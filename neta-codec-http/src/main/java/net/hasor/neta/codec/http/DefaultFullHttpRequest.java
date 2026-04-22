@@ -30,7 +30,7 @@ import net.hasor.neta.bytebuf.CompositeByteBuf;
 public class DefaultFullHttpRequest extends AbstractHttpObject<FullHttpRequest> implements FullHttpRequest {
     private final HttpRequest requestLine;
     private final HttpHeaders headers;
-    private CompositeByteBuf  contentBuffer;
+    private ByteBuf           contentBuffer;
 
     /**
      * Create an aggregated request with empty content and empty headers.
@@ -39,7 +39,7 @@ public class DefaultFullHttpRequest extends AbstractHttpObject<FullHttpRequest> 
      * @param uri request target
      */
     public DefaultFullHttpRequest(HttpVersion version, HttpMethod method, String uri) {
-        this(new DefaultHttpRequest(version, method, uri), null, null);
+        this(new DefaultHttpRequest(version, method, uri), (DefaultHttpHeaders) null, null);
     }
 
     /**
@@ -50,7 +50,21 @@ public class DefaultFullHttpRequest extends AbstractHttpObject<FullHttpRequest> 
      * @param content aggregated payload
      */
     public DefaultFullHttpRequest(HttpVersion version, HttpMethod method, String uri, ByteBuf content) {
-        this(new DefaultHttpRequest(version, method, uri), null, content);
+        this(new DefaultHttpRequest(version, method, uri), (DefaultHttpHeaders) null, content);
+    }
+
+    DefaultFullHttpRequest(DefaultHttpRequest requestLine, DefaultHttpHeaders headers, ByteBuf content) {
+        if (requestLine == null) {
+            throw new IllegalArgumentException("requestLine must not be null");
+        }
+
+        this.requestLine = requestLine;
+        this.headers = headers != null ? headers : new DefaultHttpHeaders();
+        this.contentBuffer = normalizeContent(content);
+        this.inheritHttpObjectState(requestLine);
+        if (this.headers.isBad()) {
+            this.setBadState(this.headers.badReason());
+        }
     }
 
     /**
@@ -61,28 +75,17 @@ public class DefaultFullHttpRequest extends AbstractHttpObject<FullHttpRequest> 
      * @param content aggregated payload
      */
     public DefaultFullHttpRequest(DefaultHttpRequest requestLine, HttpHeaders[] headerBlocks, ByteBuf content) {
-        if (requestLine == null) {
-            throw new IllegalArgumentException("requestLine must not be null");
-        }
-
-        this.requestLine = requestLine;
-        this.headers = mergeHeaders(this, headerBlocks);
-        this.contentBuffer = ByteBufUtils.compositeBuffer();
-        if (content != null) {
-            this.contentBuffer.addComponent(content);
-        }
-
-        this.inheritHttpObjectState(requestLine);
+        this(requestLine, mergeHeaders(headerBlocks), content);
     }
 
-    private static HttpHeaders mergeHeaders(DefaultFullHttpRequest request, HttpHeaders[] headers) {
+    private static DefaultHttpHeaders mergeHeaders(HttpHeaders[] headers) {
         DefaultHttpHeaders merged = new DefaultHttpHeaders();
         if (headers == null) {
             return merged;
         }
         for (HttpHeaders headerBlock : headers) {
             if (headerBlock != null && headerBlock.isBad()) {
-                request.setBadState(headerBlock.badReason());
+                merged.markBad(headerBlock.badReason());
             }
 
             merged.appendHeaders(headerBlock);
@@ -242,9 +245,9 @@ public class DefaultFullHttpRequest extends AbstractHttpObject<FullHttpRequest> 
 
     @Override
     public ByteBuf transferContent() {
-        CompositeByteBuf current = this.contentBuffer;
-        this.contentBuffer = ByteBufUtils.compositeBuffer();
-        return current;
+        ByteBuf current = this.contentBuffer;
+        this.contentBuffer = ByteBuf.EMPTY;
+        return current == null ? ByteBuf.EMPTY : current;
     }
 
     /**
@@ -259,7 +262,60 @@ public class DefaultFullHttpRequest extends AbstractHttpObject<FullHttpRequest> 
             return;
         }
 
-        this.contentBuffer.addComponent(content.transferContent());
+        this.contentBuffer = appendContent(this.contentBuffer, content.transferContent());
+    }
+
+    public void appendContent(ByteBuf content) {
+        if (content == null) {
+            throw new IllegalArgumentException("content must not be null");
+        }
+
+        this.contentBuffer = appendContent(this.contentBuffer, content);
+    }
+
+    private static ByteBuf normalizeContent(ByteBuf content) {
+        if (content == null) {
+            return ByteBuf.EMPTY;
+        }
+        if (content.readableBytes() == 0) {
+            if (content != ByteBuf.EMPTY) {
+                content.release();
+            }
+            return ByteBuf.EMPTY;
+        }
+        return content;
+    }
+
+    static ByteBuf appendContent(ByteBuf current, ByteBuf incoming) {
+        if (incoming == null) {
+            return current == null ? ByteBuf.EMPTY : current;
+        }
+
+        if (incoming.readableBytes() == 0) {
+            if (incoming != ByteBuf.EMPTY) {
+                incoming.release();
+            }
+            return current == null ? ByteBuf.EMPTY : current;
+        }
+
+        if (current == null || current == ByteBuf.EMPTY) {
+            return incoming;
+        }
+
+        if (current.readableBytes() == 0) {
+            current.release();
+            return incoming;
+        }
+
+        if (current instanceof CompositeByteBuf) {
+            ((CompositeByteBuf) current).addComponent(incoming);
+            return current;
+        }
+
+        CompositeByteBuf composite = ByteBufUtils.compositeBuffer(current.alloc() != null ? current.alloc() : incoming.alloc());
+        composite.addComponent(current);
+        composite.addComponent(incoming);
+        return composite;
     }
 
     //

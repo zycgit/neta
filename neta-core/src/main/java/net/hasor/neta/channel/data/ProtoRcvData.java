@@ -16,6 +16,7 @@
 package net.hasor.neta.channel.data;
 import java.io.Closeable;
 import java.util.List;
+import java.util.function.Consumer;
 import net.hasor.cobble.function.Release;
 import net.hasor.neta.bytebuf.ReferenceHolder;
 /**
@@ -79,6 +80,37 @@ public interface ProtoRcvData<T> {
     default T peekMessage() {
         List<T> msg = this.peekMessage(1);
         return msg == null || msg.isEmpty() ? null : msg.get(0);
+    }
+
+    /**
+     * Iterates over the currently readable data items without removing them from the container.
+     * <p>This call does not transfer ownership.</p>
+     */
+    default void peekEachMessage(Consumer<? super T> consumer) {
+        if (consumer == null) {
+            return;
+        }
+        for (T item : this.peekMessage(-1)) {
+            consumer.accept(item);
+        }
+    }
+
+    /**
+     * Iterates over readable data items starting at the specified zero-based peek offset.
+     * <p>This call does not transfer ownership.</p>
+     */
+    default void peekEachMessage(int startIndex, Consumer<? super T> consumer) {
+        if (consumer == null) {
+            return;
+        }
+        int begin = Math.max(0, startIndex);
+        int index = 0;
+        for (T item : this.peekMessage(-1)) {
+            if (index++ < begin) {
+                continue;
+            }
+            consumer.accept(item);
+        }
     }
 
     /**

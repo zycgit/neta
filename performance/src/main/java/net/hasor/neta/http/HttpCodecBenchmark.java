@@ -51,8 +51,8 @@ import net.hasor.neta.leak.LeakMetricSnapshot;
 @State(Scope.Thread)
 @OutputTimeUnit(TimeUnit.SECONDS)
 @BenchmarkMode(Mode.Throughput)
-@Warmup(iterations = 2, time = 1)
-@Measurement(iterations = 3, time = 2)
+@Warmup(iterations = 5, time = 1)
+@Measurement(iterations = 5, time = 2)
 public class HttpCodecBenchmark {
     private static final byte[] POST_BODY_BYTES = "{\"name\":\"John Doe\",\"email\":\"john@example.com\",\"age\":30}".getBytes(StandardCharsets.UTF_8);
     private static final byte[] RESPONSE_BODY_BYTES = "Hello, World!".getBytes(StandardCharsets.UTF_8);

@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.channel;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import net.hasor.neta.channel.data.*;
 class ProtoQueueView implements ProtoRcvQueue<Object>, ProtoSndQueue<Object> {
@@ -59,8 +60,21 @@ class ProtoQueueView implements ProtoRcvQueue<Object>, ProtoSndQueue<Object> {
     }
 
     @Override
+    public boolean offerMessage(Object offerMessage) {
+        return this.queue.offerMessage(offerMessage);
+    }
+
+    @Override
     public boolean offerMessage(ProtoRcvQueue<Object> offerList) {
         return this.queue.offerMessage(offerList);
+    }
+
+    @Override
+    public Object takeMessage() {
+        boolean wasFull = this.queue.slotSize() == 0;
+        Object result = this.queue.takeMessage();
+        this.fireWritableIfRecovered(wasFull);
+        return result;
     }
 
     @Override
@@ -74,6 +88,21 @@ class ProtoQueueView implements ProtoRcvQueue<Object>, ProtoSndQueue<Object> {
     @Override
     public List<Object> peekMessage(int cnt) {
         return this.queue.peekMessage(cnt);
+    }
+
+    @Override
+    public Object peekMessage() {
+        return this.queue.peekMessage();
+    }
+
+    @Override
+    public void peekEachMessage(Consumer<? super Object> consumer) {
+        this.queue.peekEachMessage(consumer);
+    }
+
+    @Override
+    public void peekEachMessage(int startIndex, Consumer<? super Object> consumer) {
+        this.queue.peekEachMessage(startIndex, consumer);
     }
 
     @Override
