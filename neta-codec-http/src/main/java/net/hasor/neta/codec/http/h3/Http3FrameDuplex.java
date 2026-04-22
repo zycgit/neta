@@ -23,30 +23,30 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * <p>
  * Pipeline view:
  * <pre>
- * inbound: socket bytes -> Http3FrameDuplexe -> Http3Frame
- * outbound: Http3Frame -> Http3FrameDuplexe -> socket bytes
+ * inbound: socket bytes -> Http3FrameDuplex -> Http3Frame
+ * outbound: Http3Frame -> Http3FrameDuplex -> socket bytes
  * </pre>
  * <p>
  * Typical semantic usage:
  * <pre>
  * Http3Settings settings = Http3Settings.defaultLocalSettings(true);
- * ctx.addLast("h3-frame", new Http3FrameDuplexe(true, settings));
- * ctx.addLast("h3-object", new Http3ObjectDuplexe(true, settings));
+ * ctx.addLast("h3-frame", new Http3FrameDuplex(true, settings));
+ * ctx.addLast("h3-object", new Http3ObjectDuplex(true, settings));
  * </pre>
  */
-public class Http3FrameDuplexe implements ProtoDuplexer<ByteBuf, Http3Frame, Http3Frame, ByteBuf> {
+public class Http3FrameDuplex implements ProtoDuplex<ByteBuf, Http3Frame, Http3Frame, ByteBuf> {
     private final Http3FrameDecoder decoder;
     private final Http3FrameEncoder encoder;
 
-    public Http3FrameDuplexe() {
+    public Http3FrameDuplex() {
         this(false, Http3Settings.defaultLocalSettings(false));
     }
 
-    public Http3FrameDuplexe(boolean serverMode) {
+    public Http3FrameDuplex(boolean serverMode) {
         this(serverMode, Http3Settings.defaultLocalSettings(serverMode));
     }
 
-    public Http3FrameDuplexe(boolean serverMode, Http3Settings localSettings) {
+    public Http3FrameDuplex(boolean serverMode, Http3Settings localSettings) {
         Http3Settings settings = localSettings != null ? new Http3Settings(localSettings) : Http3Settings.defaultLocalSettings(serverMode);
         this.decoder = new Http3FrameDecoder(serverMode, settings);
         this.encoder = new Http3FrameEncoder(settings);

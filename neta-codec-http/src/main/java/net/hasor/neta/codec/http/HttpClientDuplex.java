@@ -62,14 +62,14 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-02-18
  */
-public class HttpClientDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, HttpObject, ByteBuf> {
+public class HttpClientDuplex implements ProtoDuplex<ByteBuf, HttpObject, HttpObject, ByteBuf> {
     private final HttpResponseDecoder decoder;
     private final HttpRequestEncoder  encoder;
 
     /**
      * Creates a client codec with the default decoding limits.
      */
-    public HttpClientDuplexe() {
+    public HttpClientDuplex() {
         this.decoder = new HttpResponseDecoder();
         this.encoder = new HttpRequestEncoder();
     }
@@ -80,7 +80,7 @@ public class HttpClientDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Htt
      * @param maxHeaderSize the maximum total size allowed for all header fields
      * @param maxChunkSize the maximum output size of each content chunk
      */
-    public HttpClientDuplexe(int maxInitialLineLength, int maxHeaderSize, int maxChunkSize) {
+    public HttpClientDuplex(int maxInitialLineLength, int maxHeaderSize, int maxChunkSize) {
         this.decoder = new HttpResponseDecoder(maxInitialLineLength, maxHeaderSize, maxChunkSize);
         this.encoder = new HttpRequestEncoder();
     }

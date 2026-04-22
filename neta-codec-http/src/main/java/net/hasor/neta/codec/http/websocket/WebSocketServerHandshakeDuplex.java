@@ -39,9 +39,9 @@ import net.hasor.neta.codec.http.*;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-22
  */
-public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake {
-    private static final Logger                logger          = LoggerFactory.getLogger(WebSocketServerHandshakeDuplexer.class);
-    private static final String                STATE_STORE_KEY = WebSocketServerHandshakeDuplexer.class.getName() + ".stateStore";
+public class WebSocketServerHandshakeDuplex extends AbstractWebSocketHandshake {
+    private static final Logger                logger          = LoggerFactory.getLogger(WebSocketServerHandshakeDuplex.class);
+    private static final String                STATE_STORE_KEY = WebSocketServerHandshakeDuplex.class.getName() + ".stateStore";
     private final WebSocketSettings            settings;
     private final WebSocketHandshakeAuthorizer authorizer;
 
@@ -76,7 +76,7 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
      * Create a server handshake duplexer for the given websocket version.
      * @param codecVersion websocket version to negotiate
      */
-    public WebSocketServerHandshakeDuplexer(WebSocketVersion codecVersion) {
+    public WebSocketServerHandshakeDuplex(WebSocketVersion codecVersion) {
         this(WebSocketSettings.of(codecVersion));
     }
 
@@ -85,7 +85,7 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
      * @param codecVersion websocket version to negotiate
      * @param authorizer callback that accepts or rejects the request
      */
-    public WebSocketServerHandshakeDuplexer(WebSocketVersion codecVersion, WebSocketHandshakeAuthorizer authorizer) {
+    public WebSocketServerHandshakeDuplex(WebSocketVersion codecVersion, WebSocketHandshakeAuthorizer authorizer) {
         this(WebSocketSettings.of(codecVersion).handshakeAuthorizer(authorizer));
     }
 
@@ -93,7 +93,7 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
      * Create a server handshake duplexer from the full websocket settings.
      * @param settings websocket handshake settings
      */
-    public WebSocketServerHandshakeDuplexer(WebSocketSettings settings) {
+    public WebSocketServerHandshakeDuplex(WebSocketSettings settings) {
         super(Objects.requireNonNull(settings, "settings is null").version());
         this.settings = settings;
         this.authorizer = Objects.requireNonNull(settings.handshakeAuthorizer(), "handshakeAuthorizer is null");

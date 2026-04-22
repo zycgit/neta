@@ -46,7 +46,7 @@ import net.hasor.neta.codec.http.HttpObject;
  * Typical usage:
  * <pre>
  *   ctx.addLast("http", new HttpServerDuplexe());
- *   ctx.addLast("ws-handshake", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
+ *   ctx.addLast("ws-handshake", new WebSocketServerHandshakeDuplex(WebSocketVersion.V13));
  *   ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder());
  * </pre>
  * @author 赵永春 (zyc@hasor.net)

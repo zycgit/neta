@@ -28,19 +28,19 @@ import net.hasor.neta.codec.http.*;
  * <p>
  * Ordinary HTTP requests keep flowing through the current route. When an inbound
  * request is recognized as a websocket upgrade request, the request is delegated
- * to {@link WebSocketServerHandshakeDuplexer}. After a successful handshake the
+ * to {@link WebSocketServerHandshakeDuplex}. After a successful handshake the
  * active route switches to the configured websocket branch.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-24
  */
-public class WebSocketServerUpgradeRouteDuplexer implements ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> {
-    private static final String                    ROUTE_STATE_STORE_KEY   = WebSocketServerUpgradeRouteDuplexer.class.getName() + ".routeStateStore";
-    private static final String                    BUFFER_QUEUE_PREFIX     = WebSocketServerUpgradeRouteDuplexer.class.getName() + ".pendingRequest.";
-    private static final String                    RECEIVE_STAGE_QUEUE_KEY = WebSocketServerUpgradeRouteDuplexer.class.getName() + ".receive";
-    private static final String                    SEND_STAGE_QUEUE_KEY    = WebSocketServerUpgradeRouteDuplexer.class.getName() + ".send";
-    private final WebSocketServerHandshakeDuplexer delegate;
-    private final ProtoRoutingControl              routingControl;
-    private final String                           targetRoute;
+public class WebSocketServerUpgradeRouteDuplex implements ProtoDuplex<HttpObject, HttpObject, HttpObject, HttpObject> {
+    private static final String                  ROUTE_STATE_STORE_KEY   = WebSocketServerUpgradeRouteDuplex.class.getName() + ".routeStateStore";
+    private static final String                  BUFFER_QUEUE_PREFIX     = WebSocketServerUpgradeRouteDuplex.class.getName() + ".pendingRequest.";
+    private static final String                  RECEIVE_STAGE_QUEUE_KEY = WebSocketServerUpgradeRouteDuplex.class.getName() + ".receive";
+    private static final String                  SEND_STAGE_QUEUE_KEY    = WebSocketServerUpgradeRouteDuplex.class.getName() + ".send";
+    private final WebSocketServerHandshakeDuplex delegate;
+    private final ProtoRoutingControl            routingControl;
+    private final String                         targetRoute;
 
     private static final class RouteState {
         private final HttpMessageParts        requestParts = new HttpMessageParts();
@@ -61,7 +61,7 @@ public class WebSocketServerUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
      * @param version websocket version to negotiate
      * @param targetRoute route name to switch to after a successful handshake
      */
-    public WebSocketServerUpgradeRouteDuplexer(ProtoRoutingControl routingControl, WebSocketVersion version, String targetRoute) {
+    public WebSocketServerUpgradeRouteDuplex(ProtoRoutingControl routingControl, WebSocketVersion version, String targetRoute) {
         this(routingControl, version, targetRoute, (event, callback) -> callback.accept());
     }
 
@@ -72,8 +72,8 @@ public class WebSocketServerUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
      * @param targetRoute route name to switch to after a successful handshake
      * @param authorizer callback that accepts or rejects the request
      */
-    public WebSocketServerUpgradeRouteDuplexer(ProtoRoutingControl routingControl, WebSocketVersion version, String targetRoute, WebSocketHandshakeAuthorizer authorizer) {
-        this.delegate = new WebSocketServerHandshakeDuplexer(version, Objects.requireNonNull(authorizer, "authorizer is null"));
+    public WebSocketServerUpgradeRouteDuplex(ProtoRoutingControl routingControl, WebSocketVersion version, String targetRoute, WebSocketHandshakeAuthorizer authorizer) {
+        this.delegate = new WebSocketServerHandshakeDuplex(version, Objects.requireNonNull(authorizer, "authorizer is null"));
         this.routingControl = Objects.requireNonNull(routingControl, "routingControl is null");
         this.targetRoute = targetRoute;
     }

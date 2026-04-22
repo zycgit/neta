@@ -25,7 +25,7 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.bytebuf.CompositeByteBuf;
 import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.ProtoDuplexer;
+import net.hasor.neta.channel.ProtoDuplex;
 import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoRcvQueueView;
@@ -66,7 +66,7 @@ import net.hasor.neta.codec.http.h2.Http2Settings;
  *     |                       | to synthetic stream-1 seed       |
  *     |                       | switchRoute(BRANCH_H2, seed) ---->| apply route cut-over
  *     |                       |                                  | emit server SETTINGS preface
- *     |                       |                                  | Http2ObjectDuplexe consumes seed immediately
+ *     |                       |                                  | Http2ObjectDuplex consumes seed immediately
  *     |                       |                                  | stream 1 enters normal h2 pipeline
  *     |&lt;---------------------------------------------------------| upgraded response on stream 1
  *     | client preface        |                                  |
@@ -79,9 +79,9 @@ import net.hasor.neta.codec.http.h2.Http2Settings;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-04-07
  */
-public class H2CUpgradeServerDuplexer implements ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> {
-    private static final Logger       logger              = Logger.getLogger(H2CUpgradeServerDuplexer.class);
-    private static final String       UPGRADE_REQUEST_KEY = H2CUpgradeServerDuplexer.class.getName() + ".upgradeRequest";
+public class H2CUpgradeServerDuplex implements ProtoDuplex<HttpObject, HttpObject, HttpObject, HttpObject> {
+    private static final Logger       logger              = Logger.getLogger(H2CUpgradeServerDuplex.class);
+    private static final String       UPGRADE_REQUEST_KEY = H2CUpgradeServerDuplex.class.getName() + ".upgradeRequest";
     private final ProtoRoutingControl control;
     private final Http2Settings       http2Settings;
     private boolean                   upgraded;
@@ -89,11 +89,11 @@ public class H2CUpgradeServerDuplexer implements ProtoDuplexer<HttpObject, HttpO
     /**
      * Creates an h2c upgrade bridge with the given routing controller.
      */
-    public H2CUpgradeServerDuplexer(ProtoRoutingControl control) {
+    public H2CUpgradeServerDuplex(ProtoRoutingControl control) {
         this(control, Http2Settings.defaultLocalSettings(true));
     }
 
-    private H2CUpgradeServerDuplexer(ProtoRoutingControl control, Http2Settings http2Settings) {
+    private H2CUpgradeServerDuplex(ProtoRoutingControl control, Http2Settings http2Settings) {
         this.control = Objects.requireNonNull(control, "control is null");
         this.http2Settings = http2Settings != null ? new Http2Settings(http2Settings) : Http2Settings.defaultLocalSettings(true);
     }

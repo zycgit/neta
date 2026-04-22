@@ -19,7 +19,7 @@ public class NTPRealServerTest {
         NetManager neta = new NetManager();
 
         // 2. Define Protocol Stack (Duplexer)
-        ProtoInitializer initializer = c -> c.addLast(new NTPDuplexer());
+        ProtoInitializer initializer = c -> c.addLast(new NTPDuplex());
 
         // 3. Connect to NTP Server (UDP)
         InetSocketAddress serverAddress = new InetSocketAddress("ntp.aliyun.com", 123);

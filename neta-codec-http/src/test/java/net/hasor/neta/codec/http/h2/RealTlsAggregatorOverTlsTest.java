@@ -139,29 +139,29 @@ public class RealTlsAggregatorOverTlsTest extends AbstractHttp2Test {
     }
 
     private static ProtoInitializer serverProto(SslConfig sslConfig) {
-        return ctx -> ProtoHelper.standard().nextDuplex("ssl", new SslDuplexer(sslConfig))//
+        return ctx -> ProtoHelper.standard().nextDuplex("ssl", new SslDuplex(sslConfig))//
                 .nextRouteAsStatic("alpn", new HttpAggregatorOverTlsRoute(), routing -> {
                     ProtoRoutingControl routingControl = routing.control();
 
                     routing.branch(HttpRouteKey.BRANCH_H1, b -> b//
-                            .nextDuplex("http-codec", new HttpServerDuplexe())//
+                            .nextDuplex("http-codec", new HttpServerDuplex())//
                             .nextDecoder("http-aggregator", new HttpRequestAggregator(MAX_CONTENT_LENGTH))//
                             .nextDecoder("http-handler", new InlineTlsHandler("h1")))//
                             .branch(HttpRouteKey.BRANCH_H2, b -> b//
-                                    .nextDuplex("h2-frame", new Http2FrameDuplexe(true))//
-                                    .nextDuplex("h2-message", new Http2ObjectDuplexe(true, routingControl))//
+                                    .nextDuplex("h2-frame", new Http2FrameDuplex(true))//
+                                    .nextDuplex("h2-message", new Http2ObjectDuplex(true, routingControl))//
                                     .nextPartition("h2-stream", new Http2ObjectPartitionSelector(), p1 -> {
                                         ProtoPartitionControl partitionControl = p1.control();
                                         Http2ObjectPartitionPolicy policy = new Http2ObjectPartitionPolicy();
                                         p1.policy(policy).byDefault(p2 -> {
                                             p2.addLast("h2-control-lifecycle", new Http2ObjectStreamManager(partitionControl, policy));
                                         }).byInitializer(partitionCtx -> {
-                                            partitionCtx.addLast("h2-aggregator", new HttpServerDuplexeAggregator(MAX_CONTENT_LENGTH));
+                                            partitionCtx.addLast("h2-aggregator", new HttpServerDuplexAggregator(MAX_CONTENT_LENGTH));
                                             partitionCtx.addLastDecoder("h2-handler", new InlineTlsHandler("h2"));
                                         });
                                     }))//
                             .branch(HttpRouteKey.BRANCH_H2C, b -> b//
-                                    .nextDuplex("http-codec", new HttpServerDuplexe())//
+                                    .nextDuplex("http-codec", new HttpServerDuplex())//
                                     .nextDecoder("http-aggregator", new HttpRequestAggregator(MAX_CONTENT_LENGTH))//
                                     .nextDecoder("h2c-handler", new InlineTlsHandler("h2c")));
                 }).config(ctx);
@@ -169,18 +169,18 @@ public class RealTlsAggregatorOverTlsTest extends AbstractHttp2Test {
 
     private static ProtoInitializer clientH1Proto(SslConfig sslConfig) {
         return ctx -> ProtoHelper.standard()//
-                .nextDuplex("ssl", new SslDuplexer(sslConfig))//
-                .nextDuplex("http-codec", new HttpClientDuplexe())//
+                .nextDuplex("ssl", new SslDuplex(sslConfig))//
+                .nextDuplex("http-codec", new HttpClientDuplex())//
                 .nextDecoder("http-aggregator", new HttpResponseAggregator(MAX_CONTENT_LENGTH))//
                 .config(ctx);
     }
 
     private static ProtoInitializer clientH2Proto(SslConfig sslConfig) {
         return ctx -> ProtoHelper.standard()//
-                .nextDuplex("ssl", new SslDuplexer(sslConfig))//
-                .nextDuplex("h2-frame", new Http2FrameDuplexe(false))//
-                .nextDuplex("h2-message", new Http2ObjectDuplexe(false))//
-                .nextDuplex("h2-aggregator", new HttpClientDuplexeAggregator(MAX_CONTENT_LENGTH))//
+                .nextDuplex("ssl", new SslDuplex(sslConfig))//
+                .nextDuplex("h2-frame", new Http2FrameDuplex(false))//
+                .nextDuplex("h2-message", new Http2ObjectDuplex(false))//
+                .nextDuplex("h2-aggregator", new HttpClientDuplexAggregator(MAX_CONTENT_LENGTH))//
                 .config(ctx);
     }
 

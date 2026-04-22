@@ -60,6 +60,24 @@ public class HttpResponseDecoderTest extends AbstractHttpTest {
     }
 
     @Test
+    public void testResponseDecoderParsesFragmentedStatusHeadersAndTrailers() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastDecoder("resp-decoder", new HttpResponseDecoder());
+            }, VrtSoConfig.asClient());
+
+            List<HttpObject> messages = receiveAndIntBound(pipe, ascii("HTTP/1.1 20"), ascii("0 OK\r\nTrans"), ascii("fer-Encoding: chu"), ascii("nked\r\nServer: demo\r"), ascii("\n\r\n4\r\nWiki\r\n0\r\nX-Trai"), ascii("l: done\r\n\r\n"));
+            assertEquals(5, messages.size());
+            assertEquals(HttpStatus.OK, ((HttpResponse) messages.get(0)).status());
+            assertEquals("chunked", ((HttpHeaders) messages.get(1)).getString(HttpHeaderNames.TRANSFER_ENCODING));
+            assertEquals("demo", ((HttpHeaders) messages.get(1)).getString(HttpHeaderNames.SERVER));
+            assertEquals("Wiki", body((HttpContent) messages.get(2)));
+            assertEquals("done", ((HttpHeaders) messages.get(3)).getString("X-Trail"));
+            assertTrue(messages.get(4) instanceof LastHttpContent);
+        });
+    }
+
+    @Test
     public void testResponseDecoderTransparentModeWrapsInboundByteBuf() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {

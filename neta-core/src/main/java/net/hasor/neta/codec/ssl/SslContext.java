@@ -17,7 +17,7 @@ package net.hasor.neta.codec.ssl;
 import net.hasor.neta.channel.SoChannel;
 /**
  * Per-channel TLS state exposed to pipeline handlers.
- * <p>An instance is created by {@link SslDuplexer#onInit(String, int, int, net.hasor.neta.channel.ProtoContext)}
+ * <p>An instance is created by {@link SslDuplex#onInit(String, int, int, net.hasor.neta.channel.ProtoContext)}
  * and stored in the active {@link net.hasor.neta.channel.ProtoContext}. Upper handlers can inspect it
  * to determine whether the TLS handshake has finished, which ALPN protocol was negotiated, and what SNI
  * host was requested.
@@ -38,7 +38,7 @@ import net.hasor.neta.channel.SoChannel;
  * </ul>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-18
- * @see SslDuplexer
+ * @see SslDuplex
  * @see SslConfig
  */
 public interface SslContext {

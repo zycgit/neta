@@ -17,7 +17,7 @@ package net.hasor.neta.channel;
 /**
  * Control handle passed into {@code onError(...)} callbacks so a handler can clear the current
  * exception state.
- * <p>When an unhandled exception escapes from {@link ProtoHandler} or {@link ProtoDuplexer} during
+ * <p>When an unhandled exception escapes from {@link ProtoHandler} or {@link ProtoDuplex} during
  * message processing, the framework marks the current pipeline invocation as exceptional and
  * switches subsequent handlers from {@code onMessage} to {@code onError}. The exception continues
  * to propagate until the end of the pipeline. If nothing clears it, the channel is closed on the
@@ -33,7 +33,7 @@ package net.hasor.neta.channel;
  * </pre>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-17
- * @see ProtoDuplexer
+ * @see ProtoDuplex
  * @see ProtoHandler
  */
 public interface ProtoExceptionHolder {

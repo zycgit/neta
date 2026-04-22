@@ -46,17 +46,17 @@ public class Http3RealChannelTest extends AbstractHttpTest {
 
     private static VrtChannel openServer(NetManager neta) throws Throwable {
         return (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
-            ctx.addLast("h3-frame", new Http3FrameDuplexe(true, SERVER_H3_SETTINGS));
-            ctx.addLast("h3-object", new Http3ObjectDuplexe(true, SERVER_H3_SETTINGS));
-            ctx.addLast("aggregator", new HttpServerDuplexeAggregator(1048576));
+            ctx.addLast("h3-frame", new Http3FrameDuplex(true, SERVER_H3_SETTINGS));
+            ctx.addLast("h3-object", new Http3ObjectDuplex(true, SERVER_H3_SETTINGS));
+            ctx.addLast("aggregator", new HttpServerDuplexAggregator(1048576));
         }, VrtSoConfig.asServer());
     }
 
     private static VrtChannel openClient(NetManager neta) throws Throwable {
         return (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
-            ctx.addLast("h3-frame", new Http3FrameDuplexe(false, CLIENT_H3_SETTINGS));
-            ctx.addLast("h3-object", new Http3ObjectDuplexe(false, CLIENT_H3_SETTINGS));
-            ctx.addLast("aggregator", new HttpClientDuplexeAggregator(1048576));
+            ctx.addLast("h3-frame", new Http3FrameDuplex(false, CLIENT_H3_SETTINGS));
+            ctx.addLast("h3-object", new Http3ObjectDuplex(false, CLIENT_H3_SETTINGS));
+            ctx.addLast("aggregator", new HttpClientDuplexAggregator(1048576));
         }, VrtSoConfig.asClient());
     }
 

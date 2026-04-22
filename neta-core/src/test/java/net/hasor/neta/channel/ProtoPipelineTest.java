@@ -37,7 +37,7 @@ import net.hasor.neta.channel.transport.virtual.VrtSocketAddress;
  * @author test
  */
 public class ProtoPipelineTest extends AbstractStackTest {
-    private static final class InitSizeRecorder implements ProtoDuplexer<Integer, Integer, Integer, Integer> {
+    private static final class InitSizeRecorder implements ProtoDuplex<Integer, Integer, Integer, Integer> {
         private final List<String> sizes;
 
         private InitSizeRecorder(List<String> sizes) {
@@ -203,13 +203,13 @@ public class ProtoPipelineTest extends AbstractStackTest {
         neta.shutdown();
     }
 
-    // --- ProtoDuplexer used directly ---
+    // --- ProtoDuplex used directly ---
 
     @Test
     public void protoDuplexer_directUsage() throws Throwable {
         List<String> record = Collections.synchronizedList(new ArrayList<>());
 
-        ProtoDuplexer<Integer, Integer, Integer, Integer> duplexer = new ProtoDuplexer<Integer, Integer, Integer, Integer>() {
+        ProtoDuplex<Integer, Integer, Integer, Integer> duplexer = new ProtoDuplex<Integer, Integer, Integer, Integer>() {
             @Override
             public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<Integer> rcvUp, ProtoSndQueue<Integer> rcvDown, ProtoRcvQueue<Integer> sndUp, ProtoSndQueue<Integer> sndDown) throws Throwable {
                 if (isRcv) {

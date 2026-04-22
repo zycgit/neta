@@ -27,7 +27,7 @@ import net.hasor.neta.channel.ProtoContext;
 
 /**
  * Tests for {@link Http2Context} implementation and registration
- * through {@link Http2ObjectDuplexe}.
+ * through {@link Http2ObjectDuplex}.
  */
 public class Http2ContextTest {
     private static final String name     = "test";
@@ -55,7 +55,7 @@ public class Http2ContextTest {
 
     @Test
     public void serverDuplexe_registersContext() throws Throwable {
-        Http2ObjectDuplexe duplexe = new Http2ObjectDuplexe(true);
+        Http2ObjectDuplex duplexe = new Http2ObjectDuplex(true);
         ProtoContext ctx = mockContext();
 
         duplexe.onInit(name, poolSize, poolSize, ctx);
@@ -66,7 +66,7 @@ public class Http2ContextTest {
 
     @Test
     public void clientDuplexe_registersContext() throws Throwable {
-        Http2ObjectDuplexe duplexe = new Http2ObjectDuplexe(false);
+        Http2ObjectDuplex duplexe = new Http2ObjectDuplex(false);
         ProtoContext ctx = mockContext();
 
         duplexe.onInit(name, poolSize, poolSize, ctx);
@@ -77,7 +77,7 @@ public class Http2ContextTest {
 
     @Test
     public void serverContext_isServer() throws Throwable {
-        Http2ObjectDuplexe duplexe = new Http2ObjectDuplexe(true);
+        Http2ObjectDuplex duplexe = new Http2ObjectDuplex(true);
         ProtoContext ctx = mockContext();
         duplexe.onInit(name, poolSize, poolSize, ctx);
 
@@ -88,7 +88,7 @@ public class Http2ContextTest {
 
     @Test
     public void clientContext_isClient() throws Throwable {
-        Http2ObjectDuplexe duplexe = new Http2ObjectDuplexe(false);
+        Http2ObjectDuplex duplexe = new Http2ObjectDuplex(false);
         ProtoContext ctx = mockContext();
         duplexe.onInit(name, poolSize, poolSize, ctx);
 
@@ -99,7 +99,7 @@ public class Http2ContextTest {
 
     @Test
     public void initialState_notReady() throws Throwable {
-        Http2ObjectDuplexe duplexe = new Http2ObjectDuplexe(true);
+        Http2ObjectDuplex duplexe = new Http2ObjectDuplex(true);
         ProtoContext ctx = mockContext();
         duplexe.onInit(name, poolSize, poolSize, ctx);
 
@@ -110,7 +110,7 @@ public class Http2ContextTest {
 
     @Test
     public void initialState_defaultSettings() throws Throwable {
-        Http2ObjectDuplexe duplexe = new Http2ObjectDuplexe(true);
+        Http2ObjectDuplex duplexe = new Http2ObjectDuplex(true);
         ProtoContext ctx = mockContext();
         duplexe.onInit(name, poolSize, poolSize, ctx);
 
@@ -123,7 +123,7 @@ public class Http2ContextTest {
 
     @Test
     public void initialState_lastStreamIdZero() throws Throwable {
-        Http2ObjectDuplexe duplexe = new Http2ObjectDuplexe(true);
+        Http2ObjectDuplex duplexe = new Http2ObjectDuplex(true);
         ProtoContext ctx = mockContext();
         duplexe.onInit(name, poolSize, poolSize, ctx);
 

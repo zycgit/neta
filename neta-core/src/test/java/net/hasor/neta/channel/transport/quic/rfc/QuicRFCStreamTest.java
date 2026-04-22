@@ -35,7 +35,7 @@ import net.hasor.neta.channel.transport.quic.simply.QuicSimplyClient;
 import net.hasor.neta.codec.LineBasedFrameHandler;
 import net.hasor.neta.codec.ssl.SslAuthKeyType;
 import net.hasor.neta.codec.ssl.SslCertConfig;
-import net.hasor.neta.codec.string.StringDuplexer;
+import net.hasor.neta.codec.string.StringDuplex;
 
 /**
  * QUIC RFC 合规测试 — 流 ID 编码（RFC 9000 §2.1）、握手流程（RFC 9000 §7）、
@@ -106,7 +106,7 @@ public class QuicRFCStreamTest extends AbstractSoTest {
         neta.bind(address, ctx -> {
             if (ctx.getChannel() instanceof QuicStreamChannel) {
                 ctx.addLastDecoder(new LineBasedFrameHandler());
-                ctx.addLast(new StringDuplexer());
+                ctx.addLast(new StringDuplex());
             }
         }, quicCfg).onAccept(c -> {
             if (c instanceof QuicChannel) {
@@ -118,7 +118,7 @@ public class QuicRFCStreamTest extends AbstractSoTest {
         QuicChannel client = (QuicChannel) neta.connectAsync(address, ctx -> {
             if (ctx.getChannel() instanceof QuicStreamChannel) {
                 ctx.addLastDecoder(new LineBasedFrameHandler());
-                ctx.addLast(new StringDuplexer());
+                ctx.addLast(new StringDuplex());
             }
         }, quicCfg).get();
 
@@ -329,7 +329,7 @@ public class QuicRFCStreamTest extends AbstractSoTest {
         neta.bind(address, ctx -> {
             if (ctx.getChannel() instanceof QuicStreamChannel) {
                 ctx.addLastDecoder(new LineBasedFrameHandler());
-                ctx.addLast(new StringDuplexer());
+                ctx.addLast(new StringDuplex());
                 ctx.getChannel().subscribe(data -> serverRcvData.add((String) data.getData()));
             }
         }, quicCfg);
@@ -338,7 +338,7 @@ public class QuicRFCStreamTest extends AbstractSoTest {
         NetChannel rawConn = neta.connectAsync(address, ctx -> {
             if (ctx.getChannel() instanceof QuicStreamChannel) {
                 ctx.addLastDecoder(new LineBasedFrameHandler());
-                ctx.addLast(new StringDuplexer());
+                ctx.addLast(new StringDuplex());
             }
         }, quicCfg).get();
 
@@ -762,7 +762,7 @@ public class QuicRFCStreamTest extends AbstractSoTest {
         neta.bind(address, ctx -> {
             if (ctx.getChannel() instanceof QuicStreamChannel) {
                 ctx.addLastDecoder(new LineBasedFrameHandler());
-                ctx.addLast(new StringDuplexer());
+                ctx.addLast(new StringDuplex());
                 ctx.getChannel().subscribe(data -> serverRcvData.add((String) data.getData()));
             }
         }, quicCfg);
@@ -771,7 +771,7 @@ public class QuicRFCStreamTest extends AbstractSoTest {
         NetChannel rawConn = neta.connectAsync(address, ctx -> {
             if (ctx.getChannel() instanceof QuicStreamChannel) {
                 ctx.addLastDecoder(new LineBasedFrameHandler());
-                ctx.addLast(new StringDuplexer());
+                ctx.addLast(new StringDuplex());
             }
         }, quicCfg).get(10, java.util.concurrent.TimeUnit.SECONDS);
 

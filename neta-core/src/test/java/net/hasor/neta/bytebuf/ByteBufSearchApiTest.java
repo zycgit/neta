@@ -57,6 +57,132 @@ public class ByteBufSearchApiTest {
     }
 
     @Test
+    public void testReadLineBufferViewSurvivesQueueConsumption() {
+        ProtoQueue<ByteBuf> queue = new ProtoQueue<>(-1);
+        queue.offerMessage(ByteBuf.wrap("Host: example.com\r\nnext".getBytes(StandardCharsets.US_ASCII)));
+
+        ByteBuf queueBuf = ByteBufUtils.queueBuffer(queue);
+        try {
+            ByteBuf line = queueBuf.readLineBuffer(64);
+            assertNotNull(line);
+
+            StringView view = StringView.request(line, 0, line.readableBytes());
+            try {
+                queueBuf.markReader();
+                line.free();
+                assertEquals("Host: example.com", view.toString());
+            } finally {
+                view.release();
+            }
+        } finally {
+            queueBuf.free();
+        }
+    }
+
+    @Test
+    public void testLineBufferExpectWorksForArraySliceView() {
+        ProtoQueue<ByteBuf> queue = new ProtoQueue<>(-1);
+        queue.offerMessage(ByteBuf.wrap("Header: some-value\r\n".getBytes(StandardCharsets.US_ASCII)));
+
+        ByteBuf queueBuf = ByteBufUtils.queueBuffer(queue);
+        try {
+            ByteBuf line = queueBuf.readLineBuffer(64);
+            assertNotNull(line);
+            try {
+                assertEquals(6, line.expect((byte) ':', line.readableBytes()));
+                assertEquals(17, line.expectLast((byte) 'e', line.readableBytes()));
+                assertEquals(-1, line.expect((byte) '\n', line.readableBytes()));
+                assertEquals("Header: some-value", line.readString(line.readableBytes(), StandardCharsets.US_ASCII));
+            } finally {
+                line.free();
+            }
+        } finally {
+            queueBuf.free();
+        }
+    }
+
+    @Test
+    public void testLineBufferSliceSurvivesWrappedSourceRelease() {
+        ByteBuf source = ByteBuf.wrap("Header: value\r\nBody".getBytes(StandardCharsets.US_ASCII));
+        try {
+            ByteBuf line = source.readLineBuffer(64);
+            assertNotNull(line);
+            try {
+                source.free();
+                assertEquals("Header: value", line.readString(line.readableBytes(), StandardCharsets.US_ASCII));
+            } finally {
+                line.free();
+            }
+        } finally {
+            if (!source.isFree()) {
+                source.free();
+            }
+        }
+    }
+
+    @Test
+    public void testQueueBufferSliceOffRemainsCorrectAfterRepeatedConsumption() {
+        ProtoQueue<ByteBuf> queue = new ProtoQueue<>(-1);
+        queue.offerMessage(ByteBuf.wrap("abc".getBytes(StandardCharsets.US_ASCII)));
+        queue.offerMessage(ByteBuf.wrap("defg".getBytes(StandardCharsets.US_ASCII)));
+        queue.offerMessage(ByteBuf.wrap("hijk".getBytes(StandardCharsets.US_ASCII)));
+
+        ByteBuf queueBuf = ByteBufUtils.queueBuffer(queue);
+        try {
+            ByteBuf first = queueBuf.sliceOff(5);
+            try {
+                assertEquals("abcde", first.readString(first.readableBytes(), StandardCharsets.US_ASCII));
+            } finally {
+                first.free();
+            }
+
+            ByteBuf second = queueBuf.sliceOff(3);
+            try {
+                assertEquals("fgh", second.readString(second.readableBytes(), StandardCharsets.US_ASCII));
+            } finally {
+                second.free();
+            }
+
+            assertEquals("ijk", queueBuf.readString(queueBuf.readableBytes(), StandardCharsets.US_ASCII));
+            queueBuf.markReader();
+            assertEquals(0, queue.queueSize());
+        } finally {
+            queueBuf.free();
+        }
+    }
+
+    @Test
+    public void testQueueBufferMarkReaderDeferredPreservesSliceOffFrontier() {
+        ProtoQueue<ByteBuf> queue = new ProtoQueue<>(-1);
+        queue.offerMessage(ByteBuf.wrap("Header: value\r\nBody".getBytes(StandardCharsets.US_ASCII)));
+
+        QueueByteBuf queueBuf = ByteBufUtils.queueBuffer(queue);
+        try {
+            ByteBuf line = queueBuf.readLineBuffer(64);
+            assertNotNull(line);
+            try {
+                assertEquals("Header: value", line.readString(line.readableBytes(), StandardCharsets.US_ASCII));
+            } finally {
+                line.free();
+            }
+
+            queueBuf.markReaderDeferred();
+
+            ByteBuf body = queueBuf.sliceOff(4);
+            try {
+                assertEquals("Body", body.readString(body.readableBytes(), StandardCharsets.US_ASCII));
+            } finally {
+                body.free();
+            }
+
+            queueBuf.markReader();
+            assertEquals(0, queue.queueSize());
+        } finally {
+            queueBuf.free();
+        }
+    }
+
+    @Test
     public void testReadExpectBinaryReturnsPayloadBeforeDelimiter() {
         ByteBuf buf = ByteBuf.wrap(new byte[] { 0x11, 0x12, 0x13, 0x00, 0x01, 0x21 });
         try {

@@ -31,7 +31,7 @@ import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 /**
  * Per-channel TLS state machine built on top of {@link SslEngineWrap}.
- * <p>This class is the operational core behind {@link SslDuplexer}. It owns the temporary packet
+ * <p>This class is the operational core behind {@link SslDuplex}. It owns the temporary packet
  * buffers, drives {@link javax.net.ssl.SSLEngine#wrap(ByteBuffer, ByteBuffer)} and
  * {@link javax.net.ssl.SSLEngine#unwrap(ByteBuffer, ByteBuffer)}, advances the handshake, and emits
  * the SSL-specific network events seen by upper handlers.

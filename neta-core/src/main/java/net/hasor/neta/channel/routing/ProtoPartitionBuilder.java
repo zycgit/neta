@@ -15,7 +15,7 @@
  */
 package net.hasor.neta.channel.routing;
 import net.hasor.neta.channel.ProtoBuilder;
-import net.hasor.neta.channel.ProtoDuplexer;
+import net.hasor.neta.channel.ProtoDuplex;
 import net.hasor.neta.channel.ProtoInitializer;
 /**
  * Builder used to define which handlers should be installed inside a single partition.
@@ -59,5 +59,5 @@ public interface ProtoPartitionBuilder<RCV_UP, SND_DOWN> {
      * Build the partition duplexer defined by the current builder.
      * @return built partition duplexer
      */
-    ProtoDuplexer<RCV_UP, RCV_UP, SND_DOWN, SND_DOWN> build();
+    ProtoDuplex<RCV_UP, RCV_UP, SND_DOWN, SND_DOWN> build();
 }

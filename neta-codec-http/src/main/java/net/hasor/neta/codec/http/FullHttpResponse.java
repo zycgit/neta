@@ -20,7 +20,7 @@ package net.hasor.neta.codec.http;
  * A {@link FullHttpResponse} collapses the staged response flow into a single object
  * that exposes the status line, the header view, and the aggregated content.
  * It is typically produced by {@link HttpResponseAggregator} or
- * {@link HttpClientDuplexeAggregator}.
+ * {@link HttpClientDuplexAggregator}.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-03
  */

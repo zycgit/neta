@@ -148,6 +148,31 @@ public class QueueByteBufTest {
     }
 
     @Test
+    public void test_refresh_only_appends_new_queue_messages() {
+        ProtoQueue<ByteBuf> queue = newQueue();
+        offer(queue, new byte[] { 1, 2 });
+
+        QueueByteBuf buf = new QueueByteBuf(queue);
+        try {
+            assert buf.readableBytes() == 2;
+            offer(queue, new byte[] { 3, 4, 5 });
+
+            buf.refresh();
+
+            assert buf.numComponents() == 2;
+            byte[] dst = new byte[5];
+            buf.readBytes(dst);
+            assert dst[0] == 1;
+            assert dst[1] == 2;
+            assert dst[2] == 3;
+            assert dst[3] == 4;
+            assert dst[4] == 5;
+        } finally {
+            buf.free();
+        }
+    }
+
+    @Test
     public void test_readBytes_across_components() {
         ProtoQueue<ByteBuf> queue = newQueue();
         offer(queue, new byte[] { 1, 2 });
@@ -843,8 +868,6 @@ public class QueueByteBufTest {
         try {
             ByteBuf front = buf.sliceOff(3);
             try {
-                // sliceOff returns a CompositeByteBuf for zero-copy
-                assert front instanceof CompositeByteBuf;
                 assert front.readableBytes() == 3;
                 assert front.readByte() == 1;
                 assert front.readByte() == 2;
@@ -880,6 +903,25 @@ public class QueueByteBufTest {
                 assert buf.readByte() == 4;
                 assert buf.readByte() == 5;
                 assert buf.readByte() == 6;
+            } finally {
+                front.free();
+            }
+        } finally {
+            buf.free();
+        }
+    }
+
+    @Test
+    public void test_sliceOff_partial_view_survives_queue_consumption() {
+        ProtoQueue<ByteBuf> queue = newQueue();
+        offer(queue, "abc");
+        offer(queue, "def");
+        QueueByteBuf buf = new QueueByteBuf(queue);
+        try {
+            ByteBuf front = buf.sliceOff(4);
+            try {
+                assert "abcd".equals(front.readString(front.readableBytes(), StandardCharsets.US_ASCII));
+                assert "ef".equals(buf.readString(buf.readableBytes(), StandardCharsets.US_ASCII));
             } finally {
                 front.free();
             }

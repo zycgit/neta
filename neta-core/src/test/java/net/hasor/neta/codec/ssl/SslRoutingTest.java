@@ -77,7 +77,7 @@ public class SslRoutingTest extends AbstractSslTest {
                 }, r -> {
                     // TLS branch: SSL decryption → string codec
                     r.branch("tls", (ProtoBuilder<ByteBuf, ByteBuf> branch) -> {
-                        branch.nextDuplex("SSL", new SslDuplexer(sslConf)).nextDuplex("string", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1);
+                        branch.nextDuplex("SSL", new SslDuplex(sslConf)).nextDuplex("string", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1);
                     });
                     // Plaintext branch: direct string codec
                     r.branch("plain", (ProtoBuilder<ByteBuf, ByteBuf> branch) -> {
@@ -102,10 +102,10 @@ public class SslRoutingTest extends AbstractSslTest {
     private static ProtoInitializer createAlpnRoutingStack(SslConfig sslConf, List<String> h2Events, List<String> http11Events) {
         return ctx -> {
             // SSL layer
-            ctx.addLast("SSL", new SslDuplexer(sslConf));
+            ctx.addLast("SSL", new SslDuplex(sslConf));
 
             // ALPN-based router: after SSL decryption, route by negotiated protocol
-            ProtoRoutingDuplexer<ByteBuf, ByteBuf> alpnRouter = new ProtoRoutingDuplexer<>((ProtoRoutingDataSelector<ByteBuf, ByteBuf>) (context, rcvUp, rcvDown) -> {
+            ProtoRoutingDuplex<ByteBuf, ByteBuf> alpnRouter = new ProtoRoutingDuplex<>((ProtoRoutingDataSelector<ByteBuf, ByteBuf>) (context, rcvUp, rcvDown) -> {
                 SslContext sslContext = context.context(SslContext.class);
                 if (sslContext != null && sslContext.isReady()) {
                     String proto = sslContext.getApplicationProtocol();
@@ -140,7 +140,7 @@ public class SslRoutingTest extends AbstractSslTest {
     // =================================================================
     private static ProtoInitializer createFullStack(SslConfig sslConf, List<String> h2Events, List<String> http11Events) {
         return ctx -> {
-            ProtoRoutingDuplexer<ByteBuf, ByteBuf> outerRouter = new ProtoRoutingDuplexer<>((ProtoRoutingDataSelector<ByteBuf, ByteBuf>) (context, rcvUp, rcvDown) -> {
+            ProtoRoutingDuplex<ByteBuf, ByteBuf> outerRouter = new ProtoRoutingDuplex<>((ProtoRoutingDataSelector<ByteBuf, ByteBuf>) (context, rcvUp, rcvDown) -> {
                 // rcvUp is null during onActive (connection init) — no data yet, defer routing
                 if (rcvUp.queueSize() == 0) {
                     return null;
@@ -155,10 +155,10 @@ public class SslRoutingTest extends AbstractSslTest {
 
             // TLS branch with nested ALPN routing
             outerRouter.addBranch("tls", branch -> {
-                branch.addLast("SSL", new SslDuplexer(sslConf));
+                branch.addLast("SSL", new SslDuplex(sslConf));
 
                 // Nested ALPN router within the TLS branch
-                ProtoRoutingDuplexer<ByteBuf, ByteBuf> alpnRouter = new ProtoRoutingDuplexer<>((ProtoRoutingDataSelector<ByteBuf, ByteBuf>) (context, rcvUp, rcvDown) -> {
+                ProtoRoutingDuplex<ByteBuf, ByteBuf> alpnRouter = new ProtoRoutingDuplex<>((ProtoRoutingDataSelector<ByteBuf, ByteBuf>) (context, rcvUp, rcvDown) -> {
                     SslContext sslContext = context.context(SslContext.class);
                     if (sslContext != null && sslContext.isReady()) {
                         String proto = sslContext.getApplicationProtocol();
@@ -200,8 +200,8 @@ public class SslRoutingTest extends AbstractSslTest {
     //  SND: pass through
     // =================================================================
     @SuppressWarnings("unchecked")
-    private static ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, ByteBuf> createTagHandler(String proto, List<String> events) {
-        return new ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, ByteBuf>() {
+    private static ProtoDuplex<ByteBuf, ByteBuf, ByteBuf, ByteBuf> createTagHandler(String proto, List<String> events) {
+        return new ProtoDuplex<ByteBuf, ByteBuf, ByteBuf, ByteBuf>() {
             @Override
             public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) {
                 events.add("init");
@@ -254,7 +254,7 @@ public class SslRoutingTest extends AbstractSslTest {
     // Test 1: Port unification — SSL vs plaintext auto-detection
     //
     // Server pipeline:
-    //   [Router] ─── "tls"  ─── [SslDuplexer] → [StringCodec]
+    //   [Router] ─── "tls"  ─── [SslDuplex] → [StringCodec]
     //            └── "plain" ── [StringCodec]
     //
     // Client sends plaintext → routed to "plain" branch
@@ -305,7 +305,7 @@ public class SslRoutingTest extends AbstractSslTest {
     // Test 2: Port unification — SSL connection detected and routed
     //
     // Server pipeline:
-    //   [Router] ─── "tls"  ─── [SslDuplexer] → [StringCodec]
+    //   [Router] ─── "tls"  ─── [SslDuplex] → [StringCodec]
     //            └── "plain" ── [StringCodec]
     //
     // Client uses SSL → routed to "tls" branch → SSL handshake → data exchange
@@ -435,7 +435,7 @@ public class SslRoutingTest extends AbstractSslTest {
     // Test 5: ALPN with routing pipeline — SSL + ALPN-based sub-pipeline
     //
     // Server pipeline:
-    //   [SslDuplexer] → [ALPN Router] ─── "h2"      ─── [H2Handler]
+    //   [SslDuplex] → [ALPN Router] ─── "h2"      ─── [H2Handler]
     //                                 └── "http/1.1" ── [Http11Handler]
     //
     // After SSL handshake with ALPN, route to appropriate protocol handler
@@ -665,9 +665,9 @@ public class SslRoutingTest extends AbstractSslTest {
 
             // Server stack: SSL → String, with network event listener
             ProtoInitializer serverStack = ctx -> {
-                ctx.addLast("SSL", new SslDuplexer(sslConf));
+                ctx.addLast("SSL", new SslDuplex(sslConf));
                 // String codec with SslEvent listener
-                ctx.addLast("string", new ProtoDuplexer<ByteBuf, String, String, ByteBuf>() {
+                ctx.addLast("string", new ProtoDuplex<ByteBuf, String, String, ByteBuf>() {
                     @Override
                     public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) {
                     }

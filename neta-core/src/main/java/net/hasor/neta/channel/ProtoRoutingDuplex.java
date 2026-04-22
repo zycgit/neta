@@ -47,8 +47,8 @@ import net.hasor.neta.channel.routing.*;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-15
  */
-public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, Object, OUT> {
-    private static final Logger                     logger = Logger.getLogger(ProtoRoutingDuplexer.class);
+public class ProtoRoutingDuplex<IN, OUT> implements ProtoDuplex<IN, Object, Object, OUT> {
+    private static final Logger                     logger = Logger.getLogger(ProtoRoutingDuplex.class);
     private final ProtoRoutingDataSelector<IN, OUT> routing4Data;
     private final ProtoRoutingEventSelector         routing4Event;
     private final Map<String, BranchEntry>          branches;
@@ -67,7 +67,7 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
     private long                                    currentRoutingEntry;
 
     /** Create a static data-routing duplexer. */
-    public ProtoRoutingDuplexer(ProtoRoutingDataSelector<IN, OUT> routing) {
+    public ProtoRoutingDuplex(ProtoRoutingDataSelector<IN, OUT> routing) {
         this(ProtoRoutingMode.STATIC, routing);
     }
 
@@ -76,7 +76,7 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
      * @param routingMode routing mode
      * @param routing data-routing selector
      */
-    public ProtoRoutingDuplexer(ProtoRoutingMode routingMode, ProtoRoutingDataSelector<IN, OUT> routing) {
+    public ProtoRoutingDuplex(ProtoRoutingMode routingMode, ProtoRoutingDataSelector<IN, OUT> routing) {
         this.routingMode = Objects.requireNonNull(routingMode, "routingMode is null.");
         this.routing4Data = Objects.requireNonNull(routing, "routing is null.");
         this.routing4Event = null;
@@ -88,7 +88,7 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
     }
 
     /** Create a routing duplexer that performs static branch selection based on network events. */
-    public ProtoRoutingDuplexer(ProtoRoutingEventSelector routing) {
+    public ProtoRoutingDuplex(ProtoRoutingEventSelector routing) {
         this.routingMode = ProtoRoutingMode.STATIC;
         this.routing4Data = null;
         this.routing4Event = Objects.requireNonNull(routing, "routing is null.");
@@ -217,7 +217,7 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
     @Override
     public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) throws Throwable {
         if (this.branchOrder.isEmpty()) {
-            throw new IllegalStateException("ProtoRoutingDuplexer has no branches registered. At least one branch is required.");
+            throw new IllegalStateException("ProtoRoutingDuplex has no branches registered. At least one branch is required.");
         }
 
         ProtoContextService parentCtxService = (ProtoContextService) context;
@@ -611,7 +611,7 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
     }
 
     private boolean flushBranchOutputs(BranchEntry branch, ProtoSndQueue<Object> rcvDown, ProtoSndQueue<OUT> sndDown) {
-        if (!this.flushBranchRcvOutput(branch.chainRoot, rcvDown, "ProtoRoutingDuplexer failed to flush branch receive output.")) {
+        if (!this.flushBranchRcvOutput(branch.chainRoot, rcvDown, "ProtoRoutingDuplex failed to flush branch receive output.")) {
             return false;
         }
         return this.flushBranchSndOutput(branch, sndDown);
@@ -625,7 +625,7 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
         for (int i = 0; i < flushCount; i++) {
             Object item = branch.pendingSnd.removeFirst();
             if (!sndDown.offerMessage((OUT) item)) {
-                throw new IllegalStateException("ProtoRoutingDuplexer failed to flush branch send output.");
+                throw new IllegalStateException("ProtoRoutingDuplex failed to flush branch send output.");
             }
         }
         return branch.pendingSnd.isEmpty();

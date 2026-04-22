@@ -26,12 +26,12 @@ import org.junit.Test;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.codec.http.*;
 
-public class Http2ObjectDuplexeTest extends AbstractHttp2Test {
+public class Http2ObjectDuplexTest extends AbstractHttp2Test {
     @Test
     public void testClientMessageDuplexeDecodesInboundFramesAndEncodesOutboundObjects() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("h2-message", new Http2ObjectDuplexe(false));
+                ctx.addLast("h2-message", new Http2ObjectDuplex(false));
             }, VrtSoConfig.asClient());
 
             byte[] headerBlock = encodeHeaders(headers(HttpHeaderNames.PSEUDO_STATUS, "200", HttpHeaderNames.CONTENT_TYPE, "text/plain"));
@@ -69,7 +69,7 @@ public class Http2ObjectDuplexeTest extends AbstractHttp2Test {
     public void testServerMessageDuplexeDoesNotEmitClientPrefaceOnFirstSend() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("h2-message", new Http2ObjectDuplexe(true));
+                ctx.addLast("h2-message", new Http2ObjectDuplex(true));
             }, VrtSoConfig.asServer());
 
             List<HttpObject> inbound = receiveAndIntBound(pipe, Http2Frame.settings(Http2Flags.NONE, new byte[] { 0x00, 0x01, 0x00, 0x00, 0x10, 0x00 }));
@@ -102,7 +102,7 @@ public class Http2ObjectDuplexeTest extends AbstractHttp2Test {
     public void testClientMessageDuplexeQueuesPrefaceBeforeAutoSettingsAck() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("h2-message", new Http2ObjectDuplexe(false));
+                ctx.addLast("h2-message", new Http2ObjectDuplex(false));
             }, VrtSoConfig.asClient());
 
             List<HttpObject> inbound = receiveAndIntBound(pipe, Http2Frame.settings(Http2Flags.NONE, new byte[] { 0x00, 0x01, 0x00, 0x00, 0x10, 0x00 }));

@@ -26,12 +26,12 @@ import org.junit.Test;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 
-public class Http2FrameDuplexeTest extends AbstractHttp2Test {
+public class Http2FrameDuplexTest extends AbstractHttp2Test {
     @Test
     public void testServerFrameDuplexeDecodesInboundClientPrefaceAndEncodesOutboundFrame() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("h2-frame", new Http2FrameDuplexe(true));
+                ctx.addLast("h2-frame", new Http2FrameDuplex(true));
             }, VrtSoConfig.asServer());
 
             List<Http2Frame> inbound = receiveAndIntBound(pipe, ByteBuf.wrap(concat(CLIENT_PREFACE, frame(0, Http2FrameType.SETTINGS, Http2Flags.NONE, 0))));
@@ -49,7 +49,7 @@ public class Http2FrameDuplexeTest extends AbstractHttp2Test {
     public void testClientFrameDuplexePassesPrefaceAsRawBytesOnSend() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("h2-frame", new Http2FrameDuplexe(false));
+                ctx.addLast("h2-frame", new Http2FrameDuplex(false));
             }, VrtSoConfig.asClient());
 
             List<Http2Frame> inbound = receiveAndIntBound(pipe, ByteBuf.wrap(frame(0, Http2FrameType.SETTINGS, Http2Flags.NONE, 0)));

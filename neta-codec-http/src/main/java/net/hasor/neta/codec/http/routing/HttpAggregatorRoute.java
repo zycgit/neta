@@ -45,7 +45,7 @@ import net.hasor.neta.codec.http.HttpHeaderValues;
  *      |          |
  *      |          +-------------> BRANCH_H2C --> HttpServerDuplexe --> H2CUpgradeServerDuplexe --> handler
  *      |
- *      +------------------------> BRANCH_H2  --> Http2FrameDuplexe --> Http2ObjectDuplexe --> HttpServerDuplexeAggregator --> handler
+ *      +------------------------> BRANCH_H2  --> Http2FrameDuplex --> Http2ObjectDuplex --> HttpServerDuplexeAggregator --> handler
  * </pre>
  * The upgrade request on the h2c path forms a one-time switching seed.
  * The following preface, SETTINGS, and SETTINGS ACK frames enter the switched HTTP/2 processing path.
@@ -63,8 +63,8 @@ import net.hasor.neta.codec.http.HttpHeaderValues;
  *   ProtoRoutingBuilder&lt;ByteBuf, ByteBuf&gt; routing = ProtoHelper.typedRoutingAsStatic(new HttpAggregatorRoute());
  *   ProtoRoutingControl routingControl = routing.control();
  *   routing.branchByInitializer(HttpRouteKey.BRANCH_H2, branch -&gt; {
- *       branch.addLast("h2-frame", new Http2FrameDuplexe(true));
- *       branch.addLast("h2-object", new Http2ObjectDuplexe(true, routingControl));
+ *       branch.addLast("h2-frame", new Http2FrameDuplex(true));
+ *       branch.addLast("h2-object", new Http2ObjectDuplex(true, routingControl));
  *       branch.nextPartition("h2-stream", new Http2ObjectPartitionSelector(), partition -&gt; partition.policy(new Http2ObjectPartitionPolicy()).byInitializer(partitionCtx -&gt; partitionCtx.addLast("h2-aggregator", new HttpServerDuplexeAggregator(1048576))));
  *       branch.addLastDecoder("h2-handler", new HttpDispatchHandler(false));
  *   });

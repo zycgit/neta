@@ -15,12 +15,12 @@
  */
 package net.hasor.neta.channel.routing;
 import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.ProtoRoutingDuplexer;
+import net.hasor.neta.channel.ProtoRoutingDuplex;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 /**
  * Data-routing selector.
- * <p>{@link ProtoRoutingDuplexer} invokes it to decide which branch the current inbound data should
+ * <p>{@link ProtoRoutingDuplex} invokes it to decide which branch the current inbound data should
  * enter. The selector may base its decision on context state, the current inbound queue content,
  * or a combination of both.</p>
  * <p>In static routing mode, the first successfully returned branch is cached. In realtime routing

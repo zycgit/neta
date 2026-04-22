@@ -270,7 +270,7 @@ public class SslUtils {
 
     /**
      * Retrieves the {@link SslContext} stored in the <b>root (main-pipeline) ctx</b>.
-     * <p>Use this when {@link SslDuplexer} is placed directly in the main pipeline (not inside a branch).
+     * <p>Use this when {@link SslDuplex} is placed directly in the main pipeline (not inside a branch).
      * If SSL is inside a routing branch, use {@link #getSslContextFromPath} instead.</p>
      * @param channel the network channel
      * @return the {@link SslContext} or {@code null} if not set

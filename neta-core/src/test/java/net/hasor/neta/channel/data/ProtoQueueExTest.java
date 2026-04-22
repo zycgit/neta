@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.channel.data;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -345,6 +346,26 @@ public class ProtoQueueExTest {
         assert q.queueSize() == 2;
         assert q.takeMessage().equals(10);
         assert q.takeMessage().equals(20);
+    }
+
+    @Test
+    public void peekEachMessage_preservesMainQueueAndViewOrder() {
+        ProtoQueue<Integer> q = new ProtoQueue<>(10);
+        q.offerMessage(1);
+        q.offerMessage(2);
+        q.offerMessage(3);
+        q.offerMessage(4);
+
+        List<Integer> mainTail = new ArrayList<>();
+        q.peekEachMessage(2, mainTail::add);
+        assert mainTail.equals(Arrays.asList(3, 4));
+
+        q.drainToQueue("rcv-O", 3);
+        ProtoRcvQueueView<Integer> view = q.queueView("rcv-O");
+        List<Integer> viewTail = new ArrayList<>();
+        view.peekEachMessage(1, viewTail::add);
+        assert viewTail.equals(Arrays.asList(2, 3));
+        assert q.takeMessage(-1).equals(Collections.singletonList(4));
     }
 
     @Test

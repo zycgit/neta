@@ -41,7 +41,7 @@ public class RealAsServerTest extends AbstractHttpTest {
 
     private static ProtoInitializer buildServerProto() {
         return ProtoHelper.standard()//
-                .nextDuplex("http-codec", new HttpServerDuplexe())//
+                .nextDuplex("http-codec", new HttpServerDuplex())//
                 .nextDecoder("http-aggregator", new HttpRequestAggregator(1024 * 1024))//
                 .nextDecoder("http-handler", new InlineHttpServerHandler())//
                 .build();

@@ -21,11 +21,11 @@ package net.hasor.neta.channel;
  *  <li>{@code sndSlotSize} - maximum number of elements in the SND endpoint queue</li>
  *  <li>the default value {@code -1} means unbounded capacity</li>
  * </ul>
- * <p>Each {@link ProtoDuplexer} layer may have its own {@code ProtoConfig}. Use {@link #DEFAULT}
+ * <p>Each {@link ProtoDuplex} layer may have its own {@code ProtoConfig}. Use {@link #DEFAULT}
  * when an immutable unbounded singleton is needed.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
- * @see ProtoDuplexer
+ * @see ProtoDuplex
  */
 public class ProtoConfig {
     /** Immutable default configuration with unbounded capacity. */

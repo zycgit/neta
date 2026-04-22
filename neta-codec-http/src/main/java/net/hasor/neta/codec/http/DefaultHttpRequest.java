@@ -24,9 +24,9 @@ package net.hasor.neta.codec.http;
  * @version : 2026-02-18
  */
 public class DefaultHttpRequest extends AbstractHttpObject<HttpRequest> implements HttpRequest {
-    private HttpVersion version;
-    private HttpMethod  method;
-    private String      uri;
+    private HttpVersion  version;
+    private HttpMethod   method;
+    private String       uri;
     private CharSequence versionText;
     private CharSequence methodText;
     private CharSequence uriText;
@@ -67,14 +67,14 @@ public class DefaultHttpRequest extends AbstractHttpObject<HttpRequest> implemen
      * @param uri raw request target text
      */
     public DefaultHttpRequest(String version, String method, String uri) {
-        this((CharSequence) version, (CharSequence) method, (CharSequence) uri);
+        this(version, method, (CharSequence) uri);
     }
 
     public DefaultHttpRequest(CharSequence version, CharSequence method, CharSequence uri) {
-        if (version == null || version.isEmpty()) {
+        if (version == null) {
             throw new IllegalArgumentException("version must not be empty");
         }
-        if (method == null || method.isEmpty()) {
+        if (method == null) {
             throw new IllegalArgumentException("method must not be empty");
         }
         if (uri == null) {

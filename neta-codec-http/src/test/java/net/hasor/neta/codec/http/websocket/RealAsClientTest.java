@@ -83,10 +83,10 @@ public class RealAsClientTest extends AbstractWebSocketTest {
                 //client
                 Queue<Object> inbound = new ConcurrentLinkedQueue<>();
                 NetChannel channel = neta.connectSync(new InetSocketAddress("127.0.0.1", port), ctx -> {
-                    ctx.addLast("http-client", new HttpClientDuplexe());
-                    ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
-                    ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
-                    ctx.addLast("ws-message", new WebSocketMessageDuplexer());
+                    ctx.addLast("http-client", new HttpClientDuplex());
+                    ctx.addLast("ws-client", new WebSocketClientHandshakeDuplex(WebSocketVersion.V13));
+                    ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
+                    ctx.addLast("ws-message", new WebSocketMessageDuplex());
                     ctx.addLastDecoder("ws-event-tap", inboundEventTap(inbound));
                 }, SoConfig.TCP());
                 channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, d -> {
@@ -97,7 +97,7 @@ public class RealAsClientTest extends AbstractWebSocketTest {
 
                 // handshake
                 FullHttpRequest handshake = WebSocketUtils.createHandshake(WebSocketVersion.V13, "ws://127.0.0.1:" + port + "/chat");
-                channel.sendData(handshake, "ws-client").get();// "ws-client" is WebSocketClientHandshakeDuplexer target
+                channel.sendData(handshake, "ws-client").get();// "ws-client" is WebSocketClientHandshakeDuplex target
                 assertTrue(waitUntil(() -> WebSocketUtils.isReady(channel), 5000L));
                 server.awaitOpen();
 
@@ -133,10 +133,10 @@ public class RealAsClientTest extends AbstractWebSocketTest {
                 //client
                 Queue<Object> inbound = new ConcurrentLinkedQueue<>();
                 NetChannel channel = neta.connectSync(new InetSocketAddress("127.0.0.1", port), ctx -> {
-                    ctx.addLast("http-client", new HttpClientDuplexe());
-                    ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13, new WebSocketAutoHandshakeConfig("ws://127.0.0.1:" + port + "/chat")));
-                    ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
-                    ctx.addLast("ws-message", new WebSocketMessageDuplexer());
+                    ctx.addLast("http-client", new HttpClientDuplex());
+                    ctx.addLast("ws-client", new WebSocketClientHandshakeDuplex(WebSocketVersion.V13, new WebSocketAutoHandshakeConfig("ws://127.0.0.1:" + port + "/chat")));
+                    ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
+                    ctx.addLast("ws-message", new WebSocketMessageDuplex());
                     ctx.addLastDecoder("ws-event-tap", inboundEventTap(inbound));
                 }, SoConfig.TCP());
                 channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, d -> {
@@ -182,17 +182,17 @@ public class RealAsClientTest extends AbstractWebSocketTest {
                 Queue<Object> inbound = new ConcurrentLinkedQueue<>();
                 NetChannel channel = neta.connectSync(new InetSocketAddress("127.0.0.1", port), ctx -> {
                     // 1st. http basic
-                    ctx.addLast("http-client", new HttpClientDuplexe());
+                    ctx.addLast("http-client", new HttpClientDuplex());
                     // 2st. distribution
                     final ProtoRoutingControl[] routingControl = new ProtoRoutingControl[1];
                     ProtoRoutingBuilder<Object, Object> routing = ProtoHelper.typedRoutingAsDefault(BRANCH_HTTP, branchCtx -> {
                         // - for HTTP
-                        branchCtx.addLast("ws-over-http", new WebSocketClientUpgradeRouteDuplexer(routingControl[0], WebSocketVersion.V13, HttpRouteKey.BRANCH_SOCKET));
+                        branchCtx.addLast("ws-over-http", new WebSocketClientUpgradeRouteDuplex(routingControl[0], WebSocketVersion.V13, HttpRouteKey.BRANCH_SOCKET));
                         branchCtx.addLastDecoder("resp-agg", new HttpResponseAggregator());
                     }).branchByInitializer(HttpRouteKey.BRANCH_SOCKET, branchCtx -> {
                         // - for WebSocket
-                        branchCtx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
-                        branchCtx.addLast("ws-message", new WebSocketMessageDuplexer());
+                        branchCtx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
+                        branchCtx.addLast("ws-message", new WebSocketMessageDuplex());
                         branchCtx.addLastDecoder("ws-event-tap", inboundEventTap(inbound));
                     });
                     routingControl[0] = routing.control();

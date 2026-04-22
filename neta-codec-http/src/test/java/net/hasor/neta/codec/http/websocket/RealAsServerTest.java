@@ -91,10 +91,10 @@ public class RealAsServerTest extends AbstractWebSocketTest {
             Queue<Object> serverEvents = new ConcurrentLinkedQueue<>();
 
             neta.bind(new InetSocketAddress("127.0.0.1", port), ctx -> {
-                ctx.addLast("http-server", new HttpServerDuplexe());
-                ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
-                ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
-                ctx.addLast("ws-message", new WebSocketMessageDuplexer());
+                ctx.addLast("http-server", new HttpServerDuplex());
+                ctx.addLast("ws-server", new WebSocketServerHandshakeDuplex(WebSocketVersion.V13));
+                ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
+                ctx.addLast("ws-message", new WebSocketMessageDuplex());
                 ctx.addLastDecoder("ws-events", serverEventTap(serverEvents));
             }, SoConfig.TCP());
 
@@ -151,15 +151,15 @@ public class RealAsServerTest extends AbstractWebSocketTest {
             Queue<Object> serverEvents = new ConcurrentLinkedQueue<>();
 
             neta.bind(new InetSocketAddress("127.0.0.1", port), ctx -> {
-                ctx.addLast("http-server", new HttpServerDuplexe());
+                ctx.addLast("http-server", new HttpServerDuplex());
                 final ProtoRoutingControl[] routingControl = new ProtoRoutingControl[1];
                 ProtoRoutingBuilder<Object, Object> routing = ProtoHelper.typedRoutingAsDefault(BRANCH_HTTP, branchCtx -> {
-                    branchCtx.addLast("ws-upgrade", new WebSocketServerUpgradeRouteDuplexer(routingControl[0], WebSocketVersion.V13, HttpRouteKey.BRANCH_SOCKET));
+                    branchCtx.addLast("ws-upgrade", new WebSocketServerUpgradeRouteDuplex(routingControl[0], WebSocketVersion.V13, HttpRouteKey.BRANCH_SOCKET));
                     branchCtx.addLastDecoder("ws-handshake-events", handshakeEventTap(serverEvents));
                     branchCtx.addLastDecoder("http-agg", new HttpRequestAggregator(1024 * 1024));
                 }).branchByInitializer(HttpRouteKey.BRANCH_SOCKET, branchCtx -> {
-                    branchCtx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
-                    branchCtx.addLast("ws-message", new WebSocketMessageDuplexer());
+                    branchCtx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
+                    branchCtx.addLast("ws-message", new WebSocketMessageDuplex());
                     branchCtx.addLastDecoder("ws-events", serverEventTap(serverEvents));
                 });
                 routingControl[0] = routing.control();

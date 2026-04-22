@@ -29,17 +29,17 @@ import net.hasor.neta.codec.http.*;
  * <p>
  * Ordinary HTTP traffic passes through unchanged. Once an outbound request is
  * recognized as a websocket upgrade request, the request/response pair is
- * delegated to {@link WebSocketClientHandshakeDuplexer}. When the handshake
+ * delegated to {@link WebSocketClientHandshakeDuplex}. When the handshake
  * completes, the route is switched to the configured websocket branch.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-24
  */
-public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> {
-    private static final String                    ROUTE_STATE_STORE_KEY = WebSocketClientUpgradeRouteDuplexer.class.getName() + ".routeStateStore";
-    private static final String                    SEND_STAGE_QUEUE_KEY  = WebSocketClientUpgradeRouteDuplexer.class.getName() + ".send";
-    private final WebSocketClientHandshakeDuplexer delegate;
-    private final ProtoRoutingControl              control;
-    private final String                           targetRoute;
+public class WebSocketClientUpgradeRouteDuplex implements ProtoDuplex<HttpObject, HttpObject, HttpObject, HttpObject> {
+    private static final String                  ROUTE_STATE_STORE_KEY = WebSocketClientUpgradeRouteDuplex.class.getName() + ".routeStateStore";
+    private static final String                  SEND_STAGE_QUEUE_KEY  = WebSocketClientUpgradeRouteDuplex.class.getName() + ".send";
+    private final WebSocketClientHandshakeDuplex delegate;
+    private final ProtoRoutingControl            control;
+    private final String                         targetRoute;
 
     private static final class RouteState {
         private final HttpMessageParts requestParts         = new HttpMessageParts();
@@ -60,8 +60,8 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
      * @param version websocket version to negotiate
      * @param targetRoute route name to switch to after a successful handshake
      */
-    public WebSocketClientUpgradeRouteDuplexer(ProtoRoutingControl control, WebSocketVersion version, String targetRoute) {
-        this.delegate = new WebSocketClientHandshakeDuplexer(version);
+    public WebSocketClientUpgradeRouteDuplex(ProtoRoutingControl control, WebSocketVersion version, String targetRoute) {
+        this.delegate = new WebSocketClientHandshakeDuplex(version);
         this.control = java.util.Objects.requireNonNull(control, "control is null");
         this.targetRoute = targetRoute;
     }

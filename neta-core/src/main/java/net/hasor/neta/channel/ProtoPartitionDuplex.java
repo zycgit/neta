@@ -24,7 +24,7 @@ import net.hasor.neta.channel.routing.*;
 import net.hasor.neta.channel.routing.ProtoPartitionPolicy.ReceivePolicy;
 /**
  * Partition duplexer that splits one connection's message stream into multiple partition sub-pipelines by partition key.
- * <p>Unlike {@link ProtoRoutingDuplexer}, which selects one branch for the entire connection, this
+ * <p>Unlike {@link ProtoRoutingDuplex}, which selects one branch for the entire connection, this
  * duplexer uses the {@link PartitionKey} returned by {@link ProtoPartitionSelector} to maintain an
  * independent partition sub-pipeline for each key. That lets different logical partitions on the
  * same connection keep their own context, buffers, and processing state.</p>
@@ -40,9 +40,9 @@ import net.hasor.neta.channel.routing.ProtoPartitionPolicy.ReceivePolicy;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-29
  */
-public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OUT, OUT> {
-    private static final Logger                     logger          = Logger.getLogger(ProtoPartitionDuplexer.class);
-    private static final String                     STAGE_QUEUE_KEY = ProtoPartitionDuplexer.class.getName();
+public class ProtoPartitionDuplex<IN, OUT> implements ProtoDuplex<IN, IN, OUT, OUT> {
+    private static final Logger                     logger          = Logger.getLogger(ProtoPartitionDuplex.class);
+    private static final String                     STAGE_QUEUE_KEY = ProtoPartitionDuplex.class.getName();
     private final ProtoPartitionSelector            selector;
     private final Map<PartitionKey, PartitionState> partitions;
     private final ProtoPartitionControl             partitionControl;
@@ -61,7 +61,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
     private String                                  parentNextStackName;
     private boolean                                 creationLock;
 
-    public ProtoPartitionDuplexer(ProtoPartitionSelector selector) {
+    public ProtoPartitionDuplex(ProtoPartitionSelector selector) {
         String ownerSuffix = Integer.toHexString(System.identityHashCode(this));
         this.selector = Objects.requireNonNull(selector, "selector is null.");
         this.partitions = new LinkedHashMap<>();
@@ -154,7 +154,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
     @Override
     public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) {
         if (!(context instanceof ProtoContextService)) {
-            throw new IllegalStateException("ProtoPartitionDuplexer requires ProtoContextService.");
+            throw new IllegalStateException("ProtoPartitionDuplex requires ProtoContextService.");
         }
 
         ProtoContextService parentCtx = (ProtoContextService) context;
@@ -297,7 +297,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
             PartitionKey routeKey = this.selector.route(context, PartitionDataKind.Message, message);
             if (routeKey == null) {
                 if (!sndDown.offerMessage(sndUp.takeMessage())) {
-                    throw new IllegalStateException("ProtoPartitionDuplexer failed to pass through send messages.");
+                    throw new IllegalStateException("ProtoPartitionDuplex failed to pass through send messages.");
                 }
                 continue;
             }
@@ -306,7 +306,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
                 PartitionState defaultState = this.ensureDefaultPartitionState(context, PartitionDataKind.Message, message);
                 if (defaultState == null) {
                     if (!sndDown.offerMessage(sndUp.takeMessage())) {
-                        throw new IllegalStateException("ProtoPartitionDuplexer failed to pass through default send messages.");
+                        throw new IllegalStateException("ProtoPartitionDuplex failed to pass through default send messages.");
                     }
                     continue;
                 }
@@ -391,10 +391,10 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
 
     private PartitionState createPartitionState(PartitionKey routeKey, ProtoContext parentContext, ProtoInitializer initializer) throws Throwable {
         if (!(parentContext instanceof ProtoContextService)) {
-            throw new IllegalStateException("ProtoPartitionDuplexer requires ProtoContextService.");
+            throw new IllegalStateException("ProtoPartitionDuplex requires ProtoContextService.");
         }
         if (initializer == null) {
-            throw new IllegalStateException("ProtoPartitionDuplexer initializer is null.");
+            throw new IllegalStateException("ProtoPartitionDuplex initializer is null.");
         }
 
         ProtoContextService branchCtx = new ProtoContextService(//
@@ -469,7 +469,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
         }
 
         if (!rcvDown.offerMessage(stagedMessages.takeMessage(-1))) {
-            throw new IllegalStateException("ProtoPartitionDuplexer failed to pass through unmatched messages.");
+            throw new IllegalStateException("ProtoPartitionDuplex failed to pass through unmatched messages.");
         }
 
         return true;
@@ -718,7 +718,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
 
             Object[] flushArray = branchTailRcvDown.takeMessageToArray(flushCount);
             if (!finalOutput.offerMessage((List<IN>) Arrays.asList(flushArray))) {
-                throw new IllegalStateException("ProtoPartitionDuplexer failed to flush partition output.");
+                throw new IllegalStateException("ProtoPartitionDuplex failed to flush partition output.");
             }
 
             if (branchTailRcvDown.wasFull()) {
@@ -761,7 +761,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
             for (int i = 0; i < flushCount; i++) {
                 Object item = this.pendingSnd.removeFirst();
                 if (!finalOutput.offerMessage((OUT) item)) {
-                    throw new IllegalStateException("ProtoPartitionDuplexer failed to flush partition send output.");
+                    throw new IllegalStateException("ProtoPartitionDuplex failed to flush partition send output.");
                 }
             }
             return this.pendingSnd.isEmpty();
@@ -798,7 +798,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
 
     private PartitionState createDefaultPartitionState(PartitionKey routeKey, ProtoContext parentContext, ProtoInitializer initializer) throws Throwable {
         if (!(parentContext instanceof ProtoContextService)) {
-            throw new IllegalStateException("ProtoPartitionDuplexer requires ProtoContextService.");
+            throw new IllegalStateException("ProtoPartitionDuplex requires ProtoContextService.");
         }
         if (initializer == null) {
             return null;

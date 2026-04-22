@@ -35,7 +35,7 @@ import net.hasor.neta.codec.http.real.httpserver.SimpleHttpPeerServer;
 public class RealAsClientTest extends AbstractHttpTest {
     private static NetaClientHarness netaClient(NetManager neta, int port) throws Exception {
         return new NetaClientHarness(neta.connectSync(new InetSocketAddress("127.0.0.1", port), ctx -> {
-            ctx.addLast("http-client", new HttpClientDuplexe());
+            ctx.addLast("http-client", new HttpClientDuplex());
             ctx.addLastDecoder("resp-agg", new HttpResponseAggregator());
         }, SoConfig.TCP()));
     }

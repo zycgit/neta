@@ -18,7 +18,7 @@ import java.util.function.Consumer;
 import net.hasor.neta.channel.*;
 /**
  * Builder for routing branches.
- * <p>It registers multiple named branches into the same {@link ProtoRoutingDuplexer}. Each branch
+ * <p>It registers multiple named branches into the same {@link ProtoRoutingDuplex}. Each branch
  * forms an independent sub-pipeline. The branches share the same {@link ProtoContext}, and the
  * routing selector decides at runtime which branch should receive the current data or event.</p>
  * <p>This builder only handles branch definitions. Any further fluent composition on the parent
@@ -26,7 +26,7 @@ import net.hasor.neta.channel.*;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-17
  * @see ProtoRoutingDataSelector
- * @see ProtoRoutingDuplexer
+ * @see ProtoRoutingDuplex
  */
 public interface ProtoRoutingBuilder<RCV_UP, SND_DOWN> {
     /** Return the control handle owned by the current routing builder. */
@@ -50,7 +50,7 @@ public interface ProtoRoutingBuilder<RCV_UP, SND_DOWN> {
 
     /**
      * Build the routing duplexer defined by the current builder.
-     * @return {@link ProtoDuplexer} ready to be inserted into the protocol stack
+     * @return {@link ProtoDuplex} ready to be inserted into the protocol stack
      */
-    ProtoDuplexer<RCV_UP, ?, ?, SND_DOWN> build();
+    ProtoDuplex<RCV_UP, ?, ?, SND_DOWN> build();
 }

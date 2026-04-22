@@ -29,11 +29,11 @@ public class HttpClientServerFlowTest extends AbstractHttpTest {
     public void testClientEncoderToServerDecoderCompletesNormalRequestResponseFlow() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("client-http", new HttpClientDuplexe());
+                ctx.addLast("client-http", new HttpClientDuplex());
                 ctx.addLastDecoder("resp-agg", new HttpResponseAggregator());
             }, ctx -> {
-                ctx.addLast("server-http", new HttpServerDuplexe());
-                ctx.addLast("server-agg", new HttpServerDuplexeAggregator(16));
+                ctx.addLast("server-http", new HttpServerDuplex());
+                ctx.addLast("server-agg", new HttpServerDuplexAggregator(16));
             });
 
             // batch_1
@@ -70,11 +70,11 @@ public class HttpClientServerFlowTest extends AbstractHttpTest {
     public void testClientServerFlowHandlesExpectContinueBeforeSendingRequestBody() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("client-http", new HttpClientDuplexe());
+                ctx.addLast("client-http", new HttpClientDuplex());
                 ctx.addLastDecoder("resp-agg", new HttpResponseAggregator());
             }, ctx -> {
-                ctx.addLast("server-http", new HttpServerDuplexe());
-                ctx.addLast("server-agg", new HttpServerDuplexeAggregator(16));
+                ctx.addLast("server-http", new HttpServerDuplex());
+                ctx.addLast("server-agg", new HttpServerDuplexAggregator(16));
             });
 
             List<HttpObject> beforeBody = clientSendRequestObjects(pipe,//
@@ -119,11 +119,11 @@ public class HttpClientServerFlowTest extends AbstractHttpTest {
     public void testClientServerFlowAutoRepliesExpectationFailedForUnsupportedExpectation() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("client-http", new HttpClientDuplexe());
+                ctx.addLast("client-http", new HttpClientDuplex());
                 ctx.addLastDecoder("resp-agg", new HttpResponseAggregator());
             }, ctx -> {
-                ctx.addLast("server-http", new HttpServerDuplexe());
-                ctx.addLast("server-agg", new HttpServerDuplexeAggregator(16));
+                ctx.addLast("server-http", new HttpServerDuplex());
+                ctx.addLast("server-agg", new HttpServerDuplexAggregator(16));
             });
 
             List<HttpObject> requests = clientSendRequestObjects(pipe,//
@@ -149,11 +149,11 @@ public class HttpClientServerFlowTest extends AbstractHttpTest {
     public void testClientServerFlowAutoRepliesRequestEntityTooLarge() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("client-http", new HttpClientDuplexe());
+                ctx.addLast("client-http", new HttpClientDuplex());
                 ctx.addLastDecoder("resp-agg", new HttpResponseAggregator());
             }, ctx -> {
-                ctx.addLast("server-http", new HttpServerDuplexe());
-                ctx.addLast("server-agg", new HttpServerDuplexeAggregator(2));
+                ctx.addLast("server-http", new HttpServerDuplex());
+                ctx.addLast("server-agg", new HttpServerDuplexAggregator(2));
             });
 
             List<HttpObject> requests = clientSendRequestObjects(pipe,//

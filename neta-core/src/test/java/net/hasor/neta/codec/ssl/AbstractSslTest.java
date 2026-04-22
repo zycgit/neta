@@ -37,7 +37,7 @@ public class AbstractSslTest {
         // Bytes <- Bytes <- String
         return ProtoHelper.standard()
                 // SSL
-                .nextDuplex("SSL", new SslDuplexer(sslConf))
+                .nextDuplex("SSL", new SslDuplex(sslConf))
                 // bytes <-> String
                 .nextDuplex("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
                 // create Stack
@@ -48,7 +48,7 @@ public class AbstractSslTest {
      * Creates a protocol stack whose String codec layer listens for {@link SslHandshakeEvent} and counts
      * down {@code handshakeLatch} as soon as TLS negotiation succeeds on that side.
      * <p>
-     * {@link SslDuplexer} already calls {@code fireEvent(SslEvent.class, …)} the moment the
+     * {@link SslDuplex} already calls {@code fireEvent(SslEvent.class, …)} the moment the
      * handshake finishes. That event propagates to every downstream handler in the pipeline, so
      * the String codec — which sits directly after the SSL layer — can intercept it without any
      * extra passthrough handler.
@@ -62,10 +62,10 @@ public class AbstractSslTest {
     public static ProtoInitializer createProtoStackWithHandshakeLatch(SslConfig sslConf, CountDownLatch handshakeLatch) {
         return ctx -> {
             // SSL encryption/decryption layer — fires SslEvent when handshake completes
-            ctx.addLast("SSL", new SslDuplexer(sslConf));
+            ctx.addLast("SSL", new SslDuplex(sslConf));
             // String codec layer — intercepts SslEvent to signal handshake completion,
             // then lets the event continue propagating (return false)
-            ctx.addLast("String", new ProtoDuplexer<ByteBuf, String, String, ByteBuf>() {
+            ctx.addLast("String", new ProtoDuplex<ByteBuf, String, String, ByteBuf>() {
                 @Override
                 public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) {
                 }

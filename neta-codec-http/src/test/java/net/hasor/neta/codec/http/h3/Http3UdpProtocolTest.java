@@ -89,9 +89,9 @@ public class Http3UdpProtocolTest {
      */
     private void startH3Server() throws Exception {
         ProtoInitializer serverProto = ctx -> {
-            ctx.addLast("h3-frame", new Http3FrameDuplexe(true, SERVER_H3_SETTINGS));
-            ctx.addLast("h3-object", new Http3ObjectDuplexe(true, SERVER_H3_SETTINGS));
-            ctx.addLast("h3-aggregator", new HttpServerDuplexeAggregator(1048576));
+            ctx.addLast("h3-frame", new Http3FrameDuplex(true, SERVER_H3_SETTINGS));
+            ctx.addLast("h3-object", new Http3ObjectDuplex(true, SERVER_H3_SETTINGS));
+            ctx.addLast("h3-aggregator", new HttpServerDuplexAggregator(1048576));
         };
         UdpSoConfig udpConfig = SoConfig.UDP();
         udpConfig.setRcvPacketSize(65535);
@@ -103,9 +103,9 @@ public class Http3UdpProtocolTest {
      */
     private NetChannel connectH3Client() throws Exception {
         ProtoInitializer clientProto = ctx -> {
-            ctx.addLast("h3-frame", new Http3FrameDuplexe(false, CLIENT_H3_SETTINGS));
-            ctx.addLast("h3-object", new Http3ObjectDuplexe(false, CLIENT_H3_SETTINGS));
-            ctx.addLast("h3-aggregator", new HttpClientDuplexeAggregator(1048576));
+            ctx.addLast("h3-frame", new Http3FrameDuplex(false, CLIENT_H3_SETTINGS));
+            ctx.addLast("h3-object", new Http3ObjectDuplex(false, CLIENT_H3_SETTINGS));
+            ctx.addLast("h3-aggregator", new HttpClientDuplexAggregator(1048576));
         };
         UdpSoConfig udpConfig = SoConfig.UDP();
         udpConfig.setRcvPacketSize(65535);

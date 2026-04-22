@@ -37,7 +37,7 @@ public interface ProtoContext {
     /**
      * Return the name of the current protocol stack node.
      * <p><b>Note:</b> this method only returns a meaningful result when called from inside the
-     * processing flow of a {@link ProtoDuplexer} or {@link ProtoHandler}.</p>
+     * processing flow of a {@link ProtoDuplex} or {@link ProtoHandler}.</p>
      * @return current protocol stack name
      */
     String getStackName();

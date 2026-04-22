@@ -122,7 +122,7 @@ public class TcpSslCloseNotifyTest extends AbstractSslTest {
         }
         assert clientSsl.isReady() && serverSsl.isReady() : "TLS handshake did not complete";
 
-        // Safe-close: fires SoCloseEvent → SslDuplexer → close_notify → then TCP FIN
+        // Safe-close: fires SoCloseEvent → SslDuplex → close_notify → then TCP FIN
         client.close();
 
         // Wait for server onClose

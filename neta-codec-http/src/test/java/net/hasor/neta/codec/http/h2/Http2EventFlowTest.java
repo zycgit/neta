@@ -38,11 +38,11 @@ public class Http2EventFlowTest extends AbstractHttp2Test {
     public void testClientPingEventProducesClientSidePongEvent() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("h2-frame", new Http2FrameDuplexe(false));
-                ctx.addLast("h2-message", new Http2ObjectDuplexe(false));
+                ctx.addLast("h2-frame", new Http2FrameDuplex(false));
+                ctx.addLast("h2-message", new Http2ObjectDuplex(false));
             }, ctx -> {
-                ctx.addLast("h2-frame", new Http2FrameDuplexe(true));
-                ctx.addLast("h2-message", new Http2ObjectDuplexe(true));
+                ctx.addLast("h2-frame", new Http2FrameDuplex(true));
+                ctx.addLast("h2-message", new Http2ObjectDuplex(true));
             }, VrtTransfer.direct());
 
             byte[] payload = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
@@ -72,8 +72,8 @@ public class Http2EventFlowTest extends AbstractHttp2Test {
     public void testClientPingEventProducesOutboundFrames() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("h2-frame", new Http2FrameDuplexe(false));
-                ctx.addLast("h2-message", new Http2ObjectDuplexe(false));
+                ctx.addLast("h2-frame", new Http2FrameDuplex(false));
+                ctx.addLast("h2-message", new Http2ObjectDuplex(false));
             }, ctx -> {
                 ctx.addLastDecoder("h2-frame-decoder", new Http2FrameDecoder(true));
             });
@@ -134,8 +134,8 @@ public class Http2EventFlowTest extends AbstractHttp2Test {
     public void testPriorityEventProducesOutboundPriorityFrame() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("h2-frame", new Http2FrameDuplexe(false));
-                ctx.addLast("h2-message", new Http2ObjectDuplexe(false));
+                ctx.addLast("h2-frame", new Http2FrameDuplex(false));
+                ctx.addLast("h2-message", new Http2ObjectDuplex(false));
             }, ctx -> {
                 ctx.addLastDecoder("h2-frame-decoder", new Http2FrameDecoder(true));
             });
@@ -159,8 +159,8 @@ public class Http2EventFlowTest extends AbstractHttp2Test {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
                 ctx.addLastDecoder("h2-frame-decoder", new Http2FrameDecoder(false));
             }, ctx -> {
-                ctx.addLast("h2-frame", new Http2FrameDuplexe(true));
-                ctx.addLast("h2-message", new Http2ObjectDuplexe(true));
+                ctx.addLast("h2-frame", new Http2FrameDuplex(true));
+                ctx.addLast("h2-message", new Http2ObjectDuplex(true));
             });
 
             DefaultHttpHeaders headers = new DefaultHttpHeaders();
@@ -227,8 +227,8 @@ public class Http2EventFlowTest extends AbstractHttp2Test {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
                 ctx.addLastDecoder("h2-frame-decoder", new Http2FrameDecoder(false));
             }, ctx -> {
-                ctx.addLast("h2-frame", new Http2FrameDuplexe(true));
-                ctx.addLast("h2-message", new Http2ObjectDuplexe(true));
+                ctx.addLast("h2-frame", new Http2FrameDuplex(true));
+                ctx.addLast("h2-message", new Http2ObjectDuplex(true));
             });
 
             pipe.server().fireEvent(Http2ResetEvent.class, new Http2ResetEvent(7, Http2ResetEvent.CANCEL));
@@ -250,8 +250,8 @@ public class Http2EventFlowTest extends AbstractHttp2Test {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
                 ctx.addLastDecoder("h2-frame-decoder", new Http2FrameDecoder(false));
             }, ctx -> {
-                ctx.addLast("h2-frame", new Http2FrameDuplexe(true));
-                ctx.addLast("h2-message", new Http2ObjectDuplexe(true));
+                ctx.addLast("h2-frame", new Http2FrameDuplex(true));
+                ctx.addLast("h2-message", new Http2ObjectDuplex(true));
             });
 
             pipe.server().fireEvent(Http2GoawayEvent.class, new Http2GoawayEvent(0, 3, Http2ErrorCode.PROTOCOL_ERROR, "bye".getBytes(StandardCharsets.US_ASCII)));
@@ -270,8 +270,8 @@ public class Http2EventFlowTest extends AbstractHttp2Test {
     public void testInvalidPriorityEventProducesLocalResetFrameAndEvent() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("h2-frame", new Http2FrameDuplexe(false));
-                ctx.addLast("h2-message", new Http2ObjectDuplexe(false));
+                ctx.addLast("h2-frame", new Http2FrameDuplex(false));
+                ctx.addLast("h2-message", new Http2ObjectDuplex(false));
             }, ctx -> {
                 ctx.addLastDecoder("h2-frame-decoder", new Http2FrameDecoder(true));
             });
@@ -301,8 +301,8 @@ public class Http2EventFlowTest extends AbstractHttp2Test {
     public void testClientPushPromiseEventProducesLocalGoawayAndClose() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("h2-frame", new Http2FrameDuplexe(false));
-                ctx.addLast("h2-message", new Http2ObjectDuplexe(false));
+                ctx.addLast("h2-frame", new Http2FrameDuplex(false));
+                ctx.addLast("h2-message", new Http2ObjectDuplex(false));
             }, ctx -> {
                 ctx.addLastDecoder("h2-frame-decoder", new Http2FrameDecoder(true));
             });

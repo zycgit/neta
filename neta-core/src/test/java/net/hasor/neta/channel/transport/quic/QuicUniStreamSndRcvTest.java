@@ -25,7 +25,7 @@ import org.junit.Test;
 import net.hasor.neta.channel.AbstractSoTest;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.codec.LineBasedFrameHandler;
-import net.hasor.neta.codec.string.StringDuplexer;
+import net.hasor.neta.codec.string.StringDuplex;
 
 /**
  * QUIC 传输层集成测试（非 TLS 明文模式）。
@@ -52,7 +52,7 @@ public class QuicUniStreamSndRcvTest extends AbstractSoTest {
         neta.bind(address, ctx -> {
             if (ctx.getChannel() instanceof QuicStreamChannel) {
                 ctx.addLastDecoder(new LineBasedFrameHandler());
-                ctx.addLast(new StringDuplexer());
+                ctx.addLast(new StringDuplex());
             }
         }, quicCfg).onAccept(c -> {
             if (c instanceof QuicChannel) {
@@ -64,7 +64,7 @@ public class QuicUniStreamSndRcvTest extends AbstractSoTest {
         neta.connectAsync(address, ctx -> {
             if (ctx.getChannel() instanceof QuicStreamChannel) {
                 ctx.addLastDecoder(new LineBasedFrameHandler());
-                ctx.addLast(new StringDuplexer());
+                ctx.addLast(new StringDuplex());
                 ctx.getChannel().subscribe(data -> clientRcvData.add((String) data.getData()));
             }
         }, quicCfg).get();
@@ -101,7 +101,7 @@ public class QuicUniStreamSndRcvTest extends AbstractSoTest {
         neta.bind(address, ctx -> {
             if (ctx.getChannel() instanceof QuicStreamChannel) {
                 ctx.addLastDecoder(new LineBasedFrameHandler());
-                ctx.addLast(new StringDuplexer());
+                ctx.addLast(new StringDuplex());
             }
         }, quicCfg).onAccept(c -> {
             if (c instanceof QuicChannel) {
@@ -113,7 +113,7 @@ public class QuicUniStreamSndRcvTest extends AbstractSoTest {
         neta.connectAsync(address, ctx -> {
             if (ctx.getChannel() instanceof QuicStreamChannel) {
                 ctx.addLastDecoder(new LineBasedFrameHandler());
-                ctx.addLast(new StringDuplexer());
+                ctx.addLast(new StringDuplex());
                 ctx.getChannel().subscribe(data -> clientRcvData.add((String) data.getData()));
             }
         }, quicCfg).get();
@@ -153,7 +153,7 @@ public class QuicUniStreamSndRcvTest extends AbstractSoTest {
         neta.bind(address, ctx -> {
             if (ctx.getChannel() instanceof QuicStreamChannel) {
                 ctx.addLastDecoder(new LineBasedFrameHandler());
-                ctx.addLast(new StringDuplexer());
+                ctx.addLast(new StringDuplex());
             }
         }, quicCfg).onAccept(c -> {
             if (c instanceof QuicChannel) {
@@ -165,7 +165,7 @@ public class QuicUniStreamSndRcvTest extends AbstractSoTest {
         neta.connectAsync(address, ctx -> {
             if (ctx.getChannel() instanceof QuicStreamChannel) {
                 ctx.addLastDecoder(new LineBasedFrameHandler());
-                ctx.addLast(new StringDuplexer());
+                ctx.addLast(new StringDuplex());
                 ctx.getChannel().subscribe(data -> clientRcvData.add((String) data.getData()));
             }
         }, quicCfg).get();
@@ -205,7 +205,7 @@ public class QuicUniStreamSndRcvTest extends AbstractSoTest {
         neta.bind(address, ctx -> {
             if (ctx.getChannel() instanceof QuicStreamChannel) {
                 ctx.addLastDecoder(new LineBasedFrameHandler());
-                ctx.addLast(new StringDuplexer());
+                ctx.addLast(new StringDuplex());
             }
         }, quicCfg).onAccept(c -> {
             if (c instanceof QuicStreamChannel) {
@@ -217,7 +217,7 @@ public class QuicUniStreamSndRcvTest extends AbstractSoTest {
         QuicChannel client = (QuicChannel) neta.connectAsync(address, ctx -> {
             if (ctx.getChannel() instanceof QuicStreamChannel) {
                 ctx.addLastDecoder(new LineBasedFrameHandler());
-                ctx.addLast(new StringDuplexer());
+                ctx.addLast(new StringDuplex());
             }
         }, quicCfg).get();
 

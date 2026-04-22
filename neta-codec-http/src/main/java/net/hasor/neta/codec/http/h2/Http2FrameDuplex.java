@@ -28,19 +28,19 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * An "Http2Frame stream" means the transport byte stream is split into an ordered sequence of
  * complete HTTP/2 frames that still preserve frame-layer semantics. Preface handling, the fixed
  * 9-byte frame header, payload extraction, and basic frame-size validation all happen here, while
- * higher-level HTTP message reconstruction is left to {@link Http2ObjectDuplexe}.
+ * higher-level HTTP message reconstruction is left to {@link Http2ObjectDuplex}.
  * <p>
  * Pipeline view:
  * <pre>
- *   inbound:  socket bytes -> Http2FrameDuplexe -> Http2Frame
- *   outbound: Http2Frame   -> Http2FrameDuplexe -> socket bytes
+ *   inbound:  socket bytes -> Http2FrameDuplex -> Http2Frame
+ *   outbound: Http2Frame   -> Http2FrameDuplex -> socket bytes
  * </pre>
  * <p>
  * Recommended usage falls into two scenarios depending on the processing goal:
  * <p>
  * Scenario 1: work at raw frame level.
  * <pre>
- *   ctx.addLast("h2-frame", new Http2FrameDuplexe(true));
+ *   ctx.addLast("h2-frame", new Http2FrameDuplex(true));
  *   ctx.addLast("handler", frameHandler);
  * </pre>
  * This mode suits protocol inspection, low-level testing, custom frame handling, or debugging work
@@ -48,8 +48,8 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * <p>
  * Scenario 2: continue into the HTTP/2 message layer.
  * <pre>
- *   ctx.addLast("h2-frame", new Http2FrameDuplexe(true));
- *   ctx.addLast("h2-object", new Http2ObjectDuplexe(true));
+ *   ctx.addLast("h2-frame", new Http2FrameDuplex(true));
+ *   ctx.addLast("h2-object", new Http2ObjectDuplex(true));
  *   ctx.addLast("handler", httpHandler);
  * </pre>
  * Use this mode for normal request and response processing, where frame streams should be lifted
@@ -60,14 +60,14 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-21
  */
-public class Http2FrameDuplexe implements ProtoDuplexer<ByteBuf, Http2Frame, Http2Frame, ByteBuf> {
+public class Http2FrameDuplex implements ProtoDuplex<ByteBuf, Http2Frame, Http2Frame, ByteBuf> {
     private final Http2FrameDecoder decoder;
     private final Http2FrameEncoder encoder;
 
     /**
      * Creates a client-side frame codec.
      */
-    public Http2FrameDuplexe() {
+    public Http2FrameDuplex() {
         this(false);
     }
 
@@ -75,7 +75,7 @@ public class Http2FrameDuplexe implements ProtoDuplexer<ByteBuf, Http2Frame, Htt
      * Creates a frame codec for the given endpoint role.
      * @param serverMode when {@code true}, server mode is used and the inbound side expects the client preface
      */
-    public Http2FrameDuplexe(boolean serverMode) {
+    public Http2FrameDuplex(boolean serverMode) {
         this(serverMode, new Http2Settings());
     }
 
@@ -84,7 +84,7 @@ public class Http2FrameDuplexe implements ProtoDuplexer<ByteBuf, Http2Frame, Htt
      * @param serverMode whether the codec runs in server mode
      * @param settings local HTTP/2 settings used by the frame decoder
      */
-    public Http2FrameDuplexe(boolean serverMode, Http2Settings settings) {
+    public Http2FrameDuplex(boolean serverMode, Http2Settings settings) {
         this.decoder = new Http2FrameDecoder(serverMode, settings);
         this.encoder = new Http2FrameEncoder();
     }

@@ -32,7 +32,7 @@ import net.hasor.neta.codec.ssl.SslContext;
  * <pre>
  *   inbound TCP/TLS connection
  *              v
- *        [ SslDuplexer ]
+ *        [ SslDuplex ]
  *              v
  *   +------------------------+
  *   | Http2OverTlsRoute      |
@@ -41,7 +41,7 @@ import net.hasor.neta.codec.ssl.SslContext;
  *        |             |
  *        |             +--> BRANCH_H1 --> HttpServerDuplexe --> HttpRequestAggregator --> handler
  *        |
- *        +----------------> BRANCH_H2 --> Http2FrameDuplexe --> Http2ObjectDuplexe --> HttpServerDuplexeAggregator --> handler
+ *        +----------------> BRANCH_H2 --> Http2FrameDuplex --> Http2ObjectDuplex --> HttpServerDuplexeAggregator --> handler
  * </pre>
  * <p>
  * Decision rules:
@@ -55,8 +55,8 @@ import net.hasor.neta.codec.ssl.SslContext;
  * <pre>
  *   ProtoRoutingBuilder&lt;ByteBuf, ByteBuf&gt; alpn = ProtoHelper.typedRoutingAsStatic(new Http2OverTlsRoute());
  *   alpn.branchByInitializer(HttpRouteKey.BRANCH_H2, branch -&gt; {
- *       branch.addLast("h2-frame", new Http2FrameDuplexe(true));
- *       branch.addLast("h2-object", new Http2ObjectDuplexe(true));
+ *       branch.addLast("h2-frame", new Http2FrameDuplex(true));
+ *       branch.addLast("h2-object", new Http2ObjectDuplex(true));
  *       branch.nextPartition("h2-stream", new Http2ObjectPartitionSelector(), partition -&gt; partition.policy(new Http2ObjectPartitionPolicy()).byInitializer(partitionCtx -&gt; partitionCtx.addLast("h2-aggregator", new HttpServerDuplexeAggregator(1048576))));
  *       branch.addLastDecoder("h2-handler", new HttpDispatchHandler(true));
  *   });
@@ -65,7 +65,7 @@ import net.hasor.neta.codec.ssl.SslContext;
  *       branch.addLastDecoder("http-aggregator", new HttpRequestAggregator(1048576));
  *       branch.addLastDecoder("http-handler", new HttpDispatchHandler(true));
  *   });
- *   ctx.addLast("ssl", new SslDuplexer(sslConfig));
+ *   ctx.addLast("ssl", new SslDuplex(sslConfig));
  *   ctx.addLast("alpn-router", alpn.build());
  * </pre>
  * <p>

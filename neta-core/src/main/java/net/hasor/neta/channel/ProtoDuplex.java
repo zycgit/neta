@@ -31,7 +31,7 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * @see ProtoConfig
  */
 @FunctionalInterface
-public interface ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
+public interface ProtoDuplex<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     /**
      * Initialize this protocol node.
      */

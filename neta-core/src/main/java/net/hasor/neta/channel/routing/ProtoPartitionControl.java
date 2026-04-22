@@ -16,10 +16,11 @@
 package net.hasor.neta.channel.routing;
 import java.util.Collection;
 import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.ProtoPartitionDuplexer;
+import net.hasor.neta.channel.ProtoPartitionDuplex;
+
 /**
  * Partition control interface exposed by {@link ProtoPartitionBuilder} and backed by
- * {@link ProtoPartitionDuplexer}.
+ * {@link ProtoPartitionDuplex}.
  * <p>This API is intentionally obtained during builder assembly rather than looked up at runtime
  * through {@link ProtoContext#context(Class)}, avoiding ambiguous runtime control lookup when
  * partition pipelines are nested.</p>

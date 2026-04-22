@@ -44,7 +44,7 @@ import net.hasor.neta.channel.routing.*;
  * @see ProtoRoutingBuilder
  */
 public final class ProtoHelper {
-    private static void addLast(ProtoBuildContext context, String name, ProtoConfig protoConf, ProtoDuplexer<?, ?, ?, ?> duplexer) {
+    private static void addLast(ProtoBuildContext context, String name, ProtoConfig protoConf, ProtoDuplex<?, ?, ?, ?> duplexer) {
         context.addLast(name, protoConf, duplexer);
     }
 
@@ -66,20 +66,20 @@ public final class ProtoHelper {
             throw new IllegalArgumentException("routingName is blank or routing is null.");
         }
 
-        ProtoRoutingDuplexer<RCV_UP, SND_DOWN> duplexer = new ProtoRoutingDuplexer<>(ProtoRoutingMode.STATIC, (context, rcvUp, sndDown) -> defaultRouting);
+        ProtoRoutingDuplex<RCV_UP, SND_DOWN> duplexer = new ProtoRoutingDuplex<>(ProtoRoutingMode.STATIC, (context, rcvUp, sndDown) -> defaultRouting);
         return new ProtoRoutingBuilderImpl<>(ProtoConfig.DEFAULT, duplexer).branchByInitializer(defaultRouting, initializer);
     }
 
     /** Create an independent routing builder with static route selection. */
     public static <RCV_UP, SND_DOWN> ProtoRoutingBuilder<RCV_UP, SND_DOWN> typedRoutingAsStatic(ProtoRoutingDataSelector<RCV_UP, SND_DOWN> routing) {
         Objects.requireNonNull(routing, "routing is null.");
-        return new ProtoRoutingBuilderImpl<>(ProtoConfig.DEFAULT, new ProtoRoutingDuplexer<>(ProtoRoutingMode.STATIC, routing));
+        return new ProtoRoutingBuilderImpl<>(ProtoConfig.DEFAULT, new ProtoRoutingDuplex<>(ProtoRoutingMode.STATIC, routing));
     }
 
     /** Create an independent routing builder with realtime route selection. */
     public static <RCV_UP, SND_DOWN> ProtoRoutingBuilder<RCV_UP, SND_DOWN> typedRoutingAsRealtime(ProtoRoutingDataSelector<RCV_UP, SND_DOWN> routing) {
         Objects.requireNonNull(routing, "routing is null.");
-        return new ProtoRoutingBuilderImpl<>(ProtoConfig.DEFAULT, new ProtoRoutingDuplexer<>(ProtoRoutingMode.REALTIME, routing));
+        return new ProtoRoutingBuilderImpl<>(ProtoConfig.DEFAULT, new ProtoRoutingDuplex<>(ProtoRoutingMode.REALTIME, routing));
     }
 
     /** Create a {@link ProtoBuilder} whose endpoints are {@code ByteBuf} and which uses the default config. */
@@ -126,12 +126,12 @@ public final class ProtoHelper {
         }
 
         @Override
-        public <NEXT_RCV_DOWN, NEXT_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextDuplex(ProtoDuplexer<RCV_DOWN, NEXT_RCV_DOWN, NEXT_SND_UP, SND_UP> duplexer) {
+        public <NEXT_RCV_DOWN, NEXT_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextDuplex(ProtoDuplex<RCV_DOWN, NEXT_RCV_DOWN, NEXT_SND_UP, SND_UP> duplexer) {
             return this.nextDuplex(duplexer.getClass().getSimpleName(), this.defaultConf, duplexer);
         }
 
         @Override
-        public <NEXT_RCV_DOWN, NEXT_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextDuplex(String name, ProtoDuplexer<RCV_DOWN, NEXT_RCV_DOWN, NEXT_SND_UP, SND_UP> duplexer) {
+        public <NEXT_RCV_DOWN, NEXT_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextDuplex(String name, ProtoDuplex<RCV_DOWN, NEXT_RCV_DOWN, NEXT_SND_UP, SND_UP> duplexer) {
             return this.nextDuplex(name, this.defaultConf, duplexer);
         }
 
@@ -206,7 +206,7 @@ public final class ProtoHelper {
 
         @Override
         public <NEXT_RCV_DOWN, NEXT_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextDuplex(String name, ProtoConfig protoConf,//
-                ProtoDuplexer<RCV_DOWN, NEXT_RCV_DOWN, NEXT_SND_UP, SND_UP> duplexer) {
+                ProtoDuplex<RCV_DOWN, NEXT_RCV_DOWN, NEXT_SND_UP, SND_UP> duplexer) {
             Objects.requireNonNull(name, "name is null.");
             Objects.requireNonNull(protoConf, "protoConf is null.");
             Objects.requireNonNull(duplexer, "duplexer is null.");
@@ -257,7 +257,7 @@ public final class ProtoHelper {
             Objects.requireNonNull(routing, "routing is null.");
             Objects.requireNonNull(branches, "branches is null.");
 
-            ProtoRoutingDuplexer<NEXT_RCV_DOWN, PREV_SND_UP> duplexer = new ProtoRoutingDuplexer<>(ProtoRoutingMode.STATIC, routing);
+            ProtoRoutingDuplex<NEXT_RCV_DOWN, PREV_SND_UP> duplexer = new ProtoRoutingDuplex<>(ProtoRoutingMode.STATIC, routing);
             ProtoRoutingBuilder<NEXT_RCV_DOWN, PREV_SND_UP> routeBuilder = new ProtoRoutingBuilderImpl<>(this.defaultConf, duplexer);
             branches.accept(routeBuilder);
             this.taskAppend.add(c -> addLast(c, name, protoConf, duplexer));
@@ -272,7 +272,7 @@ public final class ProtoHelper {
             Objects.requireNonNull(routing, "routing is null.");
             Objects.requireNonNull(branches, "branches is null.");
 
-            ProtoRoutingDuplexer<NEXT_RCV_DOWN, PREV_SND_UP> duplexer = new ProtoRoutingDuplexer<>(ProtoRoutingMode.REALTIME, routing);
+            ProtoRoutingDuplex<NEXT_RCV_DOWN, PREV_SND_UP> duplexer = new ProtoRoutingDuplex<>(ProtoRoutingMode.REALTIME, routing);
             ProtoRoutingBuilder<NEXT_RCV_DOWN, PREV_SND_UP> routeBuilder = new ProtoRoutingBuilderImpl<>(this.defaultConf, duplexer);
             branches.accept(routeBuilder);
             this.taskAppend.add(c -> addLast(c, name, protoConf, duplexer));
@@ -287,7 +287,7 @@ public final class ProtoHelper {
             Objects.requireNonNull(routing, "routing is null.");
             Objects.requireNonNull(branches, "branches is null.");
 
-            ProtoRoutingDuplexer<NEXT_RCV_DOWN, PREV_SND_UP> duplexer = new ProtoRoutingDuplexer<>(routing);
+            ProtoRoutingDuplex<NEXT_RCV_DOWN, PREV_SND_UP> duplexer = new ProtoRoutingDuplex<>(routing);
             ProtoRoutingBuilder<NEXT_RCV_DOWN, PREV_SND_UP> routeBuilder = new ProtoRoutingBuilderImpl<>(this.defaultConf, duplexer);
             branches.accept(routeBuilder);
             this.taskAppend.add(c -> addLast(c, name, protoConf, duplexer));
@@ -301,7 +301,7 @@ public final class ProtoHelper {
             Objects.requireNonNull(protoConf, "protoConf is null.");
             Objects.requireNonNull(routing, "routing is null.");
 
-            ProtoPartitionDuplexer<RCV_DOWN, SND_UP> duplexer = new ProtoPartitionDuplexer<>(routing);
+            ProtoPartitionDuplex<RCV_DOWN, SND_UP> duplexer = new ProtoPartitionDuplex<>(routing);
             ProtoPartitionBuilderImpl<RCV_DOWN, SND_UP> routeBuilder = new ProtoPartitionBuilderImpl<>(duplexer);
             initializer.accept(routeBuilder);
             routeBuilder.build();
@@ -320,10 +320,10 @@ public final class ProtoHelper {
     }
 
     private static class ProtoRoutingBuilderImpl<RCV_DOWN, SND_UP> implements ProtoRoutingBuilder<RCV_DOWN, SND_UP> {
-        private final ProtoConfig                            defaultConf;
-        private final ProtoRoutingDuplexer<RCV_DOWN, SND_UP> duplexer;
+        private final ProtoConfig                          defaultConf;
+        private final ProtoRoutingDuplex<RCV_DOWN, SND_UP> duplexer;
 
-        public ProtoRoutingBuilderImpl(ProtoConfig defaultConf, ProtoRoutingDuplexer<RCV_DOWN, SND_UP> duplexer) {
+        public ProtoRoutingBuilderImpl(ProtoConfig defaultConf, ProtoRoutingDuplex<RCV_DOWN, SND_UP> duplexer) {
             this.defaultConf = defaultConf;
             this.duplexer = duplexer;
         }
@@ -350,18 +350,18 @@ public final class ProtoHelper {
         }
 
         @Override
-        public ProtoDuplexer<RCV_DOWN, ?, ?, SND_UP> build() {
+        public ProtoDuplex<RCV_DOWN, ?, ?, SND_UP> build() {
             return this.duplexer;
         }
     }
 
     private static class ProtoPartitionBuilderImpl<RCV_DOWN, SND_UP> implements ProtoPartitionBuilder<RCV_DOWN, SND_UP> {
-        private final ProtoPartitionDuplexer<RCV_DOWN, SND_UP> duplexer;
-        private ProtoPartitionPolicy                           policy;
-        private ProtoInitializer                               partitionInitializer;
-        private ProtoInitializer                               defaultInitializer;
+        private final ProtoPartitionDuplex<RCV_DOWN, SND_UP> duplexer;
+        private ProtoPartitionPolicy                         policy;
+        private ProtoInitializer                             partitionInitializer;
+        private ProtoInitializer                             defaultInitializer;
 
-        public ProtoPartitionBuilderImpl(ProtoPartitionDuplexer<RCV_DOWN, SND_UP> duplexer) {
+        public ProtoPartitionBuilderImpl(ProtoPartitionDuplex<RCV_DOWN, SND_UP> duplexer) {
             this.duplexer = duplexer;
         }
 
@@ -389,7 +389,7 @@ public final class ProtoHelper {
         }
 
         @Override
-        public ProtoDuplexer<RCV_DOWN, RCV_DOWN, SND_UP, SND_UP> build() {
+        public ProtoDuplex<RCV_DOWN, RCV_DOWN, SND_UP, SND_UP> build() {
             this.duplexer.configDuplexer(this.policy, this.partitionInitializer, this.defaultInitializer);
             return this.duplexer;
         }

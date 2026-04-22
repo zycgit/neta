@@ -26,8 +26,8 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @version : 2026-02-18
  */
 public class DefaultHttpResponse extends AbstractHttpObject<HttpResponse> implements HttpResponse {
-    private HttpVersion version;
-    private HttpStatus  status;
+    private HttpVersion  version;
+    private HttpStatus   status;
     private CharSequence reasonText;
     private CharSequence versionText;
     private CharSequence statusText;
@@ -59,14 +59,14 @@ public class DefaultHttpResponse extends AbstractHttpObject<HttpResponse> implem
      * @param reason raw reason phrase text
      */
     public DefaultHttpResponse(String version, String status, String reason) {
-        this((CharSequence) version, (CharSequence) status, (CharSequence) reason);
+        this(version, status, (CharSequence) reason);
     }
 
     public DefaultHttpResponse(CharSequence version, CharSequence status, CharSequence reason) {
-        if (version == null || version.isEmpty()) {
+        if (version == null) {
             throw new IllegalArgumentException("version must not be empty");
         }
-        if (status == null || status.isEmpty()) {
+        if (status == null) {
             throw new IllegalArgumentException("status must not be empty");
         }
         this.versionText = version;

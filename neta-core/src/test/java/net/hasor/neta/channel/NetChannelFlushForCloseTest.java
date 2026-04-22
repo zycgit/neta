@@ -76,7 +76,7 @@ public class NetChannelFlushForCloseTest {
 
     private static NetChannel createChannel(SoContextService context, TestAsyncChannel asyncChannel) throws Throwable {
         AtomicBoolean pendingFarewell = new AtomicBoolean(false);
-        ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, ByteBuf> handler = new ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, ByteBuf>() {
+        ProtoDuplex<ByteBuf, ByteBuf, ByteBuf, ByteBuf> handler = new ProtoDuplex<ByteBuf, ByteBuf, ByteBuf, ByteBuf>() {
             @Override
             public boolean onEvent(ProtoContext protoContext, SoEvent event, boolean isRcv) {
                 if (!isRcv && event.getData() instanceof SoCloseEvent) {

@@ -84,17 +84,17 @@ public class Http2RealPipelineTest extends AbstractHttp2Test {
         int MAX_CONTENT_LENGTH = 1048576;
         return openVirtualPipe(neta, clientCtx -> {
             ProtoHelper.standard()//
-                    .nextDuplex("h2-frame", new Http2FrameDuplexe(false))   //
-                    .nextDuplex("h2-message", new Http2ObjectDuplexe(false))//
+                    .nextDuplex("h2-frame", new Http2FrameDuplex(false))   //
+                    .nextDuplex("h2-message", new Http2ObjectDuplex(false))//
                     .config(clientCtx);
         }, serverCtx -> {
             ProtoHelper.standard()//
-                    .nextDuplex("h2-frame", new Http2FrameDuplexe(true))    //
-                    .nextDuplex("h2-message", new Http2ObjectDuplexe(true)) //
+                    .nextDuplex("h2-frame", new Http2FrameDuplex(true))    //
+                    .nextDuplex("h2-message", new Http2ObjectDuplex(true)) //
                     .nextPartition("h2-stream", new Http2ObjectPartitionSelector(), pb -> {
                         Http2ObjectPartitionPolicy policy = new Http2ObjectPartitionPolicy();
                         pb.policy(policy).byInitializer(pbc -> {
-                            pbc.addLast("h2-server-aggregator", new HttpServerDuplexeAggregator(MAX_CONTENT_LENGTH));
+                            pbc.addLast("h2-server-aggregator", new HttpServerDuplexAggregator(MAX_CONTENT_LENGTH));
                             pbc.addLastDecoder("h2-handler", handler);
                         }).byDefault(pbc -> {
                             pbc.addLast("h2-control-events", new Http2ObjectStreamManager(pb.control(), policy));

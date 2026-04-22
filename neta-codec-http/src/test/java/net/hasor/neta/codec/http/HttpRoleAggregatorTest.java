@@ -30,7 +30,7 @@ public class HttpRoleAggregatorTest extends AbstractHttpTest {
     public void testServerDuplexeAggregatorAggregatesInboundRequests() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("server-agg", new HttpServerDuplexeAggregator());
+                ctx.addLast("server-agg", new HttpServerDuplexAggregator());
             }, VrtSoConfig.asServer());
 
             List<HttpObject> messages = receiveAndIntBound(pipe,//
@@ -55,7 +55,7 @@ public class HttpRoleAggregatorTest extends AbstractHttpTest {
     public void testServerDuplexeAggregatorAggregatesOutboundResponses() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("server-agg", new HttpServerDuplexeAggregator());
+                ctx.addLast("server-agg", new HttpServerDuplexAggregator());
             }, VrtSoConfig.asServer());
 
             List<HttpObject> messages = sendAndOutBound(pipe,//
@@ -76,7 +76,7 @@ public class HttpRoleAggregatorTest extends AbstractHttpTest {
     public void testServerRoleAggregatorTransparentModeWrapsRawFrames() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe serverPipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("server-agg", new HttpServerDuplexeAggregator());
+                ctx.addLast("server-agg", new HttpServerDuplexAggregator());
             }, VrtSoConfig.asServer());
 
             serverPipe.channel().fireEvent(HttpThroughEvent.class, new HttpThroughEvent(true));
@@ -100,7 +100,7 @@ public class HttpRoleAggregatorTest extends AbstractHttpTest {
     public void testServerRoleAggregatorDisableTransparentModeResumesRequestAggregation() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe serverPipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("server-agg", new HttpServerDuplexeAggregator());
+                ctx.addLast("server-agg", new HttpServerDuplexAggregator());
             }, VrtSoConfig.asServer());
 
             serverPipe.channel().fireEvent(HttpThroughEvent.class, new HttpThroughEvent(true));
@@ -130,7 +130,7 @@ public class HttpRoleAggregatorTest extends AbstractHttpTest {
     public void testServerRoleAggregatorDisableTransparentModeResumesResponseAggregation() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe serverPipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("server-agg", new HttpServerDuplexeAggregator());
+                ctx.addLast("server-agg", new HttpServerDuplexAggregator());
             }, VrtSoConfig.asServer());
 
             serverPipe.channel().fireEvent(HttpThroughEvent.class, new HttpThroughEvent(true));
@@ -160,7 +160,7 @@ public class HttpRoleAggregatorTest extends AbstractHttpTest {
     public void testClientDuplexeAggregatorAggregatesInboundResponses() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("client-agg", new HttpClientDuplexeAggregator());
+                ctx.addLast("client-agg", new HttpClientDuplexAggregator());
             }, VrtSoConfig.asClient());
 
             List<HttpObject> messages = receiveAndIntBound(pipe,//
@@ -181,7 +181,7 @@ public class HttpRoleAggregatorTest extends AbstractHttpTest {
     public void testClientDuplexeAggregatorAggregatesOutboundRequests() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("client-agg", new HttpClientDuplexeAggregator());
+                ctx.addLast("client-agg", new HttpClientDuplexAggregator());
             }, VrtSoConfig.asClient());
 
             List<HttpObject> messages = sendAndOutBound(pipe,//
@@ -202,7 +202,7 @@ public class HttpRoleAggregatorTest extends AbstractHttpTest {
     public void testClientRoleAggregatorTransparentModeWrapsRawFrames() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe clientPipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("client-agg", new HttpClientDuplexeAggregator());
+                ctx.addLast("client-agg", new HttpClientDuplexAggregator());
             }, VrtSoConfig.asClient());
 
             clientPipe.channel().fireEvent(HttpThroughEvent.class, new HttpThroughEvent(true));
@@ -225,7 +225,7 @@ public class HttpRoleAggregatorTest extends AbstractHttpTest {
     public void testClientRoleAggregatorDisableTransparentModeResumesRequestAggregation() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe clientPipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("client-agg", new HttpClientDuplexeAggregator());
+                ctx.addLast("client-agg", new HttpClientDuplexAggregator());
             }, VrtSoConfig.asClient());
 
             clientPipe.channel().fireEvent(HttpThroughEvent.class, new HttpThroughEvent(true));
@@ -255,7 +255,7 @@ public class HttpRoleAggregatorTest extends AbstractHttpTest {
     public void testClientRoleAggregatorDisableTransparentModeResumesResponseAggregation() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe clientPipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("client-agg", new HttpClientDuplexeAggregator());
+                ctx.addLast("client-agg", new HttpClientDuplexAggregator());
             }, VrtSoConfig.asClient());
 
             clientPipe.channel().fireEvent(HttpThroughEvent.class, new HttpThroughEvent(true));

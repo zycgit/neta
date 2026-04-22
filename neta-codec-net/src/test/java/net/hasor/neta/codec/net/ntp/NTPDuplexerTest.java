@@ -15,10 +15,10 @@ public class NTPDuplexerTest {
     public void testDuplexer() throws Throwable {
         NetManager neta = new NetManager();
 
-        // Server: Uses NTPDuplexer
+        // Server: Uses NTPDuplex
         BlockingQueue<NTPMessage> serverReceived = new LinkedBlockingQueue<>();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
-            ctx.addLast(new NTPDuplexer());
+            ctx.addLast(new NTPDuplex());
         }, VrtSoConfig.asServer());
         server.subscribe(SubscribeMode.SYNC, d -> {
             if (d.getData() instanceof NTPMessage) {
@@ -26,10 +26,10 @@ public class NTPDuplexerTest {
             }
         });
 
-        // Client: Uses NTPDuplexer
+        // Client: Uses NTPDuplex
         BlockingQueue<NTPMessage> clientReceived = new LinkedBlockingQueue<>();
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
-            ctx.addLast(new NTPDuplexer());
+            ctx.addLast(new NTPDuplex());
         }, VrtSoConfig.asClient());
         client.subscribe(SubscribeMode.SYNC, d -> {
             if (d.getData() instanceof NTPMessage) {

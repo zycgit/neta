@@ -31,11 +31,11 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * <p><b>Flow:</b>
  * <pre>
  *   network ciphertext
- *       -> SslDuplexer (RCV)
+ *       -> SslDuplex (RCV)
  *       -> SSLEngine.unwrap(...)
  *       -> plaintext ByteBuf for upper handlers
  *   application plaintext
- *       -> SslDuplexer (SND)
+ *       -> SslDuplex (SND)
  *       -> SSLEngine.wrap(...)
  *       -> ciphertext ByteBuf for the transport
  * </pre>
@@ -52,7 +52,7 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * </ul>
  * <p><b>Pipeline placement:</b>
  * <pre>
- *   ctx.addFirst("ssl", new SslDuplexer(sslConfig));
+ *   ctx.addFirst("ssl", new SslDuplex(sslConfig));
  *   ctx.addLast("http", httpDuplexer);
  * </pre>
  * @author 赵永春 (zyc@hasor.net)
@@ -60,12 +60,12 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * @see SslContext
  * @see SslCertConfig
  */
-public class SslDuplexer implements ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, ByteBuf> {
-    private static final Logger logger = Logger.getLogger(SslDuplexer.class);
+public class SslDuplex implements ProtoDuplex<ByteBuf, ByteBuf, ByteBuf, ByteBuf> {
+    private static final Logger logger = Logger.getLogger(SslDuplex.class);
     private final SslConfig     config;
 
     /** Creates an SSL duplexer with the given SSL configuration. */
-    public SslDuplexer(SslConfig config) {
+    public SslDuplex(SslConfig config) {
         this.config = Objects.requireNonNull(config);
     }
 

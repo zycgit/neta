@@ -31,8 +31,8 @@ import net.hasor.neta.channel.transport.virtual.VrtSocketAddress;
  * @version : 2022-11-01
  */
 public class ProtoEventTest extends AbstractStackTest {
-    public static ProtoDuplexer<Integer, Integer, Integer, Integer> theDuplexer(String tag, List<String> record) {
-        return new ProtoDuplexer<Integer, Integer, Integer, Integer>() {
+    public static ProtoDuplex<Integer, Integer, Integer, Integer> theDuplexer(String tag, List<String> record) {
+        return new ProtoDuplex<Integer, Integer, Integer, Integer>() {
             @Override
             public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) {
                 record.add(tag + "-OnInit");
@@ -225,7 +225,7 @@ public class ProtoEventTest extends AbstractStackTest {
 
         ProtoInitializer initializer = (ctx) -> {
             ctx.addLast("a", theDuplexer("a", record));
-            ctx.addLast("mid", new ProtoDuplexer<Integer, Integer, Integer, Integer>() {
+            ctx.addLast("mid", new ProtoDuplex<Integer, Integer, Integer, Integer>() {
                 @Override
                 public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) {
                 }
@@ -279,7 +279,7 @@ public class ProtoEventTest extends AbstractStackTest {
 
         ProtoInitializer initializer = (ctx) -> {
             ctx.addLast("a", theDuplexer("a", record));
-            ctx.addLast("mid", new ProtoDuplexer<Integer, Integer, Integer, Integer>() {
+            ctx.addLast("mid", new ProtoDuplex<Integer, Integer, Integer, Integer>() {
                 @Override
                 public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) {
                 }

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
+import java.util.List;
 /**
  * Default implementation of {@link LastHttpHeaders}.
  * <p>
@@ -30,6 +31,10 @@ public class DefaultLastHttpHeaders extends DefaultHttpHeaders implements LastHt
      */
     public DefaultLastHttpHeaders() {
         super();
+    }
+
+    DefaultLastHttpHeaders(List<DefaultHttpHeaderEntry> entries, boolean releasableEntries) {
+        super(entries, releasableEntries);
     }
 
     /**

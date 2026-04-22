@@ -87,7 +87,7 @@ public class SoUtils {
         return String.format("%s/%s", decName, encName);
     }
 
-    static String generateName(ProtoDuplexer<?, ?, ?, ?> duplexer) {
+    static String generateName(ProtoDuplex<?, ?, ?, ?> duplexer) {
         return Integer.toHexString(System.identityHashCode(duplexer));
     }
 

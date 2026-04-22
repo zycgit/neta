@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.routing;
-import net.hasor.neta.channel.ProtoRoutingDuplexer;
+import net.hasor.neta.channel.ProtoRoutingDuplex;
+
 /**
- * Routing mode of {@link ProtoRoutingDuplexer}.
+ * Routing mode of {@link ProtoRoutingDuplex}.
  * <p>It decides whether a route selection is reused after the first match or recalculated for each
  * inbound message.</p>
  * @author 赵永春 (zyc@hasor.net)

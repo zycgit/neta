@@ -239,7 +239,7 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
 
     @Test
     public void partitionPipelineShouldStopMatchedEventWhenBranchReturnsFalse() throws Throwable {
-        ProtoPartitionDuplexer<PartitionMessage, PartitionMessage> duplexer = new ProtoPartitionDuplexer<>(new MessagePartitionSelector());
+        ProtoPartitionDuplex<PartitionMessage, PartitionMessage> duplexer = new ProtoPartitionDuplex<>(new MessagePartitionSelector());
         duplexer.configDuplexer(null, ctx -> ctx.addLastDecoder("event-stop", new EventStopHandler()), null);
 
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(2), ctx -> {
@@ -257,7 +257,7 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
 
     @Test
     public void partitionPipelineShouldPassThroughUnmatchedEventWhenDefaultPartitionIsAbsent() throws Throwable {
-        ProtoPartitionDuplexer<PartitionMessage, PartitionMessage> duplexer = new ProtoPartitionDuplexer<>(new MessagePartitionSelector());
+        ProtoPartitionDuplex<PartitionMessage, PartitionMessage> duplexer = new ProtoPartitionDuplex<>(new MessagePartitionSelector());
         duplexer.configDuplexer(null, ctx -> ctx.addLastDecoder("collector", new CollectingHandler()), null);
 
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(12), ctx -> {
@@ -287,7 +287,7 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
 
     @Test
     public void partitionPipelineShouldFlushPendingOutputAfterDownstreamRecovery() throws Throwable {
-        ProtoPartitionDuplexer<PartitionMessage, PartitionMessage> duplexer = new ProtoPartitionDuplexer<>(new MessagePartitionSelector());
+        ProtoPartitionDuplex<PartitionMessage, PartitionMessage> duplexer = new ProtoPartitionDuplex<>(new MessagePartitionSelector());
         duplexer.configDuplexer(null, ctx -> ctx.addLastDecoder("splitter", new SplitOutputHandler()), null);
 
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(3), ctx -> {
@@ -369,7 +369,7 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
 
     @Test
     public void partitionPipelineShouldPassThroughSendDirectionWithoutRouting() throws Throwable {
-        ProtoPartitionDuplexer<PartitionMessage, PartitionMessage> duplexer = new ProtoPartitionDuplexer<>(new MessagePartitionSelector());
+        ProtoPartitionDuplex<PartitionMessage, PartitionMessage> duplexer = new ProtoPartitionDuplex<>(new MessagePartitionSelector());
         duplexer.configDuplexer(null, ctx -> {
             ctx.addLastDecoder("collector", new CollectingHandler());
         }, null);
@@ -682,7 +682,7 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
         }
     }
 
-    private static class EventEchoHandler implements ProtoDuplexer<PartitionMessage, PartitionMessage, PartitionMessage, PartitionMessage> {
+    private static class EventEchoHandler implements ProtoDuplex<PartitionMessage, PartitionMessage, PartitionMessage, PartitionMessage> {
         @Override
         public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) throws Throwable {
             Object eventData = event.getData();

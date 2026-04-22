@@ -30,7 +30,7 @@ public class HttpRoleDuplexeTest extends AbstractHttpTest {
     public void testServerDuplexeDecodesInboundRequests() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("server-http", new HttpServerDuplexe());
+                ctx.addLast("server-http", new HttpServerDuplex());
             }, VrtSoConfig.asServer());
 
             List<HttpObject> messages = receiveAndIntBound(pipe, ascii("GET /server HTTP/1.1\r\nHost: example.com\r\n\r\n"));
@@ -47,7 +47,7 @@ public class HttpRoleDuplexeTest extends AbstractHttpTest {
     public void testServerDuplexeEncodesOutboundResponses() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("server-http", new HttpServerDuplexe());
+                ctx.addLast("server-http", new HttpServerDuplex());
             }, VrtSoConfig.asServer());
 
             List<ByteBuf> parts = sendAndOutBound(pipe, //
@@ -65,7 +65,7 @@ public class HttpRoleDuplexeTest extends AbstractHttpTest {
     public void testServerRoleDuplexeTransparentModeWrapsRawFrames() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe serverPipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("server-http", new HttpServerDuplexe());
+                ctx.addLast("server-http", new HttpServerDuplex());
             }, VrtSoConfig.asServer());
 
             serverPipe.channel().fireEvent(HttpThroughEvent.class, new HttpThroughEvent(true, 31));
@@ -91,7 +91,7 @@ public class HttpRoleDuplexeTest extends AbstractHttpTest {
     public void testServerRoleDuplexeDisableTransparentModeResumesRequestDecoding() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe serverPipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("server-http", new HttpServerDuplexe());
+                ctx.addLast("server-http", new HttpServerDuplex());
             }, VrtSoConfig.asServer());
 
             serverPipe.channel().fireEvent(HttpThroughEvent.class, new HttpThroughEvent(true));
@@ -114,7 +114,7 @@ public class HttpRoleDuplexeTest extends AbstractHttpTest {
     public void testServerRoleDuplexeDisableTransparentModeResumesResponseEncoding() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe serverPipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("server-http", new HttpServerDuplexe());
+                ctx.addLast("server-http", new HttpServerDuplex());
             }, VrtSoConfig.asServer());
 
             serverPipe.channel().fireEvent(HttpThroughEvent.class, new HttpThroughEvent(true));
@@ -135,7 +135,7 @@ public class HttpRoleDuplexeTest extends AbstractHttpTest {
     public void testClientDuplexeDecodesInboundResponses() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("client-http", new HttpClientDuplexe());
+                ctx.addLast("client-http", new HttpClientDuplex());
             }, VrtSoConfig.asClient());
 
             List<HttpObject> messages = receiveAndIntBound(pipe, ascii("HTTP/1.1 202 Accepted\r\nContent-Length: 2\r\n\r\n{}"));
@@ -152,7 +152,7 @@ public class HttpRoleDuplexeTest extends AbstractHttpTest {
     public void testClientDuplexeEncodesOutboundRequests() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("client-http", new HttpClientDuplexe());
+                ctx.addLast("client-http", new HttpClientDuplex());
             }, VrtSoConfig.asClient());
 
             List<ByteBuf> parts = sendAndOutBound(pipe,//
@@ -170,7 +170,7 @@ public class HttpRoleDuplexeTest extends AbstractHttpTest {
     public void testClientRoleDuplexeTransparentModeWrapsRawFrames() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe clientPipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("client-http", new HttpClientDuplexe());
+                ctx.addLast("client-http", new HttpClientDuplex());
             }, VrtSoConfig.asClient());
 
             clientPipe.channel().fireEvent(HttpThroughEvent.class, new HttpThroughEvent(true));
@@ -195,7 +195,7 @@ public class HttpRoleDuplexeTest extends AbstractHttpTest {
     public void testClientRoleDuplexeDisableTransparentModeResumesResponseDecoding() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe clientPipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("client-http", new HttpClientDuplexe());
+                ctx.addLast("client-http", new HttpClientDuplex());
             }, VrtSoConfig.asClient());
 
             clientPipe.channel().fireEvent(HttpThroughEvent.class, new HttpThroughEvent(true));
@@ -217,7 +217,7 @@ public class HttpRoleDuplexeTest extends AbstractHttpTest {
     public void testClientRoleDuplexeDisableTransparentModeResumesRequestEncoding() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe clientPipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("client-http", new HttpClientDuplexe());
+                ctx.addLast("client-http", new HttpClientDuplex());
             }, VrtSoConfig.asClient());
 
             clientPipe.channel().fireEvent(HttpThroughEvent.class, new HttpThroughEvent(true));

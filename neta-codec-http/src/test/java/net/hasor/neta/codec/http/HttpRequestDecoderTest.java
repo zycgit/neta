@@ -167,6 +167,41 @@ public class HttpRequestDecoderTest extends AbstractHttpTest {
     }
 
     @Test
+    public void testRequestDecoderParsesFragmentedInitialHeadersAndTrailers() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastDecoder("req-decoder", new HttpRequestDecoder());
+            }, VrtSoConfig.asServer());
+
+            List<HttpObject> batch1 = receiveAndIntBound(pipe, ascii("PO"));
+            assertTrue(batch1.isEmpty());
+
+            List<HttpObject> batch2 = receiveAndIntBound(pipe, ascii("ST /upload HTTP/1.1\r\nTransfer-Encoding: chu"));
+            assertEquals(1, batch2.size());
+            assertTrue(batch2.get(0) instanceof HttpRequest);
+            assertEquals(HttpMethod.POST, ((HttpRequest) batch2.get(0)).method());
+            assertEquals("/upload", ((HttpRequest) batch2.get(0)).uri());
+
+            List<HttpObject> batch3 = receiveAndIntBound(pipe, ascii("nked\r\nHost: example.com\r\n\r\n4\r"));
+            assertEquals(1, batch3.size());
+            assertTrue(batch3.get(0) instanceof LastHttpHeaders);
+            assertEquals("chunked", ((HttpHeaders) batch3.get(0)).getString(HttpHeaderNames.TRANSFER_ENCODING));
+            assertEquals("example.com", ((HttpHeaders) batch3.get(0)).getString(HttpHeaderNames.HOST));
+
+            List<HttpObject> batch4 = receiveAndIntBound(pipe, ascii("\nWiki\r\n0\r\nX-Trail: do"));
+            assertEquals(1, batch4.size());
+            assertTrue(batch4.get(0) instanceof HttpContent);
+            assertEquals("Wiki", body((HttpContent) batch4.get(0)));
+
+            List<HttpObject> batch5 = receiveAndIntBound(pipe, ascii("ne\r\n\r\n"));
+            assertEquals(2, batch5.size());
+            assertTrue(batch5.get(0) instanceof TrailerHttpHeaders);
+            assertEquals("done", ((HttpHeaders) batch5.get(0)).getString("X-Trail"));
+            assertTrue(batch5.get(1) instanceof LastHttpContent);
+        });
+    }
+
+    @Test
     public void testRequestDecoderRejectsInvalidChunkDelimiter() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {

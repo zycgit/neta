@@ -25,33 +25,33 @@ import net.hasor.neta.codec.http.HttpObject;
  * <p>
  * Pipeline view:
  * <pre>
- * inbound: Http3Frame -> Http3ObjectDuplexe -> HttpObject
- * outbound: HttpObject -> Http3ObjectDuplexe -> Http3Frame
+ * inbound: Http3Frame -> Http3ObjectDuplex -> HttpObject
+ * outbound: HttpObject -> Http3ObjectDuplex -> Http3Frame
  * </pre>
  * <p>
  * Typical usage:
  * <pre>
  * Http3Settings settings = Http3Settings.defaultLocalSettings(true);
- * ctx.addLast("h3-frame", new Http3FrameDuplexe(true, settings));
- * ctx.addLast("h3-object", new Http3ObjectDuplexe(true, settings));
+ * ctx.addLast("h3-frame", new Http3FrameDuplex(true, settings));
+ * ctx.addLast("h3-object", new Http3ObjectDuplex(true, settings));
  * ctx.addLast("aggregator", new HttpServerDuplexeAggregator(1048576));
  * </pre>
  */
-public class Http3ObjectDuplexe implements ProtoDuplexer<Http3Frame, HttpObject, HttpObject, Http3Frame> {
-    private static final Logger           logger = Logger.getLogger(Http3ObjectDuplexe.class);
+public class Http3ObjectDuplex implements ProtoDuplex<Http3Frame, HttpObject, HttpObject, Http3Frame> {
+    private static final Logger           logger = Logger.getLogger(Http3ObjectDuplex.class);
     private final boolean                 serverMode;
     private final Http3FrameToHttpDecoder decoder;
     private final Http3HttpToFrameEncoder encoder;
 
-    public Http3ObjectDuplexe(boolean serverMode) {
+    public Http3ObjectDuplex(boolean serverMode) {
         this(serverMode, Http3Settings.defaultLocalSettings(serverMode));
     }
 
-    public Http3ObjectDuplexe(boolean serverMode, int maxTableSize, int maxHeaderListSize) {
+    public Http3ObjectDuplex(boolean serverMode, int maxTableSize, int maxHeaderListSize) {
         this(serverMode, Http3Settings.defaultLocalSettings(serverMode, maxTableSize, maxHeaderListSize, Http3Settings.DEFAULT_LOCAL_QPACK_BLOCKED_STREAMS));
     }
 
-    public Http3ObjectDuplexe(boolean serverMode, Http3Settings localSettings) {
+    public Http3ObjectDuplex(boolean serverMode, Http3Settings localSettings) {
         this.serverMode = serverMode;
         Http3Settings settings = localSettings != null ? new Http3Settings(localSettings) : Http3Settings.defaultLocalSettings(serverMode);
         this.decoder = new Http3FrameToHttpDecoder(serverMode, settings);

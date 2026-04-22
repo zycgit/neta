@@ -49,15 +49,15 @@ public class RealHttp2Test extends AbstractHttpTest {
         OkHttpClient client = h2PriorKnowledgeClient();
         try {
             neta.bind(new InetSocketAddress("127.0.0.1", port), ctx -> ProtoHelper.standard()//
-                    .nextDuplex("h2-frame", new Http2FrameDuplexe(true))//
-                    .nextDuplex("h2-message", new Http2ObjectDuplexe(true))//
+                    .nextDuplex("h2-frame", new Http2FrameDuplex(true))//
+                    .nextDuplex("h2-message", new Http2ObjectDuplex(true))//
                     .nextPartition("h2-stream", new Http2ObjectPartitionSelector(), pp -> {
                         Http2ObjectPartitionPolicy policy = new Http2ObjectPartitionPolicy();
                         ProtoPartitionControl control = pp.control();
                         pp.policy(policy).byDefault(p -> {
                             p.addLast("h2-control-lifecycle", new Http2ObjectStreamManager(control, policy));
                         }).byInitializer(p -> {
-                            p.addLast("h2-aggregator", new HttpServerDuplexeAggregator(MAX_CONTENT_LENGTH));
+                            p.addLast("h2-aggregator", new HttpServerDuplexAggregator(MAX_CONTENT_LENGTH));
                             p.addLastDecoder("h2-handler", new InlineServerHandler("server"));
                         });
                     }).config(ctx), SoConfig.TCP());
@@ -108,7 +108,7 @@ public class RealHttp2Test extends AbstractHttpTest {
         NetaH2ClientHarness client = null;
         try {
             client = new NetaH2ClientHarness(neta.connectSync(new InetSocketAddress("127.0.0.1", connector.getLocalPort()), ctx -> {
-                ProtoHelper.standard().nextDuplex("h2-frame", new Http2FrameDuplexe(false)).nextDuplex("h2-message", new Http2ObjectDuplexe(false)).nextDuplex("h2-client-aggregator", new HttpClientDuplexeAggregator(MAX_CONTENT_LENGTH)).build().config(ctx);
+                ProtoHelper.standard().nextDuplex("h2-frame", new Http2FrameDuplex(false)).nextDuplex("h2-message", new Http2ObjectDuplex(false)).nextDuplex("h2-client-aggregator", new HttpClientDuplexAggregator(MAX_CONTENT_LENGTH)).build().config(ctx);
             }, SoConfig.TCP()));
 
             DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, "/hello");

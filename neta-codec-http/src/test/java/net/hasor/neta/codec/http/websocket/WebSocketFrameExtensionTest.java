@@ -171,7 +171,7 @@ public class WebSocketFrameExtensionTest extends AbstractWebSocketTest {
 
     private VirtualPipe extensionPipe(NetManager neta, boolean server, WebSocketContext context) throws Throwable {
         return openVirtualPipe(neta, ctx -> {
-            ctx.addLast("ws-ext", new WebSocketExtensionDuplexer());
+            ctx.addLast("ws-ext", new WebSocketExtensionDuplex());
             WebSocketRegistry.bind(ctx, WebSocketRegistryKey.connectionScope(), context);
         }, server ? VrtSoConfig.asServer() : VrtSoConfig.asClient());
     }
@@ -237,7 +237,7 @@ public class WebSocketFrameExtensionTest extends AbstractWebSocketTest {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
                 WebSocketRegistry.bind(ctx, WebSocketRegistryKey.connectionScope(), MockWebSocketContext.server(WebSocketVersion.V13, "/chat"));
                 ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder());
-                ctx.addLast("ws-ext", new WebSocketExtensionDuplexer());
+                ctx.addLast("ws-ext", new WebSocketExtensionDuplex());
             }, VrtSoConfig.asServer());
 
             byte[] broken = buildRfc6455Frame(0x01, true, true, new byte[] { 0x01, 0x02, 0x03, 0x04 }, "bad".getBytes(StandardCharsets.UTF_8));
@@ -258,7 +258,7 @@ public class WebSocketFrameExtensionTest extends AbstractWebSocketTest {
                 WebSocketContext context = negotiatedPerMessageDeflateContext(true);
                 WebSocketRegistry.bind(ctx, WebSocketRegistryKey.connectionScope(), context);
                 ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder());
-                ctx.addLast("ws-ext", new WebSocketExtensionDuplexer());
+                ctx.addLast("ws-ext", new WebSocketExtensionDuplex());
             }, VrtSoConfig.asServer());
 
             byte[] compressed = rawPerMessageDeflate("hello deflate".getBytes(StandardCharsets.UTF_8), 15);
@@ -280,7 +280,7 @@ public class WebSocketFrameExtensionTest extends AbstractWebSocketTest {
                 WebSocketContext context = negotiatedPerMessageDeflateContext(true);
                 WebSocketRegistry.bind(ctx, WebSocketRegistryKey.connectionScope(), context);
                 ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder());
-                ctx.addLast("ws-ext", new WebSocketExtensionDuplexer());
+                ctx.addLast("ws-ext", new WebSocketExtensionDuplex());
             }, VrtSoConfig.asServer());
 
             byte[] wire = buildRfc6455Frame(0x09, true, true, new byte[] { 0x01, 0x02, 0x03, 0x04 }, "x".getBytes(StandardCharsets.UTF_8));
@@ -310,7 +310,7 @@ public class WebSocketFrameExtensionTest extends AbstractWebSocketTest {
     public void testFrameEncoderDeflatesPayloadWhenPerMessageDeflateNegotiated() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("ws-ext", new WebSocketExtensionDuplexer());
+                ctx.addLast("ws-ext", new WebSocketExtensionDuplex());
                 WebSocketContext context = negotiatedPerMessageDeflateContext(false);
                 WebSocketRegistry.bind(ctx, WebSocketRegistryKey.connectionScope(), context);
             }, VrtSoConfig.asClient());
@@ -334,7 +334,7 @@ public class WebSocketFrameExtensionTest extends AbstractWebSocketTest {
                 WebSocketContext context = negotiatedPerMessageDeflateContext(true);
                 WebSocketRegistry.bind(ctx, WebSocketRegistryKey.connectionScope(), context);
                 ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder());
-                ctx.addLast("ws-ext", new WebSocketExtensionDuplexer());
+                ctx.addLast("ws-ext", new WebSocketExtensionDuplex());
             }, VrtSoConfig.asServer());
 
             byte[] compressed = rawPerMessageDeflate("fragmented-deflate".getBytes(StandardCharsets.UTF_8), 15);
@@ -366,7 +366,7 @@ public class WebSocketFrameExtensionTest extends AbstractWebSocketTest {
     public void testFrameEncoderDeflatesFragmentedPerMessageDeflateMessageWhenNegotiated() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("ws-ext", new WebSocketExtensionDuplexer());
+                ctx.addLast("ws-ext", new WebSocketExtensionDuplex());
                 WebSocketContext context = negotiatedPerMessageDeflateContext(false);
                 WebSocketRegistry.bind(ctx, WebSocketRegistryKey.connectionScope(), context);
             }, VrtSoConfig.asClient());
@@ -480,7 +480,7 @@ public class WebSocketFrameExtensionTest extends AbstractWebSocketTest {
                 WebSocketContext context = negotiatedDeflateFrameContext(true);
                 WebSocketRegistry.bind(ctx, WebSocketRegistryKey.connectionScope(), context);
                 ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder());
-                ctx.addLast("ws-ext", new WebSocketExtensionDuplexer());
+                ctx.addLast("ws-ext", new WebSocketExtensionDuplex());
             }, VrtSoConfig.asServer());
 
             byte[] compressed = rawDeflate("hello frame".getBytes(StandardCharsets.UTF_8));
@@ -499,7 +499,7 @@ public class WebSocketFrameExtensionTest extends AbstractWebSocketTest {
     public void testFrameEncoderDeflatesPayloadWhenDeflateFrameNegotiated() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("ws-ext", new WebSocketExtensionDuplexer());
+                ctx.addLast("ws-ext", new WebSocketExtensionDuplex());
                 WebSocketContext context = negotiatedDeflateFrameContext(false);
                 WebSocketRegistry.bind(ctx, WebSocketRegistryKey.connectionScope(), context);
             }, VrtSoConfig.asClient());
@@ -520,7 +520,7 @@ public class WebSocketFrameExtensionTest extends AbstractWebSocketTest {
     public void testFrameEncoderDeflatesPayloadWhenXWebkitDeflateFrameNegotiated() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("ws-ext", new WebSocketExtensionDuplexer());
+                ctx.addLast("ws-ext", new WebSocketExtensionDuplex());
                 WebSocketContext context = negotiatedXWebkitDeflateFrameContext(false);
                 WebSocketRegistry.bind(ctx, WebSocketRegistryKey.connectionScope(), context);
             }, VrtSoConfig.asClient());

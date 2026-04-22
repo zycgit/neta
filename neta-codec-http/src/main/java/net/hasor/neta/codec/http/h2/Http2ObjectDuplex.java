@@ -35,16 +35,16 @@ import net.hasor.neta.codec.http.HttpProtocolStateException;
  * <p>
  * Pipeline view:
  * <pre>
- *   inbound:  Http2Frame  -> Http2ObjectDuplexe -> HttpObject
- *   outbound: HttpObject  -> Http2ObjectDuplexe -> Http2Frame
+ *   inbound:  Http2Frame  -> Http2ObjectDuplex -> HttpObject
+ *   outbound: HttpObject  -> Http2ObjectDuplex -> Http2Frame
  * </pre>
  * <p>
  * Recommended usage falls into two scenarios depending on the processing goal:
  * <p>
  * Scenario 1: stream the HTTP/2 message parts.
  * <pre>
- *   ctx.addLast("h2-frame", new Http2FrameDuplexe(true));
- *   ctx.addLast("h2-object", new Http2ObjectDuplexe(true));
+ *   ctx.addLast("h2-frame", new Http2FrameDuplex(true));
+ *   ctx.addLast("h2-object", new Http2ObjectDuplex(true));
  *   ctx.addLast("handler", streamPartHandler);
  * </pre>
  * This mode works directly with the {@link HttpObject} stream and suits proxy forwarding,
@@ -53,8 +53,8 @@ import net.hasor.neta.codec.http.HttpProtocolStateException;
  * <p>
  * Scenario 2: aggregate the full HTTP/2 message.
  * <pre>
- *   ctx.addLast("h2-frame", new Http2FrameDuplexe(true));
- *   ctx.addLast("h2-object", new Http2ObjectDuplexe(true));
+ *   ctx.addLast("h2-frame", new Http2FrameDuplex(true));
+ *   ctx.addLast("h2-object", new Http2ObjectDuplex(true));
  *   ctx.addLastDecoder("http-agg", new HttpRequestAggregator(1048576));
  *   ctx.addLast("handler", fullMessageHandler);
  * </pre>
@@ -69,7 +69,7 @@ import net.hasor.neta.codec.http.HttpProtocolStateException;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-25
  */
-public class Http2ObjectDuplexe implements ProtoDuplexer<Http2Frame, HttpObject, HttpObject, Http2Frame> {
+public class Http2ObjectDuplex implements ProtoDuplex<Http2Frame, HttpObject, HttpObject, Http2Frame> {
     private final Http2ObjectDecoder  decoder;
     private final Http2ObjectEncoder  encoder;
     private final ProtoRoutingControl routingControl;
@@ -77,28 +77,28 @@ public class Http2ObjectDuplexe implements ProtoDuplexer<Http2Frame, HttpObject,
     /**
      * Creates a message-layer duplex codec for the given endpoint role using default local settings.
      */
-    public Http2ObjectDuplexe(boolean serverMode) {
+    public Http2ObjectDuplex(boolean serverMode) {
         this(serverMode, Http2Settings.defaultLocalSettings(serverMode), null);
     }
 
     /**
      * Creates a message-layer duplex codec with route-seed support for an upgraded HTTP/2 branch.
      */
-    public Http2ObjectDuplexe(boolean serverMode, ProtoRoutingControl routingControl) {
+    public Http2ObjectDuplex(boolean serverMode, ProtoRoutingControl routingControl) {
         this(serverMode, Http2Settings.defaultLocalSettings(serverMode), routingControl);
     }
 
     /**
      * Creates a message-layer duplex codec for the given endpoint role and local settings.
      */
-    public Http2ObjectDuplexe(boolean serverMode, Http2Settings localSettings) {
+    public Http2ObjectDuplex(boolean serverMode, Http2Settings localSettings) {
         this(serverMode, localSettings, null);
     }
 
     /**
      * Creates a message-layer duplex codec for the given endpoint role with explicit settings and routing control.
      */
-    public Http2ObjectDuplexe(boolean serverMode, Http2Settings localSettings, ProtoRoutingControl routingControl) {
+    public Http2ObjectDuplex(boolean serverMode, Http2Settings localSettings, ProtoRoutingControl routingControl) {
         localSettings = localSettings != null ? new Http2Settings(localSettings) : Http2Settings.defaultLocalSettings(serverMode);
         this.decoder = new Http2ObjectDecoder(serverMode, localSettings);
         this.encoder = new Http2ObjectEncoder(serverMode, localSettings);

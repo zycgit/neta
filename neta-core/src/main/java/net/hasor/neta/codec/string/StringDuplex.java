@@ -18,7 +18,7 @@ import java.nio.charset.Charset;
 import java.util.Objects;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.ProtoDuplexer;
+import net.hasor.neta.channel.ProtoDuplex;
 import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
@@ -35,21 +35,21 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-21
  */
-public class StringDuplexer implements ProtoDuplexer<ByteBuf, String, String, ByteBuf> {
+public class StringDuplex implements ProtoDuplex<ByteBuf, String, String, ByteBuf> {
     private final StringDecoder stringDecoder;
     private final StringEncoder stringEncoder;
 
     /**
      * Creates a new instance with the current system character set.
      */
-    public StringDuplexer() {
+    public StringDuplex() {
         this(Charset.defaultCharset());
     }
 
     /**
      * Creates a new instance with the specified character set.
      */
-    public StringDuplexer(Charset charset) {
+    public StringDuplex(Charset charset) {
         Objects.requireNonNull(charset, "charset");
         this.stringDecoder = new StringDecoder(charset);
         this.stringEncoder = new StringEncoder(charset);

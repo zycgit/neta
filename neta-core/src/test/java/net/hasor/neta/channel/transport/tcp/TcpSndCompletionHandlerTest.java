@@ -24,8 +24,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.Test;
 
 import net.hasor.neta.channel.NetMonitor;
-import net.hasor.neta.channel.SoSndContext;
 import net.hasor.neta.channel.SoContextService;
+import net.hasor.neta.channel.SoSndContext;
 import net.hasor.neta.channel.WriteRetryTestHelper;
 
 /**

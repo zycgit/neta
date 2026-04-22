@@ -501,7 +501,7 @@ class ProtoContextService implements ProtoBuildContext {
     public void addFirst(ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder) {
         Objects.requireNonNull(decoder, "decoder is null.");
         Objects.requireNonNull(encoder, "encoder is null.");
-        this.addFirst(SoUtils.generateName(decoder, encoder), new ProtoDuplexerHandlerWrap<>(decoder, encoder));
+        this.addFirst(SoUtils.generateName(decoder, encoder), new ProtoDuplexHandlerWrap<>(decoder, encoder));
     }
 
     /** {@inheritDoc} */
@@ -509,25 +509,25 @@ class ProtoContextService implements ProtoBuildContext {
     public void addFirst(String name, ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder) {
         Objects.requireNonNull(decoder, "decoder is null.");
         Objects.requireNonNull(encoder, "encoder is null.");
-        this.addFirst(name, new ProtoDuplexerHandlerWrap<>(decoder, encoder));
+        this.addFirst(name, new ProtoDuplexHandlerWrap<>(decoder, encoder));
     }
 
     /** {@inheritDoc} */
     @Override
-    public void addFirst(ProtoDuplexer<?, ?, ?, ?> duplexer) {
+    public void addFirst(ProtoDuplex<?, ?, ?, ?> duplexer) {
         Objects.requireNonNull(duplexer, "duplexer is null.");
         this.addFirst(SoUtils.generateName(duplexer), duplexer);
     }
 
     /** {@inheritDoc} */
     @Override
-    public void addFirst(String name, ProtoDuplexer<?, ?, ?, ?> duplexer) {
+    public void addFirst(String name, ProtoDuplex<?, ?, ?, ?> duplexer) {
         this.addFirst(name, ProtoConfig.DEFAULT, duplexer);
     }
 
     /** {@inheritDoc} */
     @Override
-    public void addFirst(String name, ProtoConfig protoConf, ProtoDuplexer<?, ?, ?, ?> duplexer) {
+    public void addFirst(String name, ProtoConfig protoConf, ProtoDuplex<?, ?, ?, ?> duplexer) {
         Objects.requireNonNull(name, "name is null.");
         Objects.requireNonNull(protoConf, "protoConf is null.");
         Objects.requireNonNull(duplexer, "duplexer is null.");
@@ -546,7 +546,7 @@ class ProtoContextService implements ProtoBuildContext {
     public void addLast(ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder) {
         Objects.requireNonNull(decoder, "decoder is null.");
         Objects.requireNonNull(encoder, "encoder is null.");
-        this.addLast(SoUtils.generateName(decoder, encoder), new ProtoDuplexerHandlerWrap<>(decoder, encoder));
+        this.addLast(SoUtils.generateName(decoder, encoder), new ProtoDuplexHandlerWrap<>(decoder, encoder));
     }
 
     /** {@inheritDoc} */
@@ -554,25 +554,25 @@ class ProtoContextService implements ProtoBuildContext {
     public void addLast(String name, ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder) {
         Objects.requireNonNull(decoder, "decoder is null.");
         Objects.requireNonNull(encoder, "encoder is null.");
-        this.addLast(name, new ProtoDuplexerHandlerWrap<>(decoder, encoder));
+        this.addLast(name, new ProtoDuplexHandlerWrap<>(decoder, encoder));
     }
 
     /** {@inheritDoc} */
     @Override
-    public void addLast(ProtoDuplexer<?, ?, ?, ?> duplexer) {
+    public void addLast(ProtoDuplex<?, ?, ?, ?> duplexer) {
         Objects.requireNonNull(duplexer, "duplexer is null.");
         this.addLast(SoUtils.generateName(duplexer), duplexer);
     }
 
     /** {@inheritDoc} */
     @Override
-    public void addLast(String name, ProtoDuplexer<?, ?, ?, ?> duplexer) {
+    public void addLast(String name, ProtoDuplex<?, ?, ?, ?> duplexer) {
         this.addLast(name, ProtoConfig.DEFAULT, duplexer);
     }
 
     /** {@inheritDoc} */
     @Override
-    public void addLast(String name, ProtoConfig protoConf, ProtoDuplexer<?, ?, ?, ?> duplexer) {
+    public void addLast(String name, ProtoConfig protoConf, ProtoDuplex<?, ?, ?, ?> duplexer) {
         Objects.requireNonNull(name, "name is null.");
         Objects.requireNonNull(protoConf, "protoConf is null.");
         Objects.requireNonNull(duplexer, "duplexer is null.");
@@ -591,7 +591,7 @@ class ProtoContextService implements ProtoBuildContext {
     public void addLast(String name, ProtoConfig protoConf, ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder) {
         Objects.requireNonNull(decoder, "decoder is null.");
         Objects.requireNonNull(encoder, "encoder is null.");
-        this.addLast(name, protoConf, new ProtoDuplexerHandlerWrap<>(decoder, encoder));
+        this.addLast(name, protoConf, new ProtoDuplexHandlerWrap<>(decoder, encoder));
     }
 
     /** {@inheritDoc} */
@@ -599,7 +599,7 @@ class ProtoContextService implements ProtoBuildContext {
     public void addFirst(String name, ProtoConfig protoConf, ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder) {
         Objects.requireNonNull(decoder, "decoder is null.");
         Objects.requireNonNull(encoder, "encoder is null.");
-        this.addFirst(name, protoConf, new ProtoDuplexerHandlerWrap<>(decoder, encoder));
+        this.addFirst(name, protoConf, new ProtoDuplexHandlerWrap<>(decoder, encoder));
     }
 
     /** {@inheritDoc} */

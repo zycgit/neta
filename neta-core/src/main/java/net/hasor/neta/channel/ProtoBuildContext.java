@@ -65,14 +65,14 @@ public interface ProtoBuildContext extends ProtoContext {
      * Add a duplexer to the pipeline head.
      * @param duplexer duplexer that should take effect first
      */
-    void addFirst(ProtoDuplexer<?, ?, ?, ?> duplexer);
+    void addFirst(ProtoDuplex<?, ?, ?, ?> duplexer);
 
     /**
      * Add a duplexer to the pipeline head with a name.
      * @param name duplexer name
      * @param duplexer duplexer that should take effect first
      */
-    void addFirst(String name, ProtoDuplexer<?, ?, ?, ?> duplexer);
+    void addFirst(String name, ProtoDuplex<?, ?, ?, ?> duplexer);
 
     /**
      * Add a duplexer to the pipeline head with a name and config.
@@ -80,7 +80,7 @@ public interface ProtoBuildContext extends ProtoContext {
      * @param protoConf protocol configuration used at this duplexer position
      * @param duplexer duplexer that should take effect first
      */
-    default void addFirst(String name, ProtoConfig protoConf, ProtoDuplexer<?, ?, ?, ?> duplexer) {
+    default void addFirst(String name, ProtoConfig protoConf, ProtoDuplex<?, ?, ?, ?> duplexer) {
         if (protoConf == null) {
             throw new NullPointerException("protoConf is null.");
         }
@@ -120,14 +120,14 @@ public interface ProtoBuildContext extends ProtoContext {
      * Add a duplexer to the pipeline tail.
      * @param duplexer duplexer to be used as postprocessing
      */
-    void addLast(ProtoDuplexer<?, ?, ?, ?> duplexer);
+    void addLast(ProtoDuplex<?, ?, ?, ?> duplexer);
 
     /**
      * Add a duplexer to the pipeline tail with a name.
      * @param name duplexer name
      * @param duplexer duplexer to be used as postprocessing
      */
-    void addLast(String name, ProtoDuplexer<?, ?, ?, ?> duplexer);
+    void addLast(String name, ProtoDuplex<?, ?, ?, ?> duplexer);
 
     /**
      * Add a duplexer to the pipeline tail with a name and config.
@@ -135,7 +135,7 @@ public interface ProtoBuildContext extends ProtoContext {
      * @param protoConf protocol configuration used at this duplexer position
      * @param duplexer duplexer to be used as postprocessing
      */
-    default void addLast(String name, ProtoConfig protoConf, ProtoDuplexer<?, ?, ?, ?> duplexer) {
+    default void addLast(String name, ProtoConfig protoConf, ProtoDuplex<?, ?, ?, ?> duplexer) {
         if (protoConf == null) {
             throw new NullPointerException("protoConf is null.");
         }

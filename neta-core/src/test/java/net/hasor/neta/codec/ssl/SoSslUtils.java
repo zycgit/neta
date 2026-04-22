@@ -70,7 +70,7 @@ public class SoSslUtils {
         // Bytes <- Bytes <- String
         return ProtoHelper.standard()
                 // SSL
-                .nextDuplex("SSL", new SslDuplexer(sslConf))
+                .nextDuplex("SSL", new SslDuplex(sslConf))
                 // bytes <-> String
                 .nextDuplex("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
                 // create Stack
@@ -83,7 +83,7 @@ public class SoSslUtils {
         // Bytes <- Bytes <- String
         return ProtoHelper.typed(ByteBuf.class, ByteBuf.class)
                 // SSL
-                .nextDuplex("SSL", new SslDuplexer(sslConf))
+                .nextDuplex("SSL", new SslDuplex(sslConf))
                 // bytes <-> String
                 .nextDuplex("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
                 // create Stack
@@ -99,7 +99,7 @@ public class SoSslUtils {
                 // limit package
                 .nextDuplex("LIMIT", limitFrame, limitFrame)
                 // SSL
-                .nextDuplex("SSL", new SslDuplexer(sslConf))
+                .nextDuplex("SSL", new SslDuplex(sslConf))
                 // bytes <-> String
                 .nextDuplex("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
                 // create Stack

@@ -15,9 +15,11 @@
  */
 package net.hasor.neta.channel.routing;
 import java.util.Objects;
-import net.hasor.neta.channel.ProtoRoutingDuplexer;
+
+import net.hasor.neta.channel.ProtoRoutingDuplex;
+
 /**
- * Route-switch event fired when {@link ProtoRoutingDuplexer} changes the active route.
+ * Route-switch event fired when {@link ProtoRoutingDuplex} changes the active route.
  * <p>This event only describes the route-switch result. It does not carry branch activation
  * lifecycle responsibilities.</p>
  * @author 赵永春 (zyc@hasor.net)

@@ -22,7 +22,7 @@ import java.util.List;
 import org.junit.Test;
 
 import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.ProtoDuplexer;
+import net.hasor.neta.channel.ProtoDuplex;
 import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.channel.SoEvent;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
@@ -33,8 +33,8 @@ import net.hasor.neta.codec.http.HttpObject;
 public class WebSocketOutboundHandlerTest extends AbstractWebSocketTest {
     private static final String WS_URI = "ws://example.com/chat";
 
-    private ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> relayOutboundEvents() {
-        return new ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject>() {
+    private ProtoDuplex<HttpObject, HttpObject, HttpObject, HttpObject> relayOutboundEvents() {
+        return new ProtoDuplex<HttpObject, HttpObject, HttpObject, HttpObject>() {
             @Override
             public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) throws Throwable {
                 Object eventData = event.getData();
@@ -79,11 +79,11 @@ public class WebSocketOutboundHandlerTest extends AbstractWebSocketTest {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta,//
                     ctx -> {
-                        ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
-                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-client", new WebSocketClientHandshakeDuplex(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
                     }, ctx -> {
-                        ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
-                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-server", new WebSocketServerHandshakeDuplex(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
                         ctx.addLastEncoder("ws-outbound", new WebSocketOutboundHandler());
                         ctx.addLast("ws-event-tail", relayOutboundEvents());
                     }, VrtTransfer.direct());
@@ -106,11 +106,11 @@ public class WebSocketOutboundHandlerTest extends AbstractWebSocketTest {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta,//
                     ctx -> {
-                        ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
-                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-client", new WebSocketClientHandshakeDuplex(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
                     }, ctx -> {
-                        ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
-                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-server", new WebSocketServerHandshakeDuplex(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
                         ctx.addLastEncoder("ws-outbound", new WebSocketOutboundHandler());
                         ctx.addLast("ws-event-tail", relayOutboundEvents());
                     }, VrtTransfer.direct());
@@ -141,13 +141,13 @@ public class WebSocketOutboundHandlerTest extends AbstractWebSocketTest {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta,//
                     ctx -> {
-                        ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
-                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-client", new WebSocketClientHandshakeDuplex(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
                         ctx.addLastEncoder("ws-outbound", new WebSocketOutboundHandler());
                         ctx.addLast("ws-event-tail", relayOutboundEvents());
                     }, ctx -> {
-                        ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
-                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-server", new WebSocketServerHandshakeDuplex(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
                     }, VrtTransfer.direct());
 
             completeHandshake(pipe, WebSocketVersion.V13);
@@ -167,13 +167,13 @@ public class WebSocketOutboundHandlerTest extends AbstractWebSocketTest {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta,//
                     ctx -> {
-                        ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V0));
-                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V0));
+                        ctx.addLast("ws-client", new WebSocketClientHandshakeDuplex(WebSocketVersion.V0));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V0));
                         ctx.addLastEncoder("ws-outbound", new WebSocketOutboundHandler());
                         ctx.addLast("ws-event-tail", relayOutboundEvents());
                     }, ctx -> {
-                        ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V0));
-                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V0));
+                        ctx.addLast("ws-server", new WebSocketServerHandshakeDuplex(WebSocketVersion.V0));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V0));
                     }, VrtTransfer.direct());
 
             completeHandshake(pipe, WebSocketVersion.V0);
@@ -193,11 +193,11 @@ public class WebSocketOutboundHandlerTest extends AbstractWebSocketTest {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, //
                     ctx -> {
-                        ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
-                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-client", new WebSocketClientHandshakeDuplex(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
                     }, ctx -> {
-                        ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
-                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-server", new WebSocketServerHandshakeDuplex(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
                         ctx.addLastEncoder("ws-outbound", new WebSocketOutboundHandler());
                         ctx.addLast("ws-event-tail", relayOutboundEvents());
                     }, VrtTransfer.direct());
@@ -220,11 +220,11 @@ public class WebSocketOutboundHandlerTest extends AbstractWebSocketTest {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, //
                     ctx -> {
-                        ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
-                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-client", new WebSocketClientHandshakeDuplex(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
                     }, ctx -> {
-                        ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
-                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-server", new WebSocketServerHandshakeDuplex(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
                         ctx.addLastEncoder("ws-outbound", new WebSocketOutboundHandler());
                         ctx.addLast("ws-event-tail", relayOutboundEvents());
                     }, VrtTransfer.direct());
@@ -247,11 +247,11 @@ public class WebSocketOutboundHandlerTest extends AbstractWebSocketTest {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, //
                     ctx -> {
-                        ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
-                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-client", new WebSocketClientHandshakeDuplex(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
                     }, ctx -> {
-                        ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
-                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-server", new WebSocketServerHandshakeDuplex(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
                         ctx.addLastEncoder("ws-outbound", new WebSocketOutboundHandler());
                         ctx.addLast("ws-event-tail", relayOutboundEvents());
                     }, VrtTransfer.direct());
@@ -286,11 +286,11 @@ public class WebSocketOutboundHandlerTest extends AbstractWebSocketTest {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta,//
                     ctx -> {
-                        ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
-                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-client", new WebSocketClientHandshakeDuplex(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
                     }, ctx -> {
-                        ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
-                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-server", new WebSocketServerHandshakeDuplex(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
                         ctx.addLastEncoder("ws-outbound", new WebSocketOutboundHandler(2));
                         ctx.addLast("ws-event-tail", relayOutboundEvents());
                     }, VrtTransfer.direct());
@@ -322,11 +322,11 @@ public class WebSocketOutboundHandlerTest extends AbstractWebSocketTest {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta,//
                     ctx -> {
-                        ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
-                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-client", new WebSocketClientHandshakeDuplex(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
                     }, ctx -> {
-                        ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
-                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-server", new WebSocketServerHandshakeDuplex(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
                         ctx.addLastEncoder("ws-outbound", new WebSocketOutboundHandler(1));
                         ctx.addLast("ws-event-tail", relayOutboundEvents());
                     }, VrtTransfer.direct());

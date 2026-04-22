@@ -64,7 +64,7 @@ public class VrtTransferTest {
 
     @Test
     public void echoTest_2() throws Throwable {
-        ProtoInitializer serverProto = ProtoHelper.typed(String.class, String.class).nextDuplex(new ProtoDuplexer<String, String, String, String>() {
+        ProtoInitializer serverProto = ProtoHelper.typed(String.class, String.class).nextDuplex(new ProtoDuplex<String, String, String, String>() {
             @Override
             public ProtoStatus onMessage(ProtoContext context, boolean isRcv,  //
                     ProtoRcvQueue<String> rcvUp, ProtoSndQueue<String> rcvDown,//

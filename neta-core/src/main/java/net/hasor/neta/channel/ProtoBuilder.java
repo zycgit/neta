@@ -26,7 +26,7 @@ import net.hasor.neta.channel.routing.*;
  * {@link ProtoBuilder} view that describes the type changes after that node is added.</p>
  * <p>Common build patterns include:</p>
  * <ul>
- *   <li>Appending a complete duplexer through {@link #nextDuplex(ProtoDuplexer)}.</li>
+ *   <li>Appending a complete duplexer through {@link #nextDuplex(ProtoDuplex)}.</li>
  *   <li>Adding a one-way handler, decoder or encoder, through {@link #nextDecoder(ProtoHandler)} or {@link #nextEncoder(ProtoHandler)}.</li>
  *   <li>Inserting a routing duplexer through {@code nextRouteAsStatic}/{@code nextRouteAsRealtime} and splitting later processing into multiple branch pipelines.</li>
  *   <li>Inserting a partition duplexer through {@link #nextPartition(String, ProtoPartitionSelector, Consumer)} to dispatch inbound data into different partition pipelines.</li>
@@ -48,7 +48,7 @@ public interface ProtoBuilder<RCV_UP, SND_DOWN> extends ProtoBuild {
      * @param <SND_UP> send input type before this duplexer processes outbound data
      * @return the next builder view after appending this duplexer
      */
-    default <RCV_DOWN, SND_UP> ProtoBuilder<RCV_DOWN, SND_UP> nextDuplex(ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> duplexer) {
+    default <RCV_DOWN, SND_UP> ProtoBuilder<RCV_DOWN, SND_UP> nextDuplex(ProtoDuplex<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> duplexer) {
         return this.nextDuplex(duplexer.getClass().getSimpleName(), ProtoConfig.DEFAULT, duplexer);
     }
 
@@ -60,7 +60,7 @@ public interface ProtoBuilder<RCV_UP, SND_DOWN> extends ProtoBuild {
      * @param <SND_UP> send input type before this duplexer processes outbound data
      * @return the next builder view after appending this duplexer
      */
-    default <RCV_DOWN, SND_UP> ProtoBuilder<RCV_DOWN, SND_UP> nextDuplex(String name, ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> duplexer) {
+    default <RCV_DOWN, SND_UP> ProtoBuilder<RCV_DOWN, SND_UP> nextDuplex(String name, ProtoDuplex<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> duplexer) {
         return this.nextDuplex(name, ProtoConfig.DEFAULT, duplexer);
     }
 
@@ -73,7 +73,7 @@ public interface ProtoBuilder<RCV_UP, SND_DOWN> extends ProtoBuild {
      * @param <SND_UP> send input type before this duplexer processes outbound data
      * @return the next builder view after appending this duplexer
      */
-    <RCV_DOWN, SND_UP> ProtoBuilder<RCV_DOWN, SND_UP> nextDuplex(String name, ProtoConfig protoConf, ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> duplexer);
+    <RCV_DOWN, SND_UP> ProtoBuilder<RCV_DOWN, SND_UP> nextDuplex(String name, ProtoConfig protoConf, ProtoDuplex<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> duplexer);
 
     /**
      * Append a duplex step composed from a decoder and an encoder.

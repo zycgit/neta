@@ -18,51 +18,52 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 /**
- * Bidirectional aggregator for client-side {@link HttpObject} streams.
+ * Bidirectional aggregator for server-side {@link HttpObject} streams.
  * <p>
- * This class is typically placed after {@link HttpClientDuplexe} to collapse segmented
- * {@link HttpObject} messages on both client-side directions into complete messages. The inbound
- * side aggregates response object streams into {@link FullHttpResponse}, while the outbound side
- * aggregates request object streams into {@link FullHttpRequest}.
+ * This class is typically placed after {@link HttpServerDuplex} to collapse segmented
+ * {@link HttpObject} messages on both server-side directions into complete messages. The inbound
+ * side aggregates request object streams into {@link FullHttpRequest}, while the outbound side
+ * aggregates response object streams into {@link FullHttpResponse}.
  * <p>
- * In other words, {@link HttpClientDuplexe} turns bytes into an {@link HttpObject} stream, and
- * this class continues aggregating that stream until a complete request or response is available.
+ * In other words, {@link HttpServerDuplex} turns connection bytes into an {@link HttpObject}
+ * stream, and this class continues aggregating that stream until a complete request or response is
+ * available.
  * <p>
  * Pipeline view:
  * <pre>
- *   inbound:  HttpObject parts -> HttpClientDuplexeAggregator -> FullHttpResponse
- *   outbound: HttpObject parts -> HttpClientDuplexeAggregator -> FullHttpRequest
+ *   inbound:  HttpObject parts -> HttpServerDuplexeAggregator -> FullHttpRequest
+ *   outbound: HttpObject parts -> HttpServerDuplexeAggregator -> FullHttpResponse
  * </pre>
  * <p>
- * It is intended for client-side logic that prefers to work with complete messages instead of
- * handling request lines, header blocks, and content fragments manually.
+ * It is intended for server-side logic that prefers to work with complete requests and responses
+ * instead of handling request lines, header blocks, and content fragments manually.
  * <p>
  * Typical usage:
  * <pre>
- *   ctx.addLast("http", new HttpClientDuplexe());
- *   ctx.addLast("http-agg", new HttpClientDuplexeAggregator(1048576));
+ *   ctx.addLast("http", new HttpServerDuplexe());
+ *   ctx.addLast("http-agg", new HttpServerDuplexeAggregator(1048576));
  * </pre>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-13
  */
-public class HttpClientDuplexeAggregator implements ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> {
-    private final HttpResponseAggregator responseAggregator;
+public class HttpServerDuplexAggregator implements ProtoDuplex<HttpObject, HttpObject, HttpObject, HttpObject> {
     private final HttpRequestAggregator  requestAggregator;
+    private final HttpResponseAggregator responseAggregator;
 
     /**
-     * Creates a client duplex aggregator with the default maximum content length.
+     * Creates a server duplex aggregator with the default maximum content length.
      */
-    public HttpClientDuplexeAggregator() {
+    public HttpServerDuplexAggregator() {
         this(AbstractHttpAggregator.DEFAULT_MAX_CONTENT_LENGTH);
     }
 
     /**
-     * Creates a client duplex aggregator with an explicit maximum content length.
+     * Creates a server duplex aggregator with an explicit maximum content length.
      * @param maxContentLength the maximum content length
      */
-    public HttpClientDuplexeAggregator(int maxContentLength) {
-        this.responseAggregator = new HttpResponseAggregator(maxContentLength);
+    public HttpServerDuplexAggregator(int maxContentLength) {
         this.requestAggregator = new HttpRequestAggregator(maxContentLength);
+        this.responseAggregator = new HttpResponseAggregator(maxContentLength);
     }
 
     /**
@@ -70,8 +71,8 @@ public class HttpClientDuplexeAggregator implements ProtoDuplexer<HttpObject, Ht
      */
     @Override
     public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) throws Throwable {
-        this.responseAggregator.onInit(name + "-response", rcvSize, context);
-        this.requestAggregator.onInit(name + "-request", sndSize, context);
+        this.requestAggregator.onInit(name + "-request", rcvSize, context);
+        this.responseAggregator.onInit(name + "-response", sndSize, context);
     }
 
     /**
@@ -80,9 +81,9 @@ public class HttpClientDuplexeAggregator implements ProtoDuplexer<HttpObject, Ht
     @Override
     public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) throws Throwable {
         if (isRcv) {
-            return this.responseAggregator.onEvent(context, event);
-        } else {
             return this.requestAggregator.onEvent(context, event);
+        } else {
+            return this.responseAggregator.onEvent(context, event);
         }
     }
 
@@ -92,9 +93,9 @@ public class HttpClientDuplexeAggregator implements ProtoDuplexer<HttpObject, Ht
     @Override
     public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<HttpObject> rcvUp, ProtoSndQueue<HttpObject> rcvDown, ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<HttpObject> sndDown) throws Throwable {
         if (isRcv) {
-            return this.responseAggregator.onMessage(context, rcvUp, rcvDown);
+            return this.requestAggregator.onMessage(context, rcvUp, rcvDown);
         } else {
-            return this.requestAggregator.onMessage(context, sndUp, sndDown);
+            return this.responseAggregator.onMessage(context, sndUp, sndDown);
         }
     }
 
@@ -104,9 +105,9 @@ public class HttpClientDuplexeAggregator implements ProtoDuplexer<HttpObject, Ht
     @Override
     public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
         if (isRcv) {
-            return this.responseAggregator.onError(context, e, eh);
-        } else {
             return this.requestAggregator.onError(context, e, eh);
+        } else {
+            return this.responseAggregator.onError(context, e, eh);
         }
     }
 
@@ -115,7 +116,7 @@ public class HttpClientDuplexeAggregator implements ProtoDuplexer<HttpObject, Ht
      */
     @Override
     public void onClose(ProtoContext context) {
-        this.responseAggregator.onClose(context);
         this.requestAggregator.onClose(context);
+        this.responseAggregator.onClose(context);
     }
 }

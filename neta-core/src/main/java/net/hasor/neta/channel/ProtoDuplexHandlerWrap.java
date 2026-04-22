@@ -24,13 +24,13 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * so the wrapper behaves externally as one complete bidirectional protocol step.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-27
- * @see ProtoDuplexer
+ * @see ProtoDuplex
  */
-class ProtoDuplexerHandlerWrap<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> implements ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
+class ProtoDuplexHandlerWrap<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> implements ProtoDuplex<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     private final ProtoHandler<RCV_UP, RCV_DOWN> decoder;
     private final ProtoHandler<SND_UP, SND_DOWN> encoder;
 
-    ProtoDuplexerHandlerWrap(ProtoHandler<RCV_UP, RCV_DOWN> decoder, ProtoHandler<SND_UP, SND_DOWN> encoder) {
+    ProtoDuplexHandlerWrap(ProtoHandler<RCV_UP, RCV_DOWN> decoder, ProtoHandler<SND_UP, SND_DOWN> encoder) {
         this.decoder = decoder;
         this.encoder = encoder;
     }

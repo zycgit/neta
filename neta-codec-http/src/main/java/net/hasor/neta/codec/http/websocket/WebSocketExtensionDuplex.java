@@ -27,7 +27,7 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-04-07
  */
-public class WebSocketExtensionDuplexer implements ProtoDuplexer<WebSocketFrame, WebSocketFrame, WebSocketFrame, WebSocketFrame> {
+public class WebSocketExtensionDuplex implements ProtoDuplex<WebSocketFrame, WebSocketFrame, WebSocketFrame, WebSocketFrame> {
     /**
      * Leave events untouched and let the surrounding pipeline handle them.
      * @param context protocol context for the current channel

@@ -10,7 +10,7 @@ import org.junit.Test;
 import net.hasor.neta.channel.AbstractSoTest;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.codec.LineBasedFrameHandler;
-import net.hasor.neta.codec.string.StringDuplexer;
+import net.hasor.neta.codec.string.StringDuplex;
 
 public class QuicUniStreamSndRcvBadTest extends AbstractSoTest {
     /**
@@ -34,7 +34,7 @@ public class QuicUniStreamSndRcvBadTest extends AbstractSoTest {
         neta.bind(address, ctx -> {
             if (ctx.getChannel() instanceof QuicStreamChannel) {
                 ctx.addLastDecoder(new LineBasedFrameHandler());
-                ctx.addLast(new StringDuplexer());
+                ctx.addLast(new StringDuplex());
             }
         }, quicCfg).onAccept(c -> {
             if (c instanceof QuicChannel) {
@@ -46,7 +46,7 @@ public class QuicUniStreamSndRcvBadTest extends AbstractSoTest {
         neta.connectAsync(address, ctx -> {
             if (ctx.getChannel() instanceof QuicStreamChannel) {
                 ctx.addLastDecoder(new LineBasedFrameHandler());
-                ctx.addLast(new StringDuplexer());
+                ctx.addLast(new StringDuplex());
                 ctx.getChannel().subscribe(data -> {
                     if (data.getError() != null) {
                         clientError.compareAndSet(null, data.getError());
@@ -111,7 +111,7 @@ public class QuicUniStreamSndRcvBadTest extends AbstractSoTest {
         neta.bind(address, ctx -> {
             if (ctx.getChannel() instanceof QuicStreamChannel) {
                 ctx.addLastDecoder(new LineBasedFrameHandler());
-                ctx.addLast(new StringDuplexer());
+                ctx.addLast(new StringDuplex());
                 ctx.getChannel().subscribe(data -> {
                     if (data.getError() != null) {
                         serverError.compareAndSet(null, data.getError());
@@ -127,7 +127,7 @@ public class QuicUniStreamSndRcvBadTest extends AbstractSoTest {
         QuicChannel clientConn = (QuicChannel) neta.connectAsync(address, ctx -> {
             if (ctx.getChannel() instanceof QuicStreamChannel) {
                 ctx.addLastDecoder(new LineBasedFrameHandler());
-                ctx.addLast(new StringDuplexer());
+                ctx.addLast(new StringDuplex());
                 ctx.getChannel().subscribe(data -> {
                     if (data.getError() != null) {
                         clientError.compareAndSet(null, data.getError());

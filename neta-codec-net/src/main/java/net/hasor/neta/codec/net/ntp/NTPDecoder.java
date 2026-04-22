@@ -33,7 +33,7 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * <p>
  * <b>Typical pipeline placement:</b>
  * <pre>
- *   ctx.addLast("ntp", new NTPDuplexer());
+ *   ctx.addLast("ntp", new NTPDuplex());
  *   // or individually:
  *   ctx.addLastDecoder("ntpDecoder", new NTPDecoder());
  *   ctx.addLastEncoder("ntpEncoder", new NTPEncoder());
@@ -41,7 +41,7 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * <b>Applicable transports:</b> UDP (RFC 5905 §2 mandates UDP port 123).
  * @author 赵永春 (zyc@hasor.net)
  * @see NTPEncoder
- * @see NTPDuplexer
+ * @see NTPDuplex
  * @see NTPMessage
  */
 public class NTPDecoder implements ProtoHandler<ByteBuf, NTPMessage> {

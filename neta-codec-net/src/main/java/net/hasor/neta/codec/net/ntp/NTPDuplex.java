@@ -16,7 +16,7 @@
 package net.hasor.neta.codec.net.ntp;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.ProtoDuplexer;
+import net.hasor.neta.channel.ProtoDuplex;
 import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
@@ -30,7 +30,7 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * This is the recommended entry point for NTP pipeline setup over UDP:
  * <pre>
  *   manager.bind(address, ctx -&gt; {
- *       ctx.addLast("ntp", new NTPDuplexer());
+ *       ctx.addLast("ntp", new NTPDuplex());
  *       ctx.addLast("handler", myNtpHandler);
  *   }, SoConfig.UDP());
  * </pre>
@@ -40,7 +40,7 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * @see NTPEncoder
  * @see NTPMessage
  */
-public class NTPDuplexer implements ProtoDuplexer<ByteBuf, NTPMessage, NTPMessage, ByteBuf> {
+public class NTPDuplex implements ProtoDuplex<ByteBuf, NTPMessage, NTPMessage, ByteBuf> {
     private final NTPDecoder decoder = new NTPDecoder();
     private final NTPEncoder encoder = new NTPEncoder();
 

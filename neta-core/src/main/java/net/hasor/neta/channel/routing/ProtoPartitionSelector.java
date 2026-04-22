@@ -15,10 +15,10 @@
  */
 package net.hasor.neta.channel.routing;
 import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.ProtoPartitionDuplexer;
+import net.hasor.neta.channel.ProtoPartitionDuplex;
 /**
  * Selector that decides which partition the current data should enter.
- * <p>When a message or event reaches {@link ProtoPartitionDuplexer}, the framework calls this
+ * <p>When a message or event reaches {@link ProtoPartitionDuplex}, the framework calls this
  * interface to compute a {@link PartitionKey}. Data with the same partition key enters the same
  * partition sub-pipeline, reusing the same partition context and handler state, while data with
  * different keys is isolated into different partition sub-pipelines.</p>

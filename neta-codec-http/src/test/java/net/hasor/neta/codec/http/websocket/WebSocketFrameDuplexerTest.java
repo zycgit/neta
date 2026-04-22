@@ -31,7 +31,7 @@ public class WebSocketFrameDuplexerTest extends AbstractWebSocketTest {
     public void testFrameDuplexerDefaultCtorDelegatesBothDirectionsAsV13() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("ws-frame", new WebSocketFrameDuplexer());
+                ctx.addLast("ws-frame", new WebSocketFrameDuplex());
             }, VrtSoConfig.asServer());
 
             byte[] frameBytes = buildRfc6455Frame(0x01, true, false, null, "Hello".getBytes(StandardCharsets.UTF_8));
@@ -58,7 +58,7 @@ public class WebSocketFrameDuplexerTest extends AbstractWebSocketTest {
     public void testFrameDuplexerConfiguredVersionIsSharedByDecoderAndEncoder() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V0));
+                ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V0));
             }, VrtSoConfig.asClient());
 
             List<HttpObject> inbound = receiveAndIntBound(pipe, httpByteBuf(buildHixieTextFrame("Hixie")));

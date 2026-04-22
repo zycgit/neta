@@ -26,14 +26,14 @@ import net.hasor.neta.codec.http.HttpObject;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-11-01
  */
-public class WebSocketFrameDuplexer implements ProtoDuplexer<HttpObject, WebSocketFrame, WebSocketFrame, HttpObject> {
+public class WebSocketFrameDuplex implements ProtoDuplex<HttpObject, WebSocketFrame, WebSocketFrame, HttpObject> {
     private final WebSocketFrameDecoder decoder;
     private final WebSocketFrameEncoder encoder;
 
     /**
      * Create a frame duplexer fixed to V13.
      */
-    public WebSocketFrameDuplexer() {
+    public WebSocketFrameDuplex() {
         this(WebSocketVersion.V13);
     }
 
@@ -41,7 +41,7 @@ public class WebSocketFrameDuplexer implements ProtoDuplexer<HttpObject, WebSock
      * Create a frame duplexer for the specified version.
      * @param version websocket version
      */
-    public WebSocketFrameDuplexer(WebSocketVersion version) {
+    public WebSocketFrameDuplex(WebSocketVersion version) {
         this(version, Integer.MAX_VALUE);
     }
 
@@ -50,7 +50,7 @@ public class WebSocketFrameDuplexer implements ProtoDuplexer<HttpObject, WebSock
      * @param version websocket version
      * @param maxPayloadChunkLength maximum payload chunk length
      */
-    public WebSocketFrameDuplexer(WebSocketVersion version, int maxPayloadChunkLength) {
+    public WebSocketFrameDuplex(WebSocketVersion version, int maxPayloadChunkLength) {
         this.decoder = new WebSocketFrameDecoder(version, maxPayloadChunkLength);
         this.encoder = new WebSocketFrameEncoder(version);
     }

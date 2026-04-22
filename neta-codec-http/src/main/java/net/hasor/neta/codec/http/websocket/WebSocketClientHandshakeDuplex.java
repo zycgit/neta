@@ -39,10 +39,10 @@ import net.hasor.neta.codec.http.*;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-22
  */
-public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake {
-    private static final Logger     logger              = LoggerFactory.getLogger(WebSocketClientHandshakeDuplexer.class);
-    private static final String     STATE_STORE_KEY     = WebSocketClientHandshakeDuplexer.class.getName() + ".stateStore";
-    private static final String     BUFFER_QUEUE_PREFIX = WebSocketClientHandshakeDuplexer.class.getName() + ".pendingRequest.";
+public class WebSocketClientHandshakeDuplex extends AbstractWebSocketHandshake {
+    private static final Logger     logger              = LoggerFactory.getLogger(WebSocketClientHandshakeDuplex.class);
+    private static final String     STATE_STORE_KEY     = WebSocketClientHandshakeDuplex.class.getName() + ".stateStore";
+    private static final String     BUFFER_QUEUE_PREFIX = WebSocketClientHandshakeDuplex.class.getName() + ".pendingRequest.";
     private final WebSocketSettings settings;
 
     private static final class ClientHandshakeState {
@@ -73,7 +73,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
      * Create a client handshake duplexer for the given protocol version.
      * @param codecVersion websocket version to negotiate
      */
-    public WebSocketClientHandshakeDuplexer(WebSocketVersion codecVersion) {
+    public WebSocketClientHandshakeDuplex(WebSocketVersion codecVersion) {
         this(WebSocketSettings.of(codecVersion));
     }
 
@@ -82,7 +82,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
      * @param codecVersion websocket version to negotiate
      * @param autoHandshakeConfig auto-handshake request settings
      */
-    public WebSocketClientHandshakeDuplexer(WebSocketVersion codecVersion, WebSocketAutoHandshakeConfig autoHandshakeConfig) {
+    public WebSocketClientHandshakeDuplex(WebSocketVersion codecVersion, WebSocketAutoHandshakeConfig autoHandshakeConfig) {
         this(WebSocketSettings.of(codecVersion).autoHandshakeConfig(autoHandshakeConfig));
     }
 
@@ -90,7 +90,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
      * Create a client handshake duplexer from the full websocket settings.
      * @param settings websocket handshake settings
      */
-    public WebSocketClientHandshakeDuplexer(WebSocketSettings settings) {
+    public WebSocketClientHandshakeDuplex(WebSocketSettings settings) {
         super(settings.version());
         this.settings = settings;
     }

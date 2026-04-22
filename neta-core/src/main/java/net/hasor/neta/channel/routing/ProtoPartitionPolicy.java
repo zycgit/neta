@@ -15,10 +15,11 @@
  */
 package net.hasor.neta.channel.routing;
 import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.ProtoPartitionDuplexer;
+import net.hasor.neta.channel.ProtoPartitionDuplex;
+
 /**
  * Policy hook consulted by the partition duplexer before creating a new partition.
- * <p>After {@link ProtoPartitionDuplexer} resolves a partition key through
+ * <p>After {@link ProtoPartitionDuplex} resolves a partition key through
  * {@link ProtoPartitionSelector}, it calls this interface if no partition instance exists yet for
  * that key, and then decides whether to create the corresponding partition sub-pipeline using the
  * default flow.</p>

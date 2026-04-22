@@ -38,12 +38,12 @@ public class WebSocketMessageDuplexerTest extends AbstractWebSocketTest {
     public void testDuplexerCanAggregateInboundFragmentedMessage() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
-                ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                ctx.addLast("ws-client", new WebSocketClientHandshakeDuplex(WebSocketVersion.V13));
+                ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
             }, ctx -> {
-                ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
-                ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
-                ctx.addLast("ws-message", new WebSocketMessageDuplexer(true, 1024, 0));
+                ctx.addLast("ws-server", new WebSocketServerHandshakeDuplex(WebSocketVersion.V13));
+                ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
+                ctx.addLast("ws-message", new WebSocketMessageDuplex(true, 1024, 0));
             }, VrtTransfer.direct());
 
             completeHandshake(pipe);
@@ -67,12 +67,12 @@ public class WebSocketMessageDuplexerTest extends AbstractWebSocketTest {
     public void testDuplexerCanAutoFragmentOutboundMessage() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
-                ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                ctx.addLast("ws-client", new WebSocketClientHandshakeDuplex(WebSocketVersion.V13));
+                ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
             }, ctx -> {
-                ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
-                ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
-                ctx.addLast("ws-message", new WebSocketMessageDuplexer(2));
+                ctx.addLast("ws-server", new WebSocketServerHandshakeDuplex(WebSocketVersion.V13));
+                ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
+                ctx.addLast("ws-message", new WebSocketMessageDuplex(2));
             }, VrtTransfer.direct());
 
             completeHandshake(pipe);
@@ -102,12 +102,12 @@ public class WebSocketMessageDuplexerTest extends AbstractWebSocketTest {
     public void testDuplexerCanStreamSingleLargeInboundFrameWithoutAggregation() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
-                ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                ctx.addLast("ws-client", new WebSocketClientHandshakeDuplex(WebSocketVersion.V13));
+                ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
             }, ctx -> {
-                ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
-                ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13, 3));
-                ctx.addLast("ws-message", new WebSocketMessageDuplexer(false, Integer.MAX_VALUE, 0));
+                ctx.addLast("ws-server", new WebSocketServerHandshakeDuplex(WebSocketVersion.V13));
+                ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13, 3));
+                ctx.addLast("ws-message", new WebSocketMessageDuplex(false, Integer.MAX_VALUE, 0));
             }, VrtTransfer.direct());
 
             completeHandshake(pipe);

@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h2;
+
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+
 import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.ProtoDuplexer;
+import net.hasor.neta.channel.ProtoDuplex;
 import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.channel.SoEvent;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
@@ -39,7 +41,7 @@ import net.hasor.neta.codec.http.LastHttpContent;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-04-03
  */
-public class Http2ObjectStreamManager implements ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> {
+public class Http2ObjectStreamManager implements ProtoDuplex<HttpObject, HttpObject, HttpObject, HttpObject> {
     private final ProtoPartitionControl       control;
     private final Http2ObjectPartitionPolicy  policy;
     private final Map<Long, StreamCloseState> streamCloseStates;

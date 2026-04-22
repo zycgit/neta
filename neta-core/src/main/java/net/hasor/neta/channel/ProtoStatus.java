@@ -15,7 +15,7 @@
  */
 package net.hasor.neta.channel;
 /**
- * Progress status returned by {@link ProtoDuplexer} and {@link ProtoHandler} after one processing round.
+ * Progress status returned by {@link ProtoDuplex} and {@link ProtoHandler} after one processing round.
  * <p>{@link ProtoStackChain} interprets these states to decide whether the current node should keep
  * running, retry itself, stop propagation in the current direction, or terminate the current round
  * immediately.</p>

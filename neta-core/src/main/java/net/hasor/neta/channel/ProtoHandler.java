@@ -19,7 +19,7 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
 /**
  * Unidirectional handler interface, typically used as a decoder or encoder.
  * <p>A unidirectional handler consumes messages from the receive queue and emits zero or more
- * messages to the next-stage send queue in the same direction. Use {@link ProtoDuplexer} instead
+ * messages to the next-stage send queue in the same direction. Use {@link ProtoDuplex} instead
  * when one type needs to coordinate both directions.</p>
  * <p><b>Ownership rule:</b> when a handler removes a message from {@code src} and does not hand it
  * off to {@code dst} or another queue, the handler becomes responsible for managing and releasing
@@ -27,7 +27,7 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * lifetime are the handler's responsibility.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-21
- * @see ProtoDuplexer
+ * @see ProtoDuplex
  */
 @FunctionalInterface
 public interface ProtoHandler<IN, OUT> {

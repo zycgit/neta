@@ -69,7 +69,7 @@ public class ProtoRoutingModeTest {
     @Test
     public void staticMode_onlySelectedBranchReceivesOnActive() throws Throwable {
         RecordHandler.reset();
-        ProtoRoutingDuplexer<Integer, Integer> router = new ProtoRoutingDuplexer<>(ProtoRoutingMode.STATIC, (ctx, rcvUp, rcvDown) -> {
+        ProtoRoutingDuplex<Integer, Integer> router = new ProtoRoutingDuplex<>(ProtoRoutingMode.STATIC, (ctx, rcvUp, rcvDown) -> {
             if (rcvUp.queueSize() == 0) {
                 return null;
             }

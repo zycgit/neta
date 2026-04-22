@@ -29,7 +29,7 @@ import net.hasor.neta.channel.routing.ProtoRoutingDataSelector;
  * <pre>
  *   inbound TCP/TLS bytes
  *           v
- *     [ SslDuplexer ]
+ *     [ SslDuplex ]
  *           v
  *   +-----------------------------+
  *   | HttpAggregatorOverTlsRoute  |
@@ -41,7 +41,7 @@ import net.hasor.neta.channel.routing.ProtoRoutingDataSelector;
  *      |            |
  *      |            +---------------> BRANCH_H2C --> HttpServerDuplexe --> H2CUpgradeServerDuplexe --> handler
  *      |
- *      +----------------------------> BRANCH_H2  --> Http2FrameDuplexe --> Http2ObjectDuplexe --> HttpServerDuplexeAggregator --> handler
+ *      +----------------------------> BRANCH_H2  --> Http2FrameDuplex --> Http2ObjectDuplex --> HttpServerDuplexeAggregator --> handler
  * </pre>
  * The h2c path on an HTTPS entry uses the already decrypted HTTP/1.1 upgrade request inside TLS as the switching seed.
  * The following preface, SETTINGS, and SETTINGS ACK frames enter the switched HTTP/2 processing path.
@@ -57,7 +57,7 @@ import net.hasor.neta.channel.routing.ProtoRoutingDataSelector;
  * Typical usage example:
  * <pre>
  *   ProtoHelper.standard()
- *       .nextDuplex("ssl", new SslDuplexer(sslConfig))
+ *       .nextDuplex("ssl", new SslDuplex(sslConfig))
  *       .nextRouteAsStatic("alpn", new HttpAggregatorOverTlsRoute(), routing -&gt; {
  *           ProtoRoutingControl routingControl = routing.control();
  *           routing.branch(HttpRouteKey.BRANCH_H1, branch -&gt; branch
@@ -65,8 +65,8 @@ import net.hasor.neta.channel.routing.ProtoRoutingDataSelector;
  *               .nextDecoder("http-aggregator", new HttpRequestAggregator(1048576))
  *               .nextDecoder("http-handler", handler));
  *           routing.branch(HttpRouteKey.BRANCH_H2, branch -&gt; branch
- *               .nextDuplex("h2-frame", new Http2FrameDuplexe(true))
- *               .nextDuplex("h2-message", new Http2ObjectDuplexe(true, routingControl))
+ *               .nextDuplex("h2-frame", new Http2FrameDuplex(true))
+ *               .nextDuplex("h2-message", new Http2ObjectDuplex(true, routingControl))
  *               .nextPartition("h2-stream", new Http2ObjectPartitionSelector(), partition -&gt; {
  *                   Http2ObjectPartitionPolicy policy = new Http2ObjectPartitionPolicy();
  *                   ProtoPartitionControl partitionControl = partition.control();

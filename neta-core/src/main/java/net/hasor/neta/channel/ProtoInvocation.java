@@ -20,7 +20,7 @@ import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 /**
  * Single node in the doubly linked handler chain of {@link ProtoStackChain}.
- * <p>It wraps one {@link ProtoDuplexer} together with its RCV_UP and SND_UP queues and implements
+ * <p>It wraps one {@link ProtoDuplex} together with its RCV_UP and SND_UP queues and implements
  * bidirectional event propagation through links to previous and next nodes.</p>
  * <pre>
  *              Protocol Layer(0)               Protocol Layer(1)
@@ -36,19 +36,19 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * @version : 2023-10-20
  */
 class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
-    public static final String                                      RCV_ERROR_TAG = ProtoStackChain.class.getName() + "-rcv-error-tag";
-    public static final String                                      SND_ERROR_TAG = ProtoStackChain.class.getName() + "-snd-error-tag";
-    private static final Logger                                     logger        = Logger.getLogger(ProtoInvocation.class);
-    private final ProtoQueueView                                    rcvUp;
-    private final ProtoQueueView                                    sndUp;
-    private final String                                            name;
-    private final ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler;
+    public static final String                                    RCV_ERROR_TAG = ProtoStackChain.class.getName() + "-rcv-error-tag";
+    public static final String                                    SND_ERROR_TAG = ProtoStackChain.class.getName() + "-snd-error-tag";
+    private static final Logger                                   logger        = Logger.getLogger(ProtoInvocation.class);
+    private final ProtoQueueView                                  rcvUp;
+    private final ProtoQueueView                                  sndUp;
+    private final String                                          name;
+    private final ProtoDuplex<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler;
     //
     private final ProtoStackChain                             chainRoot;
     protected ProtoInvocation<Object, Object, Object, Object> previous;
     protected ProtoInvocation<Object, Object, Object, Object> next;
 
-    ProtoInvocation(String name, int rcvSize, int sndSize, ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler, ProtoStackChain chainRoot) {
+    ProtoInvocation(String name, int rcvSize, int sndSize, ProtoDuplex<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler, ProtoStackChain chainRoot) {
         Objects.requireNonNull(handler, "handler is null.");
 
         this.name = name;
@@ -108,7 +108,7 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         return this.sndUp.slotSize();
     }
 
-    /** Return the name of the current {@link ProtoDuplexer}. */
+    /** Return the name of the current {@link ProtoDuplex}. */
     public String getName() {
         return this.name;
     }
@@ -144,7 +144,7 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
 
     //
 
-    /** Set {@code stackName} in the context, then invoke {@link ProtoDuplexer#onInit} on the wrapped handler. */
+    /** Set {@code stackName} in the context, then invoke {@link ProtoDuplex#onInit} on the wrapped handler. */
     public void onInit(ProtoContext protoCtx) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         try {
@@ -163,7 +163,7 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         }
     }
 
-    /** Set {@code stackName} in the context, then invoke {@link ProtoDuplexer#onActive} on the wrapped handler. */
+    /** Set {@code stackName} in the context, then invoke {@link ProtoDuplex#onActive} on the wrapped handler. */
     public void onActive(ProtoContext protoCtx) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         try {
@@ -182,7 +182,7 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         }
     }
 
-    /** Set {@code stackName} in the context, then invoke {@link ProtoDuplexer#onClose} on the wrapped handler. */
+    /** Set {@code stackName} in the context, then invoke {@link ProtoDuplex#onClose} on the wrapped handler. */
     public void onClose(ProtoContext protoCtx) {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         try {

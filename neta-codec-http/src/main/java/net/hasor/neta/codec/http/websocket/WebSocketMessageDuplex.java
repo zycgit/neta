@@ -25,14 +25,14 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-22
  */
-public class WebSocketMessageDuplexer implements ProtoDuplexer<WebSocketFrame, WebSocketMessage, WebSocketMessage, WebSocketFrame> {
+public class WebSocketMessageDuplex implements ProtoDuplex<WebSocketFrame, WebSocketMessage, WebSocketMessage, WebSocketFrame> {
     private final WebSocketInboundHandler  inbound;
     private final WebSocketOutboundHandler outbound;
 
     /**
      * Create a message duplexer with default inbound and outbound handlers.
      */
-    public WebSocketMessageDuplexer() {
+    public WebSocketMessageDuplex() {
         this.inbound = new WebSocketInboundHandler();
         this.outbound = new WebSocketOutboundHandler();
     }
@@ -41,7 +41,7 @@ public class WebSocketMessageDuplexer implements ProtoDuplexer<WebSocketFrame, W
      * Create a message duplexer with inbound fragment aggregation control.
      * @param aggregateFragments whether fragmented inbound messages should be aggregated
      */
-    public WebSocketMessageDuplexer(boolean aggregateFragments) {
+    public WebSocketMessageDuplex(boolean aggregateFragments) {
         this.inbound = new WebSocketInboundHandler(aggregateFragments);
         this.outbound = new WebSocketOutboundHandler();
     }
@@ -51,7 +51,7 @@ public class WebSocketMessageDuplexer implements ProtoDuplexer<WebSocketFrame, W
      * @param aggregateFragments whether fragmented inbound messages should be aggregated
      * @param maxMessagePayloadLength maximum allowed payload length per logical inbound message
      */
-    public WebSocketMessageDuplexer(boolean aggregateFragments, int maxMessagePayloadLength) {
+    public WebSocketMessageDuplex(boolean aggregateFragments, int maxMessagePayloadLength) {
         this.inbound = new WebSocketInboundHandler(aggregateFragments, maxMessagePayloadLength);
         this.outbound = new WebSocketOutboundHandler();
     }
@@ -60,7 +60,7 @@ public class WebSocketMessageDuplexer implements ProtoDuplexer<WebSocketFrame, W
      * Create a message duplexer with outbound auto-fragmentation settings.
      * @param maxFramePayloadLength maximum payload length per outbound frame
      */
-    public WebSocketMessageDuplexer(int maxFramePayloadLength) {
+    public WebSocketMessageDuplex(int maxFramePayloadLength) {
         this.inbound = new WebSocketInboundHandler();
         this.outbound = new WebSocketOutboundHandler(maxFramePayloadLength);
     }
@@ -71,7 +71,7 @@ public class WebSocketMessageDuplexer implements ProtoDuplexer<WebSocketFrame, W
      * @param maxMessagePayloadLength maximum allowed payload length per logical inbound message
      * @param maxFramePayloadLength maximum payload length per outbound frame
      */
-    public WebSocketMessageDuplexer(boolean aggregateFragments, int maxMessagePayloadLength, int maxFramePayloadLength) {
+    public WebSocketMessageDuplex(boolean aggregateFragments, int maxMessagePayloadLength, int maxFramePayloadLength) {
         this.inbound = new WebSocketInboundHandler(aggregateFragments, maxMessagePayloadLength);
         this.outbound = new WebSocketOutboundHandler(maxFramePayloadLength);
     }

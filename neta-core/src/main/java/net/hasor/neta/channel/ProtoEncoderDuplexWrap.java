@@ -26,7 +26,7 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2025-10-02
  */
-class ProtoEncoderDuplexWrap<RCV, SND_UP, SND_DOWN> implements ProtoDuplexer<RCV, RCV, SND_UP, SND_DOWN> {
+class ProtoEncoderDuplexWrap<RCV, SND_UP, SND_DOWN> implements ProtoDuplex<RCV, RCV, SND_UP, SND_DOWN> {
     private final ProtoHandler<SND_UP, SND_DOWN> encoder;
 
     ProtoEncoderDuplexWrap(ProtoHandler<SND_UP, SND_DOWN> encoder) {

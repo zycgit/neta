@@ -35,7 +35,7 @@ import net.hasor.neta.channel.routing.ProtoRoutingControl;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.h2.*;
-import net.hasor.neta.codec.http.routing.H2CUpgradeServerDuplexer;
+import net.hasor.neta.codec.http.routing.H2CUpgradeServerDuplex;
 import net.hasor.neta.codec.http.routing.HttpAggregatorRoute;
 import net.hasor.neta.codec.http.routing.HttpRouteKey;
 
@@ -178,8 +178,8 @@ public class WebSocketHttp2StandardRfc8441Test extends AbstractHttpTest {
 
     private VirtualPipe openStandardRfc8441Pipe(NetManager neta) throws Throwable {
         return openVirtualPipe(neta, clientCtx -> {
-            ProtoHelper.standard().nextDuplex("h2-frame", new Http2FrameDuplexe(false))//
-                    .nextDuplex("h2-message", new Http2ObjectDuplexe(false))//
+            ProtoHelper.standard().nextDuplex("h2-frame", new Http2FrameDuplex(false))//
+                    .nextDuplex("h2-message", new Http2ObjectDuplex(false))//
                     .nextPartition("h2-stream", new Http2ObjectPartitionSelector(), pb -> {
                         Http2ObjectPartitionPolicy policy = new Http2ObjectPartitionPolicy();
                         pb.policy(policy).byDefault(partitionCtx -> {
@@ -187,29 +187,29 @@ public class WebSocketHttp2StandardRfc8441Test extends AbstractHttpTest {
                         }).byInitializer(partitionCtx -> {
                             final ProtoRoutingControl[] routingControl = new ProtoRoutingControl[1];
                             ProtoRoutingBuilder<Object, Object> routing = ProtoHelper.typedRoutingAsDefault(HttpRouteKey.BRANCH_H1, branchCtx -> {
-                                branchCtx.addLast("ws-over-http", new WebSocketClientUpgradeRouteDuplexer(routingControl[0], WebSocketVersion.V13, HttpRouteKey.BRANCH_SOCKET));
+                                branchCtx.addLast("ws-over-http", new WebSocketClientUpgradeRouteDuplex(routingControl[0], WebSocketVersion.V13, HttpRouteKey.BRANCH_SOCKET));
                             }).branchByInitializer(HttpRouteKey.BRANCH_SOCKET, branchCtx -> {
-                                branchCtx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
-                                branchCtx.addLast("ws-message", new WebSocketMessageDuplexer());
+                                branchCtx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
+                                branchCtx.addLast("ws-message", new WebSocketMessageDuplex());
                             });
                             routingControl[0] = routing.control();
                             partitionCtx.addLast("client-route", routing.build());
                         });
                     }).build().config(clientCtx);
         }, serverCtx -> {
-            ProtoHelper.standard().nextDuplex("h2-frame", new Http2FrameDuplexe(true)).nextDuplex("h2-message", new Http2ObjectDuplexe(true)).nextPartition("h2-stream", new Http2ObjectPartitionSelector(), pb -> {
+            ProtoHelper.standard().nextDuplex("h2-frame", new Http2FrameDuplex(true)).nextDuplex("h2-message", new Http2ObjectDuplex(true)).nextPartition("h2-stream", new Http2ObjectPartitionSelector(), pb -> {
                 Http2ObjectPartitionPolicy policy = new Http2ObjectPartitionPolicy();
                 pb.policy(policy).byDefault(partitionCtx -> {
                     partitionCtx.addLast("h2-control-events", new Http2ObjectStreamManager(pb.control(), policy));
                 }).byInitializer(partitionCtx -> {
                     final ProtoRoutingControl[] streamRoutingControl = new ProtoRoutingControl[1];
                     ProtoRoutingBuilder<Object, Object> streamRouting = ProtoHelper.typedRoutingAsDefault(HttpRouteKey.BRANCH_H1, branchCtx -> {
-                        branchCtx.addLast("ws-upgrade", new WebSocketServerUpgradeRouteDuplexer(streamRoutingControl[0], WebSocketVersion.V13, HttpRouteKey.BRANCH_SOCKET));
+                        branchCtx.addLast("ws-upgrade", new WebSocketServerUpgradeRouteDuplex(streamRoutingControl[0], WebSocketVersion.V13, HttpRouteKey.BRANCH_SOCKET));
                         branchCtx.addLastDecoder("http-request", new HttpRequestAggregator(MAX_CONTENT_LENGTH));
                         branchCtx.addLastDecoder("http-handler", httpEchoHandler());
                     }).branchByInitializer(HttpRouteKey.BRANCH_SOCKET, branchCtx -> {
-                        branchCtx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
-                        branchCtx.addLast("ws-message", new WebSocketMessageDuplexer());
+                        branchCtx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
+                        branchCtx.addLast("ws-message", new WebSocketMessageDuplex());
                         branchCtx.addLastDecoder("ws-handler", webSocketEchoHandler());
                     });
                     streamRoutingControl[0] = streamRouting.control();
@@ -225,16 +225,16 @@ public class WebSocketHttp2StandardRfc8441Test extends AbstractHttpTest {
                 ProtoRoutingControl routingControl = routing.control();
 
                 routing.branch(HttpRouteKey.BRANCH_H1, b -> b//
-                        .nextDuplex("http-codec", new HttpServerDuplexe())//
-                        .nextDuplex("h1-upgrade", new H2CUpgradeServerDuplexer(routingControl))//
+                        .nextDuplex("http-codec", new HttpServerDuplex())//
+                        .nextDuplex("h1-upgrade", new H2CUpgradeServerDuplex(routingControl))//
                         .nextDecoder("http-request", new HttpRequestAggregator(MAX_CONTENT_LENGTH))//
                         .nextDecoder("http-handler", httpEchoHandler()))//
                         .branch(HttpRouteKey.BRANCH_H2C, b -> b//
-                                .nextDuplex("http-codec", new HttpServerDuplexe())//
-                                .nextDuplex("h2c-upgrade", new H2CUpgradeServerDuplexer(routingControl)))//
+                                .nextDuplex("http-codec", new HttpServerDuplex())//
+                                .nextDuplex("h2c-upgrade", new H2CUpgradeServerDuplex(routingControl)))//
                         .branch(HttpRouteKey.BRANCH_H2, b -> b//
-                                .nextDuplex("h2-frame", new Http2FrameDuplexe(true))//
-                                .nextDuplex("h2-message", new Http2ObjectDuplexe(true, routingControl))//
+                                .nextDuplex("h2-frame", new Http2FrameDuplex(true))//
+                                .nextDuplex("h2-message", new Http2ObjectDuplex(true, routingControl))//
                                 .nextPartition("h2-stream", new Http2ObjectPartitionSelector(), pb -> {
                                     Http2ObjectPartitionPolicy policy = new Http2ObjectPartitionPolicy();
                                     pb.policy(policy).byDefault(partitionCtx -> {
@@ -242,12 +242,12 @@ public class WebSocketHttp2StandardRfc8441Test extends AbstractHttpTest {
                                     }).byInitializer(partitionCtx -> {
                                         final ProtoRoutingControl[] streamRoutingControl = new ProtoRoutingControl[1];
                                         ProtoRoutingBuilder<Object, Object> streamRouting = ProtoHelper.typedRoutingAsDefault(HttpRouteKey.BRANCH_H1, branchCtx -> {
-                                            branchCtx.addLast("ws-upgrade", new WebSocketServerUpgradeRouteDuplexer(streamRoutingControl[0], WebSocketVersion.V13, HttpRouteKey.BRANCH_SOCKET));
+                                            branchCtx.addLast("ws-upgrade", new WebSocketServerUpgradeRouteDuplex(streamRoutingControl[0], WebSocketVersion.V13, HttpRouteKey.BRANCH_SOCKET));
                                             branchCtx.addLastDecoder("http-request", new HttpRequestAggregator(MAX_CONTENT_LENGTH));
                                             branchCtx.addLastDecoder("http-handler", httpEchoHandler());
                                         }).branchByInitializer(HttpRouteKey.BRANCH_SOCKET, branchCtx -> {
-                                            branchCtx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
-                                            branchCtx.addLast("ws-message", new WebSocketMessageDuplexer());
+                                            branchCtx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
+                                            branchCtx.addLast("ws-message", new WebSocketMessageDuplex());
                                             branchCtx.addLastDecoder("ws-handler", webSocketEchoHandler());
                                         });
                                         streamRoutingControl[0] = streamRouting.control();
@@ -258,8 +258,8 @@ public class WebSocketHttp2StandardRfc8441Test extends AbstractHttpTest {
         }, VrtSoConfig.asServer());
 
         VirtualPipe clientProtocol = openVirtualPipe(neta, clientCtx -> {
-            ProtoHelper.standard().nextDuplex("h2-frame", new Http2FrameDuplexe(false))//
-                    .nextDuplex("h2-message", new Http2ObjectDuplexe(false))//
+            ProtoHelper.standard().nextDuplex("h2-frame", new Http2FrameDuplex(false))//
+                    .nextDuplex("h2-message", new Http2ObjectDuplex(false))//
                     .nextPartition("h2-stream", new Http2ObjectPartitionSelector(), pb -> {
                         Http2ObjectPartitionPolicy policy = new Http2ObjectPartitionPolicy();
                         pb.policy(policy).byDefault(partitionCtx -> {
@@ -267,10 +267,10 @@ public class WebSocketHttp2StandardRfc8441Test extends AbstractHttpTest {
                         }).byInitializer(partitionCtx -> {
                             final ProtoRoutingControl[] routingControl = new ProtoRoutingControl[1];
                             ProtoRoutingBuilder<Object, Object> routing = ProtoHelper.typedRoutingAsDefault(HttpRouteKey.BRANCH_H1, branchCtx -> {
-                                branchCtx.addLast("ws-over-http", new WebSocketClientUpgradeRouteDuplexer(routingControl[0], WebSocketVersion.V13, HttpRouteKey.BRANCH_SOCKET));
+                                branchCtx.addLast("ws-over-http", new WebSocketClientUpgradeRouteDuplex(routingControl[0], WebSocketVersion.V13, HttpRouteKey.BRANCH_SOCKET));
                             }).branchByInitializer(HttpRouteKey.BRANCH_SOCKET, branchCtx -> {
-                                branchCtx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
-                                branchCtx.addLast("ws-message", new WebSocketMessageDuplexer());
+                                branchCtx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
+                                branchCtx.addLast("ws-message", new WebSocketMessageDuplex());
                             });
                             routingControl[0] = routing.control();
                             partitionCtx.addLast("client-route", routing.build());

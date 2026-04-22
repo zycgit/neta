@@ -35,7 +35,7 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * <b>Applicable transports:</b> UDP (RFC 5905 §2 mandates UDP port 123).
  * @author 赵永春 (zyc@hasor.net)
  * @see NTPDecoder
- * @see NTPDuplexer
+ * @see NTPDuplex
  * @see NTPMessage
  */
 public class NTPEncoder implements ProtoHandler<NTPMessage, ByteBuf> {

@@ -669,10 +669,10 @@ public class AbstractHttpTest {
         }
     }
 
-    protected static final class EventCollectDuplexer implements ProtoDuplexer<Object, Object, Object, Object> {
+    protected static final class EventCollectDuplex implements ProtoDuplex<Object, Object, Object, Object> {
         private final Queue<SoEvent> events;
 
-        private EventCollectDuplexer(Queue<SoEvent> events) {
+        private EventCollectDuplex(Queue<SoEvent> events) {
             this.events = events;
         }
 
@@ -702,7 +702,7 @@ public class AbstractHttpTest {
             if (initializer != null) {
                 initializer.config(ctx);
             }
-            ctx.addLast("__test-user-event-collector__", new EventCollectDuplexer(events));
+            ctx.addLast("__test-user-event-collector__", new EventCollectDuplex(events));
         };
     }
 
