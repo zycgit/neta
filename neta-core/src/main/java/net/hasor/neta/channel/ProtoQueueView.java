@@ -86,6 +86,14 @@ class ProtoQueueView implements ProtoRcvQueue<Object>, ProtoSndQueue<Object> {
     }
 
     @Override
+    public Object[] takeMessageToArray(int cnt) {
+        boolean wasFull = this.queue.slotSize() == 0;
+        Object[] result = this.queue.takeMessageToArray(cnt);
+        this.fireWritableIfRecovered(wasFull);
+        return result;
+    }
+
+    @Override
     public List<Object> peekMessage(int cnt) {
         return this.queue.peekMessage(cnt);
     }

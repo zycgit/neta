@@ -74,6 +74,16 @@ public interface ProtoRcvData<T> {
     List<T> takeMessage(int cnt);
 
     /**
+     * Takes up to {@code cnt} data items and returns them as an array.
+     * <p>This is a bulk-transfer helper for hot paths that need indexed iteration without an intermediate {@link List}.</p>
+     * @param cnt maximum number of items to take; a value less than 0 means taking all currently readable data
+     */
+    default Object[] takeMessageToArray(int cnt) {
+        List<T> messages = this.takeMessage(cnt);
+        return messages == null || messages.isEmpty() ? new Object[0] : messages.toArray();
+    }
+
+    /**
      * Peeks at the first data item currently available without removing it from the container.
      * <p>This call does not transfer ownership.</p>
      */

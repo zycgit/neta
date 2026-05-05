@@ -262,6 +262,17 @@ public class ByteBufUtils {
     }
 
     /**
+     * Creates a stable readable slice for a line-oriented readable region.
+     * <p>
+     * Heap-backed buffers reuse their underlying array when possible, while other buffer types
+     * fall back to a copy so the returned slice remains valid even if the source buffer keeps
+     * advancing its reader index.
+     */
+    public static ByteBuf stableSlice(ByteBuf buffer, int offset, int length) {
+        return lineSlice(buffer, offset, length);
+    }
+
+    /**
      * Create a new {@link CompositeByteBuf} pre-populated with the given buffers.
      * <p>
         * Each buffer's readable data becomes part of the composite and ownership is transferred

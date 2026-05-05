@@ -344,9 +344,13 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
      * to the caller after return.</p>
      */
     public Object[] takeMessageToArray(int cnt) {
-        if (cnt <= 0) {
+        if (cnt == 0) {
             return EMPTY_ARRAY;
         }
+        if (cnt < 0) {
+            cnt = this.linkedList.size();
+        }
+
         int fixCnt = Math.min(cnt, this.linkedList.size());
         if (fixCnt == 0) {
             return EMPTY_ARRAY;
@@ -356,6 +360,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
             result[i] = this.linkedList.get(i);
         }
         this.linkedList.subList(0, fixCnt).clear();
+        this.totalOwned -= fixCnt;
         return result;
     }
 
@@ -616,6 +621,38 @@ class ProtoQueueRcvSubQueue<T> implements ProtoRcvQueueView<T> {
         }
 
         List<T> result = new ArrayList<T>(this.linkedList.subList(0, fixCnt));
+        this.linkedList.subList(0, fixCnt).clear();
+        this.owner.adjustOwnedSize(-fixCnt);
+        this.closeIfEmpty();
+        return result;
+    }
+
+    @Override
+    public Object[] takeMessageToArray(int cnt) {
+        if (this.closed) {
+            return new Object[0];
+        }
+
+        if (cnt == 0) {
+            this.closeIfEmpty();
+            return new Object[0];
+        }
+
+        if (cnt < 0) {
+            cnt = this.linkedList.size();
+        }
+
+        int fixCnt = Math.min(cnt, this.linkedList.size());
+        if (fixCnt == 0) {
+            this.closeIfEmpty();
+            return new Object[0];
+        }
+
+        Object[] result = new Object[fixCnt];
+        for (int i = 0; i < fixCnt; i++) {
+            result[i] = this.linkedList.get(i);
+        }
+
         this.linkedList.subList(0, fixCnt).clear();
         this.owner.adjustOwnedSize(-fixCnt);
         this.closeIfEmpty();
