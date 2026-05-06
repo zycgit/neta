@@ -152,7 +152,7 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
 
             mergedHeaders = this.ensureMergedHeaders(mergedHeaders, request.streamId());
             fullReq = new DefaultFullHttpRequest(requestLine, mergedHeaders, aggregatedContent);
-            this.completeFullRequest(request, fullReq, contentLength);
+            this.completeFullRequest(request, fullReq, reqCtx, contentLength);
             dst.offerMessage(fullReq);
 
             this.logAggregatedRequest(context, request, contentLength);
@@ -183,9 +183,14 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
     /**
      * Finalizes the aggregated request headers and propagates request-line metadata.
      */
-    private void completeFullRequest(HttpRequest request, DefaultFullHttpRequest fullReq, int contentLength) {
-        fullReq.setHeader(HttpHeaderNames.CONTENT_LENGTH, String.valueOf(contentLength));
-        fullReq.removeHeader(HttpHeaderNames.TRANSFER_ENCODING);
+    private void completeFullRequest(HttpRequest request, DefaultFullHttpRequest fullReq, HttpContext.RequestDecodeState reqCtx, int contentLength) {
+        if (reqCtx.contentLength != contentLength || reqCtx.chunked || reqCtx.contentLength < 0) {
+            fullReq.setHeader(HttpHeaderNames.CONTENT_LENGTH, String.valueOf(contentLength));
+        }
+        if (reqCtx.chunked) {
+            fullReq.removeHeader(HttpHeaderNames.TRANSFER_ENCODING);
+        }
+
         fullReq.streamId(request.streamId());
         if (request.isBad()) {
             fullReq.markBad(request.badReason());
@@ -245,7 +250,7 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
     }
 
     private boolean shouldPreallocateContentBuffer(long declaredLength, int accumulatedLength) {
-        return declaredLength >= PREALLOCATE_COPY_THRESHOLD && declaredLength <= this.maxContentLength() && accumulatedLength == 0;
+        return false;
     }
 
     private ByteBuf allocateContentBuffer(ByteBuf content, long declaredLength) {
@@ -401,9 +406,6 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
         return request.protocolVersion().isKeepAliveDefault();
     }
 
-    /**
-     * Sends an automatically generated HTTP response and waits for the send future to complete.
-     */
     private void sendAutoResponse(ProtoContext context, HttpVersion protocolVersion, long streamId, HttpStatus status, boolean keepAlive) {
         DefaultFullHttpResponse response = new DefaultFullHttpResponse(protocolVersion, status, ByteBuf.wrap(new byte[0]));
         response.streamId(streamId);
@@ -430,4 +432,5 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
     private static String headerValue(HttpHeaders headers, String name) {
         return headers != null ? headers.getString(name) : null;
     }
+
 }

@@ -147,7 +147,7 @@ public class HttpResponseAggregator extends AbstractHttpAggregator<HttpResponse>
 
             mergedHeaders = this.ensureMergedHeaders(mergedHeaders, response.streamId());
             fullResp = new DefaultFullHttpResponse(responseLine, mergedHeaders, aggregatedContent);
-            this.completeFullResponse(response, fullResp, contentLength);
+            this.completeFullResponse(response, fullResp, respCtx, contentLength);
             dst.offerMessage(fullResp);
 
             this.logAggregatedResponse(context, response, contentLength);
@@ -161,9 +161,14 @@ public class HttpResponseAggregator extends AbstractHttpAggregator<HttpResponse>
     /**
      * Finalizes the aggregated response headers and propagates response-line metadata.
      */
-    private void completeFullResponse(HttpResponse response, DefaultFullHttpResponse fullResp, int contentLength) {
-        fullResp.setHeader(HttpHeaderNames.CONTENT_LENGTH, String.valueOf(contentLength));
-        fullResp.removeHeader(HttpHeaderNames.TRANSFER_ENCODING);
+    private void completeFullResponse(HttpResponse response, DefaultFullHttpResponse fullResp, HttpContext.ResponseDecodeState respCtx, int contentLength) {
+        if (respCtx.contentLength != contentLength || respCtx.chunked || respCtx.contentLength < 0) {
+            fullResp.setHeader(HttpHeaderNames.CONTENT_LENGTH, String.valueOf(contentLength));
+        }
+        if (respCtx.chunked) {
+            fullResp.removeHeader(HttpHeaderNames.TRANSFER_ENCODING);
+        }
+
         fullResp.streamId(response.streamId());
         if (response.isBad()) {
             fullResp.markBad(response.badReason());

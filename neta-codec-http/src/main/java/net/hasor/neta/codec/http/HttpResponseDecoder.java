@@ -62,24 +62,6 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
     private static final int    DEFAULT_MAX_INITIAL_LINE_LENGTH = 4096;
     private static final int    DEFAULT_MAX_HEADER_SIZE         = 8192;
     private static final int    DEFAULT_MAX_CHUNK_SIZE          = 8192;
-    private static final String X_REQUEST_ID                    = "x-request-id";
-    private static final String X_RATELIMIT_LIMIT               = "x-ratelimit-limit";
-    private static final String X_RATELIMIT_REMAINING           = "x-ratelimit-remaining";
-    private static final String HEADER_CONTENT_TYPE             = "Content-Type";
-    private static final String HEADER_CONTENT_LENGTH           = "Content-Length";
-    private static final String HEADER_SERVER                   = "Server";
-    private static final String HEADER_CACHE_CONTROL            = "Cache-Control";
-    private static final String HEADER_CONNECTION               = "Connection";
-    private static final String HEADER_PRAGMA                   = "Pragma";
-    private static final String HEADER_EXPIRES                  = "Expires";
-    private static final String HEADER_X_REQUEST_ID             = "X-Request-Id";
-    private static final String X_TRACE_ID                      = "x-trace-id";
-    private static final String HEADER_X_TRACE_ID               = "X-Trace-Id";
-    private static final String HEADER_X_RATELIMIT_LIMIT        = "X-RateLimit-Limit";
-    private static final String HEADER_X_RATELIMIT_REMAINING    = "X-RateLimit-Remaining";
-    private static final String HEADER_ACCESS_CONTROL_ORIGIN    = "Access-Control-Allow-Origin";
-    private static final String HEADER_ACCESS_CONTROL_METHODS   = "Access-Control-Allow-Methods";
-    private static final String HEADER_VARY                     = "Vary";
     private final int           maxInitialLineLength;
     private final int           maxHeaderSize;
     private final int           maxChunkSize;
@@ -164,13 +146,14 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         boolean printLog = context.getConfig().isPrintLog();
         long channelID = context.getChannel().getChannelId();
         HttpContext.ResponseDecodeState respCtx = httpCtx.resp;
-        QueueByteBuf accumulator = respCtx.prepareAccumulator(src);
+        QueueByteBuf accumulator = null;
 
         try {
             while (true) {
                 switch (respCtx.decoderPhase) {
                     // response
                     case READ_INITIAL: {
+                        accumulator = respCtx.prepareAccumulator(src);
                         HttpResponse responseLine = this.decodeStatusLine(accumulator, respCtx);
                         if (responseLine == null) {
                             return ProtoStatus.Next;
@@ -183,7 +166,13 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                     }
                     // header
                     case READ_HEADER: {
-                        HttpHeaders headers = this.decodeHeaders(respCtx, accumulator);
+                        if (accumulator != null) {
+                            accumulator.markReader();
+                            respCtx.releaseAccumulator();
+                            accumulator = null;
+                        }
+
+                        HttpHeaders headers = this.decodeHeaders(respCtx, src);
                         if (headers == null) {
                             return ProtoStatus.Next;
                         }
@@ -199,6 +188,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                     }
                     // body
                     case READ_FIXED_LENGTH_CONTENT: {
+                        accumulator = respCtx.prepareAccumulator(src);
                         HttpContent content = this.decodeFixedLengthContent(respCtx, accumulator);
                         if (content == null) {
                             return ProtoStatus.Next;
@@ -210,6 +200,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                         break;
                     }
                     case READ_VARIABLE_LENGTH_CONTENT: {
+                        accumulator = respCtx.prepareAccumulator(src);
                         // Close-delimited body has no in-band terminator, so we stay in this state
                         // and keep draining bytes until the peer closes the connection.
                         HttpContent content = this.decodeVariableLengthContent(respCtx, accumulator);
@@ -221,6 +212,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                         break;
                     }
                     case READ_CHUNK_SIZE: {
+                        accumulator = respCtx.prepareAccumulator(src);
                         if (!this.decodeChunkSize(accumulator, respCtx)) {
                             return ProtoStatus.Next;
                         }
@@ -229,6 +221,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                         break;
                     }
                     case READ_CHUNKED_CONTENT: {
+                        accumulator = respCtx.prepareAccumulator(src);
                         HttpContent content = this.decodeChunkedContent(respCtx, accumulator);
                         if (content == null) {
                             return ProtoStatus.Next;
@@ -240,6 +233,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                         break;
                     }
                     case READ_CHUNK_DELIMITER: {
+                        accumulator = respCtx.prepareAccumulator(src);
                         if (!this.decodeChunkDelimiter(accumulator, respCtx)) {
                             return ProtoStatus.Next;
                         }
@@ -249,7 +243,13 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                     }
                     // trailer
                     case READ_HEADER_TRAILER: {
-                        TrailerHttpHeaders trailers = this.decodeChunkTrailer(respCtx, accumulator);
+                        if (accumulator != null) {
+                            accumulator.markReader();
+                            respCtx.releaseAccumulator();
+                            accumulator = null;
+                        }
+
+                        TrailerHttpHeaders trailers = this.decodeChunkTrailer(respCtx, src);
                         if (trailers == null) {
                             return ProtoStatus.Next;
                         }
@@ -266,6 +266,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                             this.offerResponseObject(context, dst, respCtx, new DefaultLastHttpContent(ByteBuf.EMPTY), channelID, printLog);
                         }
                         httpCtx.resp.reset();
+                        accumulator = respCtx.prepareAccumulator(src);
                         if (accumulator.readableBytes() == 0) {
                             return ProtoStatus.Next;
                         }
@@ -440,7 +441,6 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
             int reasonLength = secondSpace < 0 || reasonStart >= lineLength ? 0 : lineLength - reasonStart;
             HttpVersion version = this.resolveHttpVersion(accumulator, 0, firstSpace);
             HttpStatus status = this.resolveHttpStatus(accumulator, statusCode, reasonStart, reasonLength);
-
             accumulator.skipReadableBytes(consumedBytes);
             accumulator.markReaderDeferred();
             respCtx.currentMessage = new DefaultHttpResponse(version, status);
@@ -449,100 +449,49 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
     }
 
     // header
-    private HttpHeaders decodeHeaders(HttpContext.ResponseDecodeState respCtx, QueueByteBuf accumulator) {
+    private HttpHeaders decodeHeaders(HttpContext.ResponseDecodeState respCtx, ProtoRcvQueue<ByteBuf> src) {
         HeaderEntryStore headerEntries = null;
-        boolean endOfHeaders = false;
-        boolean needsContentLength = respCtx.contentLength < 0;
-        boolean needsConnectionHeader = !respCtx.connectionClose;
+        final boolean[] needsContentLength = { respCtx.contentLength < 0 };
+        final boolean[] needsConnectionHeader = { !respCtx.connectionClose };
         if (respCtx.currentMessage != null && HttpVersion.HTTP_1_0.equals(respCtx.currentMessage.protocolVersion())) {
             respCtx.connectionClose = true;
-            needsConnectionHeader = false;
+            needsConnectionHeader[0] = false;
         }
-        ByteBuf line;
-        while ((line = accumulator.readLineBuffer(this.maxHeaderSize + 2)) != null) {
-            boolean releaseLine = true;
-            try {
-                int lineLength = line.readableBytes();
-                respCtx.headerBytes += lineLength + 2;
-                if (respCtx.headerBytes > this.maxHeaderSize) {
-                    throw new HttpHeaderTooLargeException("HTTP headers too large: " + respCtx.headerBytes + " > " + maxHeaderSize, this.maxHeaderSize, respCtx.headerBytes);
-                }
+        final HeaderEntryStore[] headerEntriesRef = { null };
+        boolean endOfHeaders = HttpHeaderStreamingScanner.scan(src, respCtx, this.maxHeaderSize, (line, nameStart, nameLength, valueStart, valueLength) -> {
+            if (headerEntriesRef[0] == null) {
+                headerEntriesRef[0] = new HeaderEntryStore(16);
+            }
 
-                if (lineLength == 0) {
-                    endOfHeaders = true;
-                    accumulator.markReader();
-                    break;
-                }
+            boolean isTransferEncoding = HttpCharSequences.equalsIgnoreCase(line, nameStart, nameLength, HttpHeaderNames.TRANSFER_ENCODING);
+            boolean isContentLength = HttpCharSequences.equalsIgnoreCase(line, nameStart, nameLength, HttpHeaderNames.CONTENT_LENGTH);
+            boolean isConnection = HttpCharSequences.equalsIgnoreCase(line, nameStart, nameLength, HttpHeaderNames.CONNECTION);
 
-                int colonIdx = line.expect((byte) ':', lineLength);
-                if (colonIdx < 0) {
-                    throw new HttpBadRequestException("invalid header line (no colon)");
-                }
-
-                int nameStart = 0;
-                int nameEnd = colonIdx;
-                while (nameStart < nameEnd && isHorizontalWhitespace(line.getUInt8(nameStart))) {
-                    nameStart++;
-                }
-                while (nameEnd > nameStart && isHorizontalWhitespace(line.getUInt8(nameEnd - 1))) {
-                    nameEnd--;
-                }
-                if (nameStart >= nameEnd) {
-                    throw new HttpBadRequestException("empty header name");
-                }
-
-                int valueStart = colonIdx + 1;
-                while (valueStart < lineLength && isHorizontalWhitespace(line.getUInt8(valueStart))) {
-                    valueStart++;
-                }
-                int valueEnd = lineLength;
-                while (valueEnd > valueStart && isHorizontalWhitespace(line.getUInt8(valueEnd - 1))) {
-                    valueEnd--;
-                }
-
-                if (headerEntries == null) {
-                    headerEntries = new HeaderEntryStore(16);
-                }
-
-                int nameLength = nameEnd - nameStart;
-                int valueLength = valueEnd - valueStart;
-                String headerName = this.resolveHeaderName(line, nameStart, nameLength);
-                boolean isTransferEncoding = headerName == HttpHeaderNames.TRANSFER_ENCODING;
-                boolean isContentLength = headerName == HttpHeaderNames.CONTENT_LENGTH;
-                boolean isConnection = headerName == HttpHeaderNames.CONNECTION;
-
-                if (!respCtx.chunked && isTransferEncoding && HttpCharSequences.containsIgnoreCase(line, valueStart, valueLength, HttpHeaderValues.CHUNKED)) {
-                    respCtx.chunked = true;
-                    respCtx.contentLength = -1;
-                    needsContentLength = false;
-                } else if (needsContentLength && !respCtx.chunked && isContentLength && !HttpCharSequences.isBlank(line, valueStart, valueLength)) {
-                    try {
-                        respCtx.contentLength = HttpCharSequences.parseLong(line, valueStart, valueLength);
-                        if (respCtx.contentLength < 0) {
-                            throw new HttpContentTooLargeException("negative Content-Length: " + respCtx.contentLength);
-                        }
-                        needsContentLength = false;
-                    } catch (NumberFormatException e) {
-                        throw new HttpBadRequestException("invalid Content-Length", e);
+            if (!respCtx.chunked && isTransferEncoding && HttpCharSequences.containsIgnoreCase(line, valueStart, valueLength, HttpHeaderValues.CHUNKED)) {
+                respCtx.chunked = true;
+                respCtx.contentLength = -1;
+                needsContentLength[0] = false;
+            } else if (needsContentLength[0] && !respCtx.chunked && isContentLength && !HttpCharSequences.isBlank(line, valueStart, valueLength)) {
+                try {
+                    respCtx.contentLength = HttpCharSequences.parseLong(line, valueStart, valueLength);
+                    if (respCtx.contentLength < 0) {
+                        throw new HttpContentTooLargeException("negative Content-Length: " + respCtx.contentLength);
                     }
-                }
-
-                if (needsConnectionHeader && isConnection && HttpCharSequences.containsIgnoreCase(line, valueStart, valueLength, HttpHeaderValues.CLOSE)) {
-                    respCtx.connectionClose = true;
-                    needsConnectionHeader = false;
-                }
-
-                headerEntries.add(this.materializeHeaderEntry(headerName, line, valueStart, valueLength));
-                if (valueLength > 0) {
-                    releaseLine = false;
-                }
-                accumulator.markReader();
-            } finally {
-                if (releaseLine) {
-                    line.free();
+                    needsContentLength[0] = false;
+                } catch (NumberFormatException e) {
+                    throw new HttpBadRequestException("invalid Content-Length", e);
                 }
             }
-        }
+
+            if (needsConnectionHeader[0] && isConnection && HttpCharSequences.containsIgnoreCase(line, valueStart, valueLength, HttpHeaderValues.CLOSE)) {
+                respCtx.connectionClose = true;
+                needsConnectionHeader[0] = false;
+            }
+
+            headerEntriesRef[0].add(DefaultHttpHeaderEntry.newOwnedEntry(line, nameStart, nameLength, valueStart, valueLength));
+            return valueLength > 0;
+        }).isComplete();
+        headerEntries = headerEntriesRef[0];
 
         if (headerEntries == null) {
             respCtx.currentHeaders = endOfHeaders ? new DefaultLastHttpHeaders() : null;
@@ -641,70 +590,27 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         }
     }
 
-    private TrailerHttpHeaders decodeChunkTrailer(HttpContext.ResponseDecodeState respCtx, QueueByteBuf accumulator) {
+    private TrailerHttpHeaders decodeChunkTrailer(HttpContext.ResponseDecodeState respCtx, ProtoRcvQueue<ByteBuf> src) {
         if (!respCtx.currentHeadersTrailer) {
             respCtx.currentHeaders = new DefaultTrailerHttpHeaders();
             respCtx.currentHeadersTrailer = true;
         }
-
-        ByteBuf line;
-        while ((line = accumulator.readLineBuffer(this.maxHeaderSize + 2)) != null) {
-            boolean releaseLine = true;
-            try {
-                int lineLength = line.readableBytes();
-                if (lineLength == 0) {
-                    DefaultTrailerHttpHeaders trailers = (DefaultTrailerHttpHeaders) respCtx.currentHeaders;
-                    if (respCtx.currentMessage != null) {
-                        trailers.streamId(respCtx.currentMessage.streamId());
-                    }
-                    respCtx.currentHeaders = null;
-                    respCtx.currentHeadersTrailer = false;
-                    respCtx.trailerComplete = true;
-                    accumulator.markReaderDeferred();
-                    return trailers;
-                }
-
-                int colonIdx = line.expect((byte) ':', lineLength);
-                if (colonIdx <= 0) {
-                    throw new HttpBadRequestException("invalid trailer line (no colon)");
-                }
-
-                int nameStart = 0;
-                int nameEnd = colonIdx;
-                while (nameStart < nameEnd && isHorizontalWhitespace(line.getUInt8(nameStart))) {
-                    nameStart++;
-                }
-                while (nameEnd > nameStart && isHorizontalWhitespace(line.getUInt8(nameEnd - 1))) {
-                    nameEnd--;
-                }
-                if (nameStart >= nameEnd) {
-                    throw new HttpBadRequestException("empty trailer name");
-                }
-
-                int valueStart = colonIdx + 1;
-                while (valueStart < lineLength && isHorizontalWhitespace(line.getUInt8(valueStart))) {
-                    valueStart++;
-                }
-                int valueEnd = lineLength;
-                while (valueEnd > valueStart && isHorizontalWhitespace(line.getUInt8(valueEnd - 1))) {
-                    valueEnd--;
-                }
-
-                String headerName = this.resolveHeaderName(line, nameStart, nameEnd - nameStart);
-                int valueLength = valueEnd - valueStart;
-                respCtx.currentHeaders.addHeaderEntry(DefaultHttpHeaderEntry.newOwnedEntry(headerName, line, valueStart, valueLength));
-                if (valueLength > 0) {
-                    releaseLine = false;
-                }
-                accumulator.markReaderDeferred();
-            } finally {
-                if (releaseLine) {
-                    line.free();
-                }
-            }
+        boolean complete = HttpHeaderStreamingScanner.scan(src, respCtx, this.maxHeaderSize, (line, nameStart, nameLength, valueStart, valueLength) -> {
+            respCtx.currentHeaders.addHeaderEntry(DefaultHttpHeaderEntry.newOwnedEntry(line, nameStart, nameLength, valueStart, valueLength));
+            return valueLength > 0;
+        }).isComplete();
+        if (!complete) {
+            return null;
         }
 
-        return null;
+        DefaultTrailerHttpHeaders trailers = (DefaultTrailerHttpHeaders) respCtx.currentHeaders;
+        if (respCtx.currentMessage != null) {
+            trailers.streamId(respCtx.currentMessage.streamId());
+        }
+        respCtx.currentHeaders = null;
+        respCtx.currentHeadersTrailer = false;
+        respCtx.trailerComplete = true;
+        return trailers;
     }
 
     private void offerResponseObject(ProtoContext context, ProtoSndQueue<HttpObject> dst, HttpContext.ResponseDecodeState respCtx, HttpObject httpObject, long channelID, boolean printLog) {
@@ -782,158 +688,6 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         return HttpStatus.valueOf(statusCode, this.materializeAscii(line, reasonOffset, reasonLength));
     }
 
-    private DefaultHttpHeaderEntry materializeHeaderEntry(String headerName, ByteBuf source, int valueOffset, int valueLength) {
-        return DefaultHttpHeaderEntry.newOwnedEntry(headerName, source, valueOffset, valueLength);
-    }
-
-    private String resolveHeaderName(ByteBuf source, int offset, int length) {
-        switch (length) {
-            case 4:
-                if (matchesAscii(source, offset, length, HEADER_VARY)) {
-                    return HttpHeaderNames.VARY;
-                }
-                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.HOST)) {
-                    return HttpHeaderNames.HOST;
-                }
-                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.DATE)) {
-                    return HttpHeaderNames.DATE;
-                }
-                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.VARY)) {
-                    return HttpHeaderNames.VARY;
-                }
-                break;
-            case 5:
-                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.RANGE)) {
-                    return HttpHeaderNames.RANGE;
-                }
-                break;
-            case 6:
-                if (matchesAscii(source, offset, length, HEADER_SERVER)) {
-                    return HttpHeaderNames.SERVER;
-                }
-                if (matchesAscii(source, offset, length, HEADER_PRAGMA)) {
-                    return HttpHeaderNames.PRAGMA;
-                }
-                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.SERVER)) {
-                    return HttpHeaderNames.SERVER;
-                }
-                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.EXPECT)) {
-                    return HttpHeaderNames.EXPECT;
-                }
-                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.PRAGMA)) {
-                    return HttpHeaderNames.PRAGMA;
-                }
-                break;
-            case 7:
-                if (matchesAscii(source, offset, length, HEADER_EXPIRES)) {
-                    return HttpHeaderNames.EXPIRES;
-                }
-                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.EXPIRES)) {
-                    return HttpHeaderNames.EXPIRES;
-                }
-                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.UPGRADE)) {
-                    return HttpHeaderNames.UPGRADE;
-                }
-                break;
-            case 10:
-                if (matchesAscii(source, offset, length, HEADER_CONNECTION)) {
-                    return HttpHeaderNames.CONNECTION;
-                }
-                if (matchesAscii(source, offset, length, HEADER_X_TRACE_ID)) {
-                    return X_TRACE_ID;
-                }
-                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.CONNECTION)) {
-                    return HttpHeaderNames.CONNECTION;
-                }
-                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.KEEP_ALIVE)) {
-                    return HttpHeaderNames.KEEP_ALIVE;
-                }
-                if (matchesAsciiIgnoreCase(source, offset, X_TRACE_ID)) {
-                    return X_TRACE_ID;
-                }
-                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.USER_AGENT)) {
-                    return HttpHeaderNames.USER_AGENT;
-                }
-                break;
-            case 12:
-                if (matchesAscii(source, offset, length, HEADER_CONTENT_TYPE)) {
-                    return HttpHeaderNames.CONTENT_TYPE;
-                }
-                if (matchesAscii(source, offset, length, HEADER_X_REQUEST_ID)) {
-                    return X_REQUEST_ID;
-                }
-                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.CONTENT_TYPE)) {
-                    return HttpHeaderNames.CONTENT_TYPE;
-                }
-                if (matchesAsciiIgnoreCase(source, offset, X_REQUEST_ID)) {
-                    return X_REQUEST_ID;
-                }
-                break;
-            case 13:
-                if (matchesAscii(source, offset, length, HEADER_CACHE_CONTROL)) {
-                    return HttpHeaderNames.CACHE_CONTROL;
-                }
-                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.CACHE_CONTROL)) {
-                    return HttpHeaderNames.CACHE_CONTROL;
-                }
-                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.AUTHORIZATION)) {
-                    return HttpHeaderNames.AUTHORIZATION;
-                }
-                break;
-            case 14:
-                if (matchesAscii(source, offset, length, HEADER_CONTENT_LENGTH)) {
-                    return HttpHeaderNames.CONTENT_LENGTH;
-                }
-                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.CONTENT_LENGTH)) {
-                    return HttpHeaderNames.CONTENT_LENGTH;
-                }
-                break;
-            case 17:
-                if (matchesAscii(source, offset, length, HEADER_X_RATELIMIT_LIMIT)) {
-                    return X_RATELIMIT_LIMIT;
-                }
-                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.TRANSFER_ENCODING)) {
-                    return HttpHeaderNames.TRANSFER_ENCODING;
-                }
-                if (matchesAsciiIgnoreCase(source, offset, X_RATELIMIT_LIMIT)) {
-                    return X_RATELIMIT_LIMIT;
-                }
-                break;
-            case 21:
-                if (matchesAscii(source, offset, length, HEADER_X_RATELIMIT_REMAINING)) {
-                    return X_RATELIMIT_REMAINING;
-                }
-                if (matchesAsciiIgnoreCase(source, offset, X_RATELIMIT_REMAINING)) {
-                    return X_RATELIMIT_REMAINING;
-                }
-                break;
-            case 15:
-                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.ACCEPT_LANGUAGE)) {
-                    return HttpHeaderNames.ACCEPT_LANGUAGE;
-                }
-                break;
-            case 27:
-                if (matchesAscii(source, offset, length, HEADER_ACCESS_CONTROL_ORIGIN)) {
-                    return HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN;
-                }
-                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN)) {
-                    return HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN;
-                }
-                break;
-            case 28:
-                if (matchesAscii(source, offset, length, HEADER_ACCESS_CONTROL_METHODS)) {
-                    return HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS;
-                }
-                if (matchesAsciiIgnoreCase(source, offset, HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS)) {
-                    return HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS;
-                }
-                break;
-            default:
-                break;
-        }
-        return this.materializeAscii(source, offset, length);
-    }
-
     private String materializeAscii(ByteBuf source, int offset, int length) {
         return length == 0 ? "" : source.getString(offset, length, java.nio.charset.StandardCharsets.US_ASCII);
     }
@@ -948,10 +702,6 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
             }
         }
         return true;
-    }
-
-    private static boolean matchesAsciiIgnoreCase(ByteBuf line, int offset, CharSequence expected) {
-        return HttpCharSequences.equalsIgnoreCase(line, offset, expected.length(), expected);
     }
 
     private static boolean isBodyForbidden(HttpContext.ResponseDecodeState respCtx) {

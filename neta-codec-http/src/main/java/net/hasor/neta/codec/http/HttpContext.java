@@ -125,6 +125,7 @@ class HttpContext {
         boolean                        trailerComplete       = false;
         boolean                        emitEmptyEndContent   = false;
         long                           packetSequence        = 0;
+        ByteBuf                        headerLineScratch;
         private QueueByteBuf           accumulator;
         private ProtoRcvQueue<ByteBuf> accumulatorSource;
 
@@ -143,6 +144,7 @@ class HttpContext {
             this.trailerComplete = false;
             this.emitEmptyEndContent = false;
             this.packetSequence = 0;
+            this.releaseHeaderLineScratch();
         }
 
         /**
@@ -156,6 +158,7 @@ class HttpContext {
                 this.currentHeaders.release();
             }
             this.releaseAccumulator();
+            this.releaseHeaderLineScratch();
             this.reset();
         }
 
@@ -205,6 +208,14 @@ class HttpContext {
             this.emitEmptyEndContent = false;
             this.packetSequence = 0;
             this.decoderPhase = DecodePhase.READ_HEADER;
+            this.releaseHeaderLineScratch();
+        }
+
+        void releaseHeaderLineScratch() {
+            if (this.headerLineScratch != null && !this.headerLineScratch.isFree()) {
+                this.headerLineScratch.release();
+            }
+            this.headerLineScratch = null;
         }
     }
 

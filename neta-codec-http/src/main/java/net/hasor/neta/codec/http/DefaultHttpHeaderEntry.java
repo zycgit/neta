@@ -71,9 +71,9 @@ public class DefaultHttpHeaderEntry extends AbstractReferenceHolder {
         return entry;
     }
 
-    static DefaultHttpHeaderEntry newOwnedEntry(CharSequence name, ByteBuf source, int valueOffset, int valueLength) {
+    static DefaultHttpHeaderEntry newOwnedEntry(ByteBuf source, int nameOffset, int nameLength, int valueOffset, int valueLength) {
         DefaultHttpHeaderEntry entry = RecycleObjectPool.get(RECYCLE_INDEX, RECYCLE_HANDLER);
-        entry.initEntry(name, source, valueOffset, valueLength, false);
+        entry.initEntry(source, nameOffset, nameLength, valueOffset, valueLength, false);
         return entry;
     }
 
@@ -124,6 +124,24 @@ public class DefaultHttpHeaderEntry extends AbstractReferenceHolder {
         this.source = valueLength == 0 ? null : (retainSource ? source.retain() : source);
         this.nameOffset = 0;
         this.nameLength = 0;
+        this.valueOffset = valueOffset;
+        this.valueLength = valueLength;
+    }
+
+    private void initEntry(ByteBuf source, int nameOffset, int nameLength, int valueOffset, int valueLength, boolean retainSource) {
+        if (source == null) {
+            throw new IllegalArgumentException("source must not be null");
+        }
+        if (nameOffset < 0 || nameLength <= 0 || valueOffset < 0 || valueLength < 0) {
+            throw new IllegalArgumentException("name/value range must not be negative or empty");
+        }
+
+        this.resetRefCnt();
+        this.name = null;
+        this.value = valueLength == 0 ? "" : null;
+        this.source = retainSource ? source.retain() : source;
+        this.nameOffset = nameOffset;
+        this.nameLength = nameLength;
         this.valueOffset = valueOffset;
         this.valueLength = valueLength;
     }

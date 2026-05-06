@@ -78,6 +78,61 @@ public class HttpResponseDecoderTest extends AbstractHttpTest {
     }
 
     @Test
+    public void testResponseDecoderDoesNotConsumePartialHeaderLine() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastDecoder("resp-decoder", new HttpResponseDecoder());
+            }, VrtSoConfig.asClient());
+
+            List<HttpObject> batch1 = receiveAndIntBound(pipe, ascii("HTTP/1.1 200 OK\r\nServer: demo\r\nX-Desc: hel"));
+            assertEquals(2, batch1.size());
+            assertEquals(HttpStatus.OK, ((HttpResponse) batch1.get(0)).status());
+            assertEquals("demo", ((HttpHeaders) batch1.get(1)).getString(HttpHeaderNames.SERVER));
+
+            List<HttpObject> batch2 = receiveAndIntBound(pipe, ascii("lo\r\nContent-Length: 0\r\n\r\n"));
+            assertEquals(2, batch2.size());
+            HttpHeaders headers = (HttpHeaders) batch2.get(0);
+            assertEquals("hello", headers.getString("X-Desc"));
+            assertEquals("0", headers.getString(HttpHeaderNames.CONTENT_LENGTH));
+            assertTrue(batch2.get(1) instanceof LastHttpContent);
+        });
+    }
+
+    @Test
+    public void testResponseDecoderDoesNotConsumePartialHeaderLineWithoutCrLf() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastDecoder("resp-decoder", new HttpResponseDecoder());
+            }, VrtSoConfig.asClient());
+
+            List<HttpObject> batch1 = receiveAndIntBound(pipe, ascii("HTTP/1.1 200 OK\r\nX-Desc: hello"));
+            assertEquals(1, batch1.size());
+            assertEquals(HttpStatus.OK, ((HttpResponse) batch1.get(0)).status());
+
+            List<HttpObject> batch2 = receiveAndIntBound(pipe, ascii("\r\nContent-Length: 0\r\n\r\n"));
+            assertEquals(2, batch2.size());
+            HttpHeaders headers = (HttpHeaders) batch2.get(0);
+            assertEquals("hello", headers.getString("X-Desc"));
+            assertEquals("0", headers.getString(HttpHeaderNames.CONTENT_LENGTH));
+            assertTrue(batch2.get(1) instanceof LastHttpContent);
+        });
+    }
+
+    @Test
+    public void testResponseDecoderPreservesOriginalHeaderNames() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastDecoder("resp-decoder", new HttpResponseDecoder());
+            }, VrtSoConfig.asClient());
+
+            List<HttpObject> batch = receiveAndIntBound(pipe, ascii("HTTP/1.1 200 OK\r\nX-Custom-Header: demo\r\nContent-Length: 0\r\n\r\n"));
+            HttpHeaders headers = (HttpHeaders) batch.get(1);
+            assertTrue(headers.headerNames().contains("X-Custom-Header"));
+            assertEquals("demo", headers.getString("x-custom-header"));
+        });
+    }
+
+    @Test
     public void testResponseDecoderTransparentModeWrapsInboundByteBuf() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {

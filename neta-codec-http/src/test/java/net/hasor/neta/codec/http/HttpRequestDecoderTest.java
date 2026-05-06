@@ -131,6 +131,20 @@ public class HttpRequestDecoderTest extends AbstractHttpTest {
     }
 
     @Test
+    public void testRequestDecoderPreservesOriginalHeaderNames() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastDecoder("req-decoder", new HttpRequestDecoder());
+            }, VrtSoConfig.asServer());
+
+            List<HttpObject> batch = receiveAndIntBound(pipe, ascii("GET /hello HTTP/1.1\r\nX-Custom-Header: demo\r\n\r\n"));
+            HttpHeaders headers = (HttpHeaders) batch.get(1);
+            assertTrue(headers.headerNames().contains("X-Custom-Header"));
+            assertEquals("demo", headers.getString("x-custom-header"));
+        });
+    }
+
+    @Test
     public void testRequestDecoderEmitsSeparatedHeadersAndTrailers() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
