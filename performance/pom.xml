@@ -23,7 +23,6 @@
                     <excludes>
                         <exclude>**/Http2CodecBenchmark.java</exclude>
                         <exclude>**/StubProtoContext.java</exclude>
-                        <exclude>**/WebSocketBenchmark.java</exclude>
                     </excludes>
                 </configuration>
             </plugin>
@@ -34,7 +33,6 @@
                     <excludes>
                         <exclude>**/Http2CodecBenchmark.java</exclude>
                         <exclude>**/StubProtoContext.java</exclude>
-                        <exclude>**/WebSocketBenchmark.java</exclude>
                     </excludes>
                 </configuration>
             </plugin>
@@ -45,7 +43,6 @@
                     <sourceFileExcludes>
                         <sourceFileExclude>**/Http2CodecBenchmark.java</sourceFileExclude>
                         <sourceFileExclude>**/StubProtoContext.java</sourceFileExclude>
-                        <sourceFileExclude>**/WebSocketBenchmark.java</sourceFileExclude>
                         <sourceFileExclude>**/jmh_generated/*.java</sourceFileExclude>
                     </sourceFileExcludes>
                 </configuration>
