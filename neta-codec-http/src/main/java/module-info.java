@@ -3,6 +3,7 @@ module net.hasor.neta.handler.codec {
     requires transitive jdk.unsupported;
     requires transitive net.hasor.cobble;
     requires transitive net.hasor.neta;
+    requires static jzlib;
 
     exports net.hasor.neta.codec.http;
     exports net.hasor.neta.codec.http.cookie;

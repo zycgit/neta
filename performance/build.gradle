@@ -1,0 +1,25 @@
+plugins { id 'java'; id 'com.gradleup.shadow' }
+
+description = 'JMH benchmarks for Neta.'
+
+dependencies {
+    implementation "org.openjdk.jmh:jmh-core:${property('lib.jmh')}"
+    annotationProcessor "org.openjdk.jmh:jmh-generator-annprocess:${property('lib.jmh')}"
+    implementation project(':neta-core')
+    implementation project(':neta-codec-http')
+    implementation project(':nhttp-server')
+    implementation "io.netty:netty-all:${property('lib.netty')}"
+}
+
+tasks.withType(JavaCompile).configureEach {
+    exclude '**/Http2CodecBenchmark.java', '**/StubProtoContext.java'
+}
+
+tasks.named('shadowJar') {
+    archiveClassifier = ''
+    mergeServiceFiles()
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
+    manifest { attributes 'Main-Class': 'org.openjdk.jmh.Main' }
+}
+
+tasks.named('build') { dependsOn tasks.shadowJar }

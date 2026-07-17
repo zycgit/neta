@@ -4,7 +4,6 @@ bin
 /out/
 .DS_Store
 _book
-dependency-reduced-pom.xml
 .gradle
 /.gradle/
 
@@ -18,7 +17,6 @@ yarn-error.log*
 
 # Editor directories and files
 .settings
-target
 .classpath
 .project
 *.iml
@@ -29,9 +27,6 @@ target
 *.ntvs*
 *.njsproj
 *.sln
-pom.xml.versionsBackup
-pom.xml.releaseBackup
-release.properties
 
 # codes
 gen/
@@ -41,3 +36,4 @@ logs/*
 .docusaurus
 .cache-loader
 neta-doc/build/
+**/build/

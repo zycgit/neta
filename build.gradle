@@ -1,0 +1,63 @@
+plugins {
+    id 'com.gradleup.shadow' version '9.2.2' apply false
+}
+
+allprojects {
+    group = 'net.hasor'
+}
+
+subprojects {
+    plugins.withType(JavaPlugin).configureEach {
+        java { toolchain.languageVersion = JavaLanguageVersion.of(17) }
+        tasks.withType(JavaCompile).configureEach {
+            options.encoding = 'UTF-8'
+            options.release = 17
+        }
+        tasks.withType(Javadoc).configureEach {
+            options.encoding = 'UTF-8'
+            options.addStringOption('Xdoclint:none', '-quiet')
+            failOnError = false
+        }
+        tasks.withType(Test).configureEach { useJUnit() }
+        tasks.withType(GenerateModuleMetadata).configureEach { enabled = false }
+
+        plugins.withId('maven-publish') {
+            apply plugin: 'signing'
+            java { withSourcesJar(); withJavadocJar() }
+            publishing {
+                publications {
+                    mavenJava(MavenPublication) {
+                        from components.java
+                        pom {
+                            name = providers.provider { project.findProperty('pomName') ?: project.name }
+                            description = providers.provider { project.description ?: project.name }
+                            url = 'https://www.hasor.net/'
+                            licenses { license { name = 'The Apache Software License, Version 2.0'; url = 'https://www.apache.org/licenses/LICENSE-2.0.txt' } }
+                            developers { developer { name = '赵永春(Mr.Zhao)'; email = 'zyc@hasor.net' } }
+                            scm {
+                                connection = 'scm:git:git@gitee.com:zycgit/neta.git'
+                                developerConnection = connection
+                                url = 'https://gitee.com/zycgit/neta'
+                                tag = 'HEAD'
+                            }
+                        }
+                    }
+                }
+                if (findProperty('centralBundleDir')) {
+                    repositories { maven { name = 'centralBundle'; url = uri(findProperty('centralBundleDir')) } }
+                }
+            }
+            afterEvaluate {
+                if (plugins.hasPlugin('com.gradleup.shadow')) {
+                    publishing.publications.mavenJava.setArtifacts([tasks.shadowJar, tasks.sourcesJar, tasks.javadocJar])
+                }
+            }
+            signing {
+                required { findProperty('centralRelease') == 'true' }
+                def key = findProperty('maven.central.signing_key')
+                if (key) useInMemoryPgpKeys(key.replace('\\n', '\n'), findProperty('maven.central.signing_password'))
+                sign publishing.publications.mavenJava
+            }
+        }
+    }
+}

@@ -1,0 +1,10 @@
+plugins { id 'application' }
+
+description = 'Telnet echo server example.'
+
+application { mainClass = 'com.example.demo.AioEchoServer' }
+
+dependencies {
+    implementation project(':neta-core')
+    implementation "ch.qos.logback:logback-classic:${property('lib.logback')}"
+}

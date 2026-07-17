@@ -1,0 +1,27 @@
+plugins { id 'java-library'; id 'maven-publish' }
+
+ext.pomName = 'Neta HTTP Codec'
+description = 'HTTP protocol codecs for Neta.'
+
+dependencies {
+    api project(':neta-core')
+    compileOnly "com.jcraft:jzlib:${property('lib.jzlib')}"
+
+    testImplementation "com.jcraft:jzlib:${property('lib.jzlib')}"
+    testImplementation "junit:junit:${property('lib.junit')}"
+    testImplementation "org.bouncycastle:bcpkix-jdk15on:${property('lib.bouncycastle')}"
+    testImplementation "org.bouncycastle:bcprov-jdk15on:${property('lib.bouncycastle')}"
+    testImplementation "org.bouncycastle:bctls-jdk15on:${property('lib.bouncycastle')}"
+    testImplementation "com.squareup.okhttp3:okhttp:${property('lib.okhttp')}"
+    testImplementation 'org.java-websocket:Java-WebSocket:1.5.7'
+    testImplementation "org.eclipse.jetty:jetty-client:${property('lib.jetty')}"
+    testImplementation "org.eclipse.jetty:jetty-server:${property('lib.jetty')}"
+    testImplementation "org.eclipse.jetty.http2:http2-server:${property('lib.jetty')}"
+}
+
+tasks.named('compileJava') {
+    doFirst {
+        options.compilerArgs += ['--module-path', classpath.asPath]
+        classpath = files()
+    }
+}

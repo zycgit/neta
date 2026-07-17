@@ -1,0 +1,13 @@
+plugins { id 'java-library'; id 'maven-publish' }
+
+ext.pomName = 'Neta Core'
+description = 'High performance asynchronous network application framework.'
+
+dependencies {
+    api "net.hasor:cobble-all:${property('lib.cobble')}"
+    compileOnly "org.bouncycastle:bcpkix-jdk15on:${property('lib.bouncycastle')}"
+    compileOnly "org.bouncycastle:bcprov-jdk15on:${property('lib.bouncycastle')}"
+    compileOnly "org.bouncycastle:bctls-jdk15on:${property('lib.bouncycastle')}"
+
+    testImplementation "junit:junit:${property('lib.junit')}"
+}

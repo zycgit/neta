@@ -1,0 +1,12 @@
+plugins { id 'java-library' }
+
+description = 'A lightweight HTTP server built on Neta.'
+
+dependencies {
+    api project(':neta-core')
+    api project(':neta-codec-http')
+    api "net.hasor:cobble-all:${property('lib.cobble')}"
+
+    testImplementation "junit:junit:${property('lib.junit')}"
+    testImplementation "com.squareup.okhttp3:okhttp:${property('lib.okhttp')}"
+}

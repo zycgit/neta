@@ -1,0 +1,12 @@
+plugins { id 'application' }
+
+description = 'HTTP server example using the nHTTP server API.'
+
+application { mainClass = 'net.hasor.neta.example.httpserver.HttpServerMain' }
+
+dependencies {
+    implementation project(':nhttp-server')
+    implementation "ch.qos.logback:logback-classic:${property('lib.logback')}"
+    implementation "org.bouncycastle:bcpkix-jdk15on:${property('lib.bouncycastle')}"
+    implementation "org.bouncycastle:bcprov-jdk15on:${property('lib.bouncycastle')}"
+}

@@ -1,0 +1,13 @@
+plugins { id 'java-library'; id 'maven-publish' }
+
+ext.pomName = 'Neta Network Codec'
+description = 'Network protocol codecs for Neta.'
+
+dependencies {
+    api project(':neta-core')
+
+    testImplementation "junit:junit:${property('lib.junit')}"
+    testImplementation "org.bouncycastle:bcpkix-jdk15on:${property('lib.bouncycastle')}"
+    testImplementation "org.bouncycastle:bcprov-jdk15on:${property('lib.bouncycastle')}"
+    testImplementation "org.bouncycastle:bctls-jdk15on:${property('lib.bouncycastle')}"
+}

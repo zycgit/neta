@@ -1,0 +1,25 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        mavenLocal()
+        mavenCentral()
+    }
+}
+
+rootProject.name = 'neta-parent'
+
+include 'neta-core', 'neta-codec-http', 'neta-codec-net', 'neta-all'
+include 'nhttp', 'nhttp-server', 'tconsole'
+include 'neta-example-http-server', 'performance'
+
+project(':nhttp').projectDir = file('neta-lab/nhttp')
+project(':nhttp-server').projectDir = file('neta-lab/nhttp-server')
+project(':tconsole').projectDir = file('neta-lab/tconsole')
+project(':neta-example-http-server').projectDir = file('neta-example/httpServer')

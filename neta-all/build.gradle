@@ -1,0 +1,36 @@
+plugins { id 'java-library'; id 'maven-publish'; id 'com.gradleup.shadow' }
+
+ext.pomName = 'Neta All-in-One'
+description = 'All Neta modules in one artifact.'
+
+configurations { shaded }
+
+dependencies {
+    api "net.hasor:cobble-all:${property('lib.cobble')}"
+    compileOnly project(':neta-core')
+    compileOnly project(':neta-codec-http')
+    compileOnly project(':neta-codec-net')
+    shaded project(':neta-core')
+    shaded project(':neta-codec-http')
+    shaded project(':neta-codec-net')
+}
+
+tasks.named('shadowJar') {
+    configurations = [project.configurations.shaded]
+    archiveClassifier = ''
+    exclude 'META-INF/MANIFEST.MF', 'module-info.class'
+    manifest { attributes 'Automatic-Module-Name': 'net.hasor.neta' }
+}
+
+publishing.publications.mavenJava.pom.withXml {
+    def dependenciesNode = asNode().dependencies[0] ?: asNode().appendNode('dependencies')
+    configurations.compileOnly.dependencies.withType(ProjectDependency).each { dep ->
+        def target = project(dep.path)
+        def node = dependenciesNode.appendNode('dependency')
+        node.appendNode('groupId', target.group)
+        node.appendNode('artifactId', target.name)
+        node.appendNode('version', target.version)
+        node.appendNode('scope', 'compile')
+        node.appendNode('optional', 'true')
+    }
+}
