@@ -2,7 +2,6 @@ package net.hasor.neta.bytebuf;
 
 import org.junit.Test;
 
-import net.hasor.cobble.ref.RecycleObjectPool;
 
 /**
  * Tests for sliceOff and discardReadBytes with Zero-Copy/Split logic
@@ -16,7 +15,7 @@ public class PooledByteBufSliceTest {
         int fmtMaxCap = PageChunkPool.tableSizeFor(initCapacity, Integer.MAX_VALUE);
         Buffer target = POOL.requestBuffer(initCapacity, ByteBufAllocator.DEFAULT);
 
-        PooledByteBuf byteBuf = RecycleObjectPool.get(PooledByteBuf.class, PooledByteBuf.RECYCLE_HANDLER);
+        PooledByteBuf byteBuf = PooledByteBuf.RECYCLER.get();
         byteBuf.initBuffer(ByteBufAllocator.DEFAULT, fmtMaxCap, 4096, target, POOL);
         return byteBuf;
     }

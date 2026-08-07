@@ -43,8 +43,8 @@ public class TcpNeta2JvmTest extends AbstractSoTest {
 
         // server
         AtomicBoolean serverRead = new AtomicBoolean(false);
+        ServerSocket server = new ServerSocket(safePort);
         ThreadUtils.daemonThread(true, (Callable) () -> {
-            ServerSocket server = new ServerSocket(safePort);
             Socket remote = server.accept();
 
             byte[] byteArray = new byte[1024];
@@ -57,12 +57,11 @@ public class TcpNeta2JvmTest extends AbstractSoTest {
         // client send
         NetManager neta = new NetManager();
         NetChannel clientSite = neta.connectAsync(address, ProtoHelper.standard().build(), TcpSoConfig.TCP()).get();
-        clientSite.sendData("Hello TCP".getBytes());
+        clientSite.sendData("Hello TCP".getBytes()).get();
 
         // wait finish
-        while (!serverRead.get()) {
-            ThreadUtils.sleep(10);
-        }
+        waitFor(serverRead::get, 5000);
+        assert serverRead.get();
         neta.shutdown();
     }
 

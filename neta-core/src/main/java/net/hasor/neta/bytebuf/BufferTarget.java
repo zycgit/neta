@@ -35,18 +35,8 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * @see PooledByteBuf
  */
 class BufferTarget implements Buffer {
-    static final int                                  RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    static RecycleObjectPool.ObjHandler<BufferTarget> RECYCLE_HANDLER = //
-            new RecycleObjectPool.ObjHandler<BufferTarget>() {
-                public BufferTarget create() {
-                    return new BufferTarget();
-                }
-
-                @Override
-                public void free(BufferTarget tar) {
-                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
-                }
-            };
+    static final RecycleObjectPool.Recycler<BufferTarget> RECYCLER = RecycleObjectPool.recycler(//
+            BufferTarget::new, BufferTarget::resetState, BufferTarget::onRecycle);
     private Buffer                                    memory;
     private PageChunkSplit                            pages;
     private int                                       pageSize;
@@ -58,6 +48,23 @@ class BufferTarget implements Buffer {
     private int     capacity;
 
     private BufferTarget() {
+    }
+
+    private void resetState() {
+        this.memory = null;
+        this.pages = null;
+        this.pageSize = 0;
+        this.readOnly = false;
+        this.offset = 0;
+        this.limit = 0;
+        this.capacity = 0;
+    }
+
+    private void onRecycle() {
+        if (this.pages != null) {
+            this.pages.free();
+        }
+        this.resetState();
     }
 
     void initBuffer(int pageSize, PageChunkSplit pages, Buffer memory) {
@@ -101,9 +108,7 @@ class BufferTarget implements Buffer {
 
     @Override
     public void free() {
-        this.pages.free();
-        this.memory = null;
-        RECYCLE_HANDLER.free(this);
+        RECYCLER.recycle(this);
     }
 
     @Override
@@ -182,7 +187,7 @@ class BufferTarget implements Buffer {
         }
 
         // build new Buffer
-        BufferTarget splitBuffer = RecycleObjectPool.get(BufferTarget.RECYCLE_INDEX, BufferTarget.RECYCLE_HANDLER);
+        BufferTarget splitBuffer = BufferTarget.RECYCLER.get();
         splitBuffer.initBuffer(this.pageSize, headPages, this.memory, this.offset, newOffset, newCapacity);
 
         // update self

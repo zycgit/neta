@@ -47,22 +47,22 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * @see AutoArrayByteBuf
  */
 final class RingArrayByteBuf extends AbstractByteBuf {
-    static final int                                      RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    static RecycleObjectPool.ObjHandler<RingArrayByteBuf> RECYCLE_HANDLER = //
-            new RecycleObjectPool.ObjHandler<RingArrayByteBuf>() {
-                public RingArrayByteBuf create() {
-                    return new RingArrayByteBuf();
-                }
-
-                @Override
-                public void free(RingArrayByteBuf tar) {
-                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
-                }
-            };
+    static final RecycleObjectPool.Recycler<RingArrayByteBuf> RECYCLER = RecycleObjectPool.recycler(//
+            RingArrayByteBuf::new, RingArrayByteBuf::resetState, RingArrayByteBuf::onRecycle);
     byte[]                                                target;
     private int                                           capacityMask;
 
     private RingArrayByteBuf() {
+    }
+
+    private void resetState() {
+        this.target = null;
+        this.capacityMask = 0;
+    }
+
+    private void onRecycle() {
+        this.target = null;
+        this.capacityMask = 0;
     }
 
     /** Round up to the next power of 2 (for bitwise index masking). */
@@ -310,7 +310,7 @@ final class RingArrayByteBuf extends AbstractByteBuf {
         int mask = this.capacityMask;
         int maskedIdx = idx & mask;
         // Fast path: data doesn't cross ring boundary
-        if (maskedIdx + 2 <= t.length && UnsafeMemory.HAS_UNSAFE) {
+        if (maskedIdx + 2 <= t.length && UnsafeMemory.HAS_FAST_ARRAY_ACCESS) {
             return UnsafeMemory.getInt16(t, maskedIdx, bigEndian);
         }
         byte b0 = t[maskedIdx];
@@ -330,7 +330,7 @@ final class RingArrayByteBuf extends AbstractByteBuf {
         int mask = this.capacityMask;
         int maskedIdx = idx & mask;
         // Fast path: data doesn't cross ring boundary
-        if (maskedIdx + 2 <= t.length && UnsafeMemory.HAS_UNSAFE) {
+        if (maskedIdx + 2 <= t.length && UnsafeMemory.HAS_FAST_ARRAY_ACCESS) {
             UnsafeMemory.putInt16(t, maskedIdx, n, bigEndian);
             return;
         }
@@ -351,7 +351,7 @@ final class RingArrayByteBuf extends AbstractByteBuf {
         int mask = this.capacityMask;
         int maskedIdx = idx & mask;
         // Fast path: data doesn't cross ring boundary
-        if (maskedIdx + 4 <= t.length && UnsafeMemory.HAS_UNSAFE) {
+        if (maskedIdx + 4 <= t.length && UnsafeMemory.HAS_FAST_ARRAY_ACCESS) {
             return UnsafeMemory.getInt32(t, maskedIdx, bigEndian);
         }
         byte b0 = t[maskedIdx];
@@ -373,7 +373,7 @@ final class RingArrayByteBuf extends AbstractByteBuf {
         int mask = this.capacityMask;
         int maskedIdx = idx & mask;
         // Fast path: data doesn't cross ring boundary
-        if (maskedIdx + 4 <= t.length && UnsafeMemory.HAS_UNSAFE) {
+        if (maskedIdx + 4 <= t.length && UnsafeMemory.HAS_FAST_ARRAY_ACCESS) {
             UnsafeMemory.putInt32(t, maskedIdx, n, bigEndian);
             return;
         }
@@ -398,7 +398,7 @@ final class RingArrayByteBuf extends AbstractByteBuf {
         int mask = this.capacityMask;
         int maskedIdx = idx & mask;
         // Fast path: data doesn't cross ring boundary
-        if (maskedIdx + 8 <= t.length && UnsafeMemory.HAS_UNSAFE) {
+        if (maskedIdx + 8 <= t.length && UnsafeMemory.HAS_FAST_ARRAY_ACCESS) {
             return UnsafeMemory.getInt64(t, maskedIdx, bigEndian);
         }
         byte b0 = t[maskedIdx];
@@ -424,7 +424,7 @@ final class RingArrayByteBuf extends AbstractByteBuf {
         int mask = this.capacityMask;
         int maskedIdx = idx & mask;
         // Fast path: data doesn't cross ring boundary
-        if (maskedIdx + 8 <= t.length && UnsafeMemory.HAS_UNSAFE) {
+        if (maskedIdx + 8 <= t.length && UnsafeMemory.HAS_FAST_ARRAY_ACCESS) {
             UnsafeMemory.putInt64(t, maskedIdx, n, bigEndian);
             return;
         }
@@ -493,15 +493,14 @@ final class RingArrayByteBuf extends AbstractByteBuf {
         this.markedReaderIndex = Math.min(this.markedReaderIndex, this.readerIndex);
 
         ByteBuffer newBuf = ByteBuffer.wrap(sliceData);
-        WrapByteBuffer slicedBuf = RecycleObjectPool.get(WrapByteBuffer.RECYCLE_INDEX, WrapByteBuffer.RECYCLE_HANDLER);
+        WrapByteBuffer slicedBuf = WrapByteBuffer.RECYCLER.get();
         slicedBuf.initBuffer(newBuf, false);
         return slicedBuf;
     }
 
     @Override
     protected void _free() {
-        this.target = null;
-        RECYCLE_HANDLER.free(this);
+        RECYCLER.recycle(this);
     }
 
     @Override
@@ -520,7 +519,7 @@ final class RingArrayByteBuf extends AbstractByteBuf {
 
         byte[] copyArray = new byte[this.getMaxCapacity()];
         this._getBytes(this.markedReaderIndex, copyArray, 0, copyArray.length);
-        RingArrayByteBuf byteBuf = RecycleObjectPool.get(RingArrayByteBuf.RECYCLE_INDEX, RingArrayByteBuf.RECYCLE_HANDLER);
+        RingArrayByteBuf byteBuf = RingArrayByteBuf.RECYCLER.get();
         byteBuf.initBuffer(this.alloc, copyArray);
 
         int shift = this.markedReaderIndex;

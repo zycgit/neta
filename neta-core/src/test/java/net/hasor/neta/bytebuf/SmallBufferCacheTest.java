@@ -772,6 +772,23 @@ public class SmallBufferCacheTest {
     }
 
     @Test
+    public void allocSmallBuffer_nonSizeClass_normalizesAndReusesStorage() {
+        Buffer heap = SmallBufferCache.allocSmallBuffer(false, 27);
+        assert heap.capacity() == 32;
+        byte[] heapStorage = heap.heapArray();
+        heap.free();
+        assert SmallBufferCache.allocHeap(32) == heapStorage;
+
+        Buffer direct = SmallBufferCache.allocSmallBuffer(true, 27);
+        assert direct.capacity() == 32;
+        ByteBuffer directStorage = direct.getTarget();
+        direct.free();
+        ByteBuffer cached = SmallBufferCache.allocDirect(32);
+        assert cached == directStorage;
+        SmallBufferCache.freeDirect(cached);
+    }
+
+    @Test
     public void pooledBuffer_smallFixed_noTransition() {
         ByteBufAllocator alloc = ByteBufUtils.POOLED_HEAP_ALLOCATOR;
 

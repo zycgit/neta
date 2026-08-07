@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
-import static net.hasor.neta.bytebuf.Bits.*;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import net.hasor.cobble.ObjectUtils;
+import static net.hasor.neta.bytebuf.Bits.*;
+
 /**
  * Base implementation of {@link ByteBuf} index management.
  * <p>
@@ -30,7 +31,7 @@ import net.hasor.cobble.ObjectUtils;
  *   |----------------------|-----------------|------------------|---------------|
  *   |       ancient        |   discardable   |     readable     |  overlayable  | writable |
  *   |&lt;----- already dropped by markReader() ----&gt;|&lt;-- visible --&gt;|&lt;-- rewritable --&gt;|
- * 
+ *
  * invariants
  *   0 &lt;= markedReaderIndex &lt;= readerIndex &lt;= markedWriterIndex &lt;= writerIndex &lt;= capacity
  * </pre>
@@ -40,19 +41,19 @@ import net.hasor.cobble.ObjectUtils;
  * @version : 2022-11-01
  */
 public abstract class AbstractByteBuf extends AbstractReferenceHolder implements ByteBuf, AutoCloseable {
-    protected ByteBufAllocator                alloc;
-    protected int                             markedReaderIndex;
-    protected int                             markedWriterIndex;
-    protected int                             readerIndex;
-    protected int                             writerIndex;
-    protected ByteOrder                       byteOrder = ByteOrder.BIG_ENDIAN;
-    protected boolean                         bigEndian = true;
-    protected boolean                         freed     = false;
-    private int                               maxCapacity;
-    private ResourceLeakDetector.ResourceLeak leak;
-    private ByteBufAllocatorMetric            metric;
-    private boolean                           metricDirect;
-    private int                               metricCapacity;
+    protected ByteBufAllocator                  alloc;
+    protected int                               markedReaderIndex;
+    protected int                               markedWriterIndex;
+    protected int                               readerIndex;
+    protected int                               writerIndex;
+    protected ByteOrder                         byteOrder = ByteOrder.BIG_ENDIAN;
+    protected boolean                           bigEndian = true;
+    protected boolean                           freed     = false;
+    private   int                               maxCapacity;
+    private   ResourceLeakDetector.ResourceLeak leak;
+    private   ByteBufAllocatorMetric            metric;
+    private   boolean                           metricDirect;
+    private   int                               metricCapacity;
 
     protected void initByteBuf(ByteBufAllocator alloc, int maxCapacity) {
         this.alloc = alloc;
@@ -203,6 +204,26 @@ public abstract class AbstractByteBuf extends AbstractReferenceHolder implements
     protected abstract int _getBytes(int offset, ByteBuf dst, int dstLen);
 
     protected abstract void _free();
+
+    @Override
+    public ByteBuf copy(int offset, int length) {
+        if (length <= 0) {
+            return ByteBuf.EMPTY;
+        }
+        int baseOffset = offsetReadable(offset, length);
+        byte[] copy = new byte[length];
+        this._getBytes(baseOffset, copy, 0, length);
+        return ByteBuf.wrap(copy);
+    }
+
+    @Override
+    public ByteBuf slice(int offset, int length) {
+        if (length <= 0) {
+            return ByteBuf.EMPTY;
+        }
+        int baseOffset = offsetReadable(offset, length);
+        return ArraySliceByteBuf.newSlice(this, baseOffset, length);
+    }
 
     @Override
     public int readableBytes() {

@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import net.hasor.cobble.concurrent.future.Future;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Test;
@@ -232,6 +233,38 @@ public class ChannelLifecycleTest extends AbstractStackTest {
         assert awaited;
         assert closeCalled.get();
         assert channel.isClose();
+
+        neta.shutdown();
+    }
+
+    @Test
+    public void virtualGracefulCloseCompletesLifecycleAsync() throws Throwable {
+        AtomicBoolean lifecycleClosed = new AtomicBoolean();
+        ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class)//
+                .nextDecoder("L1", new ProtoHandler<Integer, Integer>() {
+                    @Override
+                    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Integer> src, ProtoSndQueue<Integer> dst) {
+                        return ProtoStatus.Next;
+                    }
+
+                    @Override
+                    public void onClose(ProtoContext context) {
+                        lifecycleClosed.set(true);
+                    }
+                })//
+                .build();
+
+        NetManager neta = new NetManager();
+        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
+        Future<NetChannel> closeFuture = channel.close();
+
+        // Graceful close runs on the pipeline executor for all transports (uniform close path).
+        closeFuture.get();
+
+        assert closeFuture.isDone();
+        assert channel.isClose();
+        assert lifecycleClosed.get();
+        assert neta.getContext().findChannel(channel.getChannelId()) == null;
 
         neta.shutdown();
     }

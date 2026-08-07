@@ -24,7 +24,6 @@ import net.hasor.cobble.concurrent.future.Future;
  * @version : 2023-09-24
  */
 public interface AsyncChannel extends Closeable {
-
     /**
      * Return the unique identifier of this channel.
      * @return channel ID as a long value

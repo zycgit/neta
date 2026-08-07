@@ -931,6 +931,42 @@ public class QueueByteBufTest {
     }
 
     @Test
+    public void test_slice_view_survives_queue_consumption() {
+        ProtoQueue<ByteBuf> queue = newQueue();
+        offer(queue, "abc");
+        offer(queue, "def");
+        QueueByteBuf buf = new QueueByteBuf(queue);
+        ByteBuf slice = buf.slice(1, 4);
+        try {
+            buf.skipReadableBytes(buf.readableBytes());
+            buf.discardReadBytes();
+            buf.release();
+
+            assert "bcde".equals(slice.readString(slice.readableBytes(), StandardCharsets.US_ASCII));
+        } finally {
+            slice.release();
+            if (!buf.isFree()) {
+                buf.release();
+            }
+        }
+    }
+
+    @Test
+    public void test_slice_has_independent_indices() {
+        ProtoQueue<ByteBuf> queue = newQueue();
+        offer(queue, "abc");
+        QueueByteBuf buf = new QueueByteBuf(queue);
+        ByteBuf slice = buf.slice(0, 3);
+        try {
+            assert "abc".equals(slice.readString(slice.readableBytes(), StandardCharsets.US_ASCII));
+            assert "abc".equals(buf.readString(buf.readableBytes(), StandardCharsets.US_ASCII));
+        } finally {
+            slice.release();
+            buf.release();
+        }
+    }
+
+    @Test
     public void test_sliceOff_exact_component_boundary() {
         // sliceOff at exact component boundary should be fully zero-copy
         ProtoQueue<ByteBuf> queue = newQueue();

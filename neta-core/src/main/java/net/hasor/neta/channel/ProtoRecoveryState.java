@@ -17,18 +17,18 @@ package net.hasor.neta.channel;
 import java.util.LinkedHashMap;
 import java.util.Map;
 final class ProtoRecoveryState {
-    static final int            RECOVERY_RCV = 1;
-    static final int            RECOVERY_SND = 1 << 1;
-    private String              recoveryOwnerId;
-    private String              recoveryBranchName;
-    private boolean             pendingRcvRecoveryGlobal;
-    private boolean             pendingSndRecoveryGlobal;
-    private boolean             activeRcvRecoveryGlobal;
-    private boolean             activeSndRecoveryGlobal;
-    private Map<String, String> pendingRcvRecoveryBranches;
-    private Map<String, String> pendingSndRecoveryBranches;
-    private Map<String, String> activeRcvRecoveryBranches;
-    private Map<String, String> activeSndRecoveryBranches;
+    static final int                 RECOVERY_RCV = 1;
+    static final int                 RECOVERY_SND = 1 << 1;
+    private      String              recoveryOwnerId;
+    private      String              recoveryBranchName;
+    private      boolean             pendingRcvRecoveryGlobal;
+    private      boolean             pendingSndRecoveryGlobal;
+    private      boolean             activeRcvRecoveryGlobal;
+    private      boolean             activeSndRecoveryGlobal;
+    private      Map<String, String> pendingRcvRecoveryBranches;
+    private      Map<String, String> pendingSndRecoveryBranches;
+    private      Map<String, String> activeRcvRecoveryBranches;
+    private      Map<String, String> activeSndRecoveryBranches;
 
     void setupSource(String ownerId, String branchName) {
         this.recoveryOwnerId = ownerId;
@@ -64,36 +64,47 @@ final class ProtoRecoveryState {
             return this.hasRecoveryGlobal(isRcv) || this.activeRecoveryGlobal(isRcv);
         }
 
-        String pendingBranch = this.branches(isRcv, false).get(ownerId);
+        Map<String, String> pendingBranches = this.branchesOrNull(isRcv, false);
+        String pendingBranch = pendingBranches != null ? pendingBranches.get(ownerId) : null;
         if (branchName.equals(pendingBranch)) {
             return true;
         }
 
-        String activeBranch = this.branches(isRcv, true).get(ownerId);
+        Map<String, String> activeBranches = this.branchesOrNull(isRcv, true);
+        String activeBranch = activeBranches != null ? activeBranches.get(ownerId) : null;
         return branchName.equals(activeBranch);
     }
 
     String activeRecovery(boolean isRcv, String ownerId) {
-        return this.branches(isRcv, true).get(ownerId);
+        Map<String, String> activeBranches = this.branchesOrNull(isRcv, true);
+        return activeBranches != null ? activeBranches.get(ownerId) : null;
     }
 
     //
 
     private boolean hasDirectionRecovery(boolean isRcv) {
-        return this.hasRecoveryGlobal(isRcv) || !this.branches(isRcv, false).isEmpty();
+        Map<String, String> pendingBranches = this.branchesOrNull(isRcv, false);
+        return this.hasRecoveryGlobal(isRcv) || pendingBranches != null && !pendingBranches.isEmpty();
     }
 
     private int beginDirectionRecovery(boolean isRcv) {
-        Map<String, String> pendingBranches = this.branches(isRcv, false);
-        Map<String, String> activeBranches = this.branches(isRcv, true);
+        Map<String, String> pendingBranches = this.branchesOrNull(isRcv, false);
+        Map<String, String> activeBranches = this.branchesOrNull(isRcv, true);
 
         this.setActiveRecoveryGlobal(isRcv, this.hasRecoveryGlobal(isRcv));
         this.setPendingRecoveryGlobal(isRcv, false);
-        activeBranches.clear();
-        activeBranches.putAll(pendingBranches);
-        pendingBranches.clear();
+        if (activeBranches != null) {
+            activeBranches.clear();
+        }
+        if (pendingBranches != null && !pendingBranches.isEmpty()) {
+            if (activeBranches == null) {
+                activeBranches = this.branches(isRcv, true);
+            }
+            activeBranches.putAll(pendingBranches);
+            pendingBranches.clear();
+        }
 
-        boolean hasActiveRecovery = this.activeRecoveryGlobal(isRcv) || !activeBranches.isEmpty();
+        boolean hasActiveRecovery = this.activeRecoveryGlobal(isRcv) || activeBranches != null && !activeBranches.isEmpty();
         if (!hasActiveRecovery) {
             return 0;
         }
@@ -162,6 +173,14 @@ final class ProtoRecoveryState {
                 }
                 return this.pendingSndRecoveryBranches;
             }
+        }
+    }
+
+    private Map<String, String> branchesOrNull(boolean isRcv, boolean active) {
+        if (isRcv) {
+            return active ? this.activeRcvRecoveryBranches : this.pendingRcvRecoveryBranches;
+        } else {
+            return active ? this.activeSndRecoveryBranches : this.pendingSndRecoveryBranches;
         }
     }
 }

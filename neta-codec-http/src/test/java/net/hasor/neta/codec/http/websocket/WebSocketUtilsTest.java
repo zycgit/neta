@@ -24,6 +24,8 @@ import org.junit.Test;
 
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.bytebuf.ByteBufUtils;
+import net.hasor.neta.bytebuf.CompositeByteBuf;
 import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.cookie.DefaultCookie;
 
@@ -34,6 +36,41 @@ public class WebSocketUtilsTest extends AbstractWebSocketTest {
     private static String readContent(WebSocketFrame frame) {
         ByteBuf content = frame.content();
         return content.readString(content.readableBytes(), StandardCharsets.UTF_8);
+    }
+
+    @Test
+    public void testDecodeMaskedRangeAcrossCompositeComponents() {
+        CompositeByteBuf source = ByteBufUtils.compositeBuffer();
+        source.addComponent(ByteBuf.wrap(new byte[] { 0x11, 0x22 }));
+        source.addComponent(ByteBuf.wrap(new byte[] { 0x33, 0x44 }));
+
+        ByteBuf decoded = InternalUtils.decodeMaskedRange(source, 0, 4, new byte[] { 0x01, 0x02, 0x03, 0x04 }, 0);
+        try {
+            assertEquals(0x10, decoded.getByte(0));
+            assertEquals(0x20, decoded.getByte(1));
+            assertEquals(0x30, decoded.getByte(2));
+            assertEquals(0x40, decoded.getByte(3));
+            assertEquals(0, source.readerIndex());
+            assertEquals(0x11, source.getByte(0));
+            assertEquals(0x44, source.getByte(3));
+        } finally {
+            decoded.release();
+            source.release();
+        }
+    }
+
+    @Test
+    public void testDecodeMaskedRangeHonorsMaskOffset() {
+        ByteBuf source = ByteBuf.wrap(new byte[] { 0x22, 0x33, 0x44 });
+        ByteBuf decoded = InternalUtils.decodeMaskedRange(source, 0, 3, new byte[] { 0x01, 0x02, 0x03, 0x04 }, 1);
+        try {
+            assertEquals(0x20, decoded.getByte(0));
+            assertEquals(0x30, decoded.getByte(1));
+            assertEquals(0x40, decoded.getByte(2));
+        } finally {
+            decoded.release();
+            source.release();
+        }
     }
 
     @Test
@@ -213,6 +250,21 @@ public class WebSocketUtilsTest extends AbstractWebSocketTest {
         assertEquals("/chat?room=blue", fullRequest.uri());
         assertEquals("prod.example.com:8443", fullRequest.getString(HttpHeaderNames.HOST));
         assertEquals("https://prod.example.com:8443", fullRequest.getString(HttpHeaderNames.ORIGIN));
+    }
+
+    @Test
+    public void testRepeatedHandshakeTargetKeepsIndependentRandomKeys() {
+        FullHttpRequest first = WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI);
+        FullHttpRequest second = WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI);
+
+        assertEquals(first.uri(), second.uri());
+        assertEquals(first.getString(HttpHeaderNames.HOST), second.getString(HttpHeaderNames.HOST));
+        assertEquals(first.getString(HttpHeaderNames.ORIGIN), second.getString(HttpHeaderNames.ORIGIN));
+        String firstKey = first.getString(HttpHeaderNames.SEC_WEBSOCKET_KEY);
+        String secondKey = second.getString(HttpHeaderNames.SEC_WEBSOCKET_KEY);
+        assertNotEquals(firstKey, secondKey);
+        assertEquals(16, Base64.getDecoder().decode(firstKey).length);
+        assertEquals(16, Base64.getDecoder().decode(secondKey).length);
     }
 
     @Test

@@ -95,6 +95,29 @@ public class WebSocketFrameDecoderTest extends AbstractWebSocketTest {
     }
 
     @Test
+    public void testFrameDecoderCumulationDecodesMaskedFrameSplitAcrossThreeInputs() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder(WebSocketVersion.V13));
+            }, VrtSoConfig.asServer());
+
+            byte[] wire = buildRfc6455Frame(0x01, true, true, new byte[] { 0x11, 0x22, 0x33, 0x44 }, "three-parts".getBytes(StandardCharsets.UTF_8));
+            int firstEnd = wire.length / 3;
+            int secondEnd = firstEnd * 2;
+            byte[] first = java.util.Arrays.copyOfRange(wire, 0, firstEnd);
+            byte[] second = java.util.Arrays.copyOfRange(wire, firstEnd, secondEnd);
+            byte[] third = java.util.Arrays.copyOfRange(wire, secondEnd, wire.length);
+
+            assertTrue(receiveAndIntBound(pipe, httpByteBuf(first)).isEmpty());
+            assertTrue(receiveAndIntBound(pipe, httpByteBuf(second)).isEmpty());
+            List<HttpObject> result = receiveAndIntBound(pipe, httpByteBuf(third));
+
+            assertEquals(1, result.size());
+            assertEquals("three-parts", text((WebSocketFrame) result.get(0)));
+        });
+    }
+
+    @Test
     public void testFrameDecoderParsesExtended16BitPayloadLength() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
@@ -283,6 +306,29 @@ public class WebSocketFrameDecoderTest extends AbstractWebSocketTest {
     }
 
     @Test
+    public void testFrameDecoderDecodesFourCompleteMaskedInputObjectsInOnePipelineCall() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder(WebSocketVersion.V13));
+            }, VrtSoConfig.asServer());
+
+            HttpByteBuf[] inputs = new HttpByteBuf[4];
+            for (int i = 0; i < inputs.length; i++) {
+                byte[] wire = buildRfc6455Frame(0x01, true, true, new byte[] { 0x11, 0x22, 0x33, 0x44 }, ("frame-" + i).getBytes(StandardCharsets.UTF_8));
+                inputs[i] = httpByteBuf(wire);
+            }
+
+            List<HttpObject> result = receiveAndIntBound(pipe, (Object[]) inputs);
+
+            assertEquals(4, result.size());
+            for (int i = 0; i < result.size(); i++) {
+                assertNull(inputs[i].content());
+                assertEquals("frame-" + i, text((WebSocketFrame) result.get(i)));
+            }
+        });
+    }
+
+    @Test
     public void testFrameDecoderV0ParsesCloseFrame() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
@@ -364,6 +410,27 @@ public class WebSocketFrameDecoderTest extends AbstractWebSocketTest {
             assertNull(source.content());
             assertTrue(wirePayload.isFree());
             assertEquals("owned", text((WebSocketFrame) result.get(0)));
+        });
+    }
+
+    @Test
+    public void testFrameDecoderMaskedViewKeepsPayloadReadableAfterSourceRelease() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder(WebSocketVersion.V13));
+            }, VrtSoConfig.asServer());
+
+            byte[] rfc6455Frame = buildRfc6455Frame(0x01, true, true, new byte[] { 0x37, (byte) 0xFA, 0x21, 0x3D }, "masked-owned".getBytes(StandardCharsets.UTF_8));
+            ByteBuf wirePayload = ByteBufAllocator.DEFAULT.buffer(rfc6455Frame.length, Integer.MAX_VALUE);
+            wirePayload.writeBytes(rfc6455Frame, 0, rfc6455Frame.length);
+            wirePayload.markWriter();
+            HttpByteBuf source = new DefaultHttpByteBuf(wirePayload);
+
+            List<HttpObject> result = receiveAndIntBound(pipe, source);
+
+            assertNull(source.content());
+            assertTrue(wirePayload.isFree());
+            assertEquals("masked-owned", text((WebSocketFrame) result.get(0)));
         });
     }
 }

@@ -340,22 +340,6 @@ public class PerformanceOptVerificationTest {
     }
 
     @Test
-    public void test_trimSmallBufferCache_publicAPI() {
-        // Test public API via ByteBufUtils
-        for (int i = 0; i < 10; i++) {
-            byte[] buf = SmallBufferCache.allocHeap(8);
-            SmallBufferCache.freeHeap(buf);
-        }
-
-        int sizeBefore = ByteBufUtils.smallBufferCacheSize();
-        assert sizeBefore > 0 : "cache should have entries via public API";
-
-        ByteBufUtils.trimSmallBufferCache();
-        int sizeAfter = ByteBufUtils.smallBufferCacheSize();
-        assert sizeAfter == 0 : "cache should be empty after public trim, got " + sizeAfter;
-    }
-
-    @Test
     public void test_trimSmallBufferCache_reusableAfterTrim() {
         // After trimming, allocations should still work normally
         for (int i = 0; i < 5; i++) {

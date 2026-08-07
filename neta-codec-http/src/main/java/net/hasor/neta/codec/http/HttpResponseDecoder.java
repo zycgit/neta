@@ -20,6 +20,7 @@ import net.hasor.neta.bytebuf.QueueByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
+
 /**
  * Decodes inbound socket bytes into staged HTTP/1.x response objects.
  * <p>
@@ -62,9 +63,9 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
     private static final int    DEFAULT_MAX_INITIAL_LINE_LENGTH = 4096;
     private static final int    DEFAULT_MAX_HEADER_SIZE         = 8192;
     private static final int    DEFAULT_MAX_CHUNK_SIZE          = 8192;
-    private final int           maxInitialLineLength;
-    private final int           maxHeaderSize;
-    private final int           maxChunkSize;
+    private final        int    maxInitialLineLength;
+    private final        int    maxHeaderSize;
+    private final        int    maxChunkSize;
 
     /**
      * Creates a response decoder with the default limits.
@@ -137,7 +138,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
 
                 ByteBuf msg = src.takeMessage();
                 if (msg != null) {
-                    dst.offerMessage(new DefaultHttpByteBuf(msg, Math.toIntExact(httpCtx.transparentStreamId())));
+                    dst.offerMessage(DefaultHttpByteBuf.newInstance(msg, Math.toIntExact(httpCtx.transparentStreamId())));
                 }
             }
             return ProtoStatus.Next;
@@ -396,11 +397,13 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
             }
 
             if (lineLength > this.maxInitialLineLength) {
+                consumeRejectedInitialLine(accumulator, consumedBytes);
                 throw new HttpInitialLineTooLongException("status line too long: " + lineLength + " > " + maxInitialLineLength, maxInitialLineLength, lineLength);
             }
 
             int firstSpace = accumulator.expect((byte) ' ', lineLength);
             if (firstSpace <= 0) {
+                consumeRejectedInitialLine(accumulator, consumedBytes);
                 throw new HttpBadRequestException("invalid status line");
             }
 
@@ -422,6 +425,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                 statusEnd--;
             }
             if (statusStart >= statusEnd) {
+                consumeRejectedInitialLine(accumulator, consumedBytes);
                 throw new HttpBadRequestException("invalid status code");
             }
 
@@ -429,11 +433,13 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
             for (int i = statusStart; i < statusEnd; i++) {
                 int value = accumulator.getUInt8(i);
                 if (value < '0' || value > '9') {
+                    consumeRejectedInitialLine(accumulator, consumedBytes);
                     throw new HttpBadRequestException("invalid status code");
                 }
                 statusCode = statusCode * 10 + (value - '0');
             }
             if (statusCode < 100 || statusCode > 999) {
+                consumeRejectedInitialLine(accumulator, consumedBytes);
                 throw new HttpBadRequestException("invalid status code: " + statusCode);
             }
 
@@ -446,6 +452,11 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
             respCtx.currentMessage = new DefaultHttpResponse(version, status);
             return respCtx.currentMessage;
         }
+    }
+
+    private static void consumeRejectedInitialLine(QueueByteBuf accumulator, int consumedBytes) {
+        accumulator.skipReadableBytes(consumedBytes);
+        accumulator.markReaderDeferred();
     }
 
     // header
@@ -490,7 +501,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
 
             headerEntriesRef[0].add(DefaultHttpHeaderEntry.newOwnedEntry(line, nameStart, nameLength, valueStart, valueLength));
             return valueLength > 0;
-        }).isComplete();
+        });
         headerEntries = headerEntriesRef[0];
 
         if (headerEntries == null) {
@@ -598,7 +609,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         boolean complete = HttpHeaderStreamingScanner.scan(src, respCtx, this.maxHeaderSize, (line, nameStart, nameLength, valueStart, valueLength) -> {
             respCtx.currentHeaders.addHeaderEntry(DefaultHttpHeaderEntry.newOwnedEntry(line, nameStart, nameLength, valueStart, valueLength));
             return valueLength > 0;
-        }).isComplete();
+        });
         if (!complete) {
             return null;
         }

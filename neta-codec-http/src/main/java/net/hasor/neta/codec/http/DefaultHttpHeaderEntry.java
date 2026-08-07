@@ -18,34 +18,47 @@ import java.nio.charset.StandardCharsets;
 import net.hasor.cobble.ref.RecycleObjectPool;
 import net.hasor.neta.bytebuf.AbstractReferenceHolder;
 import net.hasor.neta.bytebuf.ByteBuf;
+
 /**
  * Default implementation of a single HTTP header entry.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-10
  */
 public class DefaultHttpHeaderEntry extends AbstractReferenceHolder {
-    static final int                                                  RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    static final RecycleObjectPool.ObjHandler<DefaultHttpHeaderEntry> RECYCLE_HANDLER = //
-            new RecycleObjectPool.ObjHandler<DefaultHttpHeaderEntry>() {
-                @Override
-                public DefaultHttpHeaderEntry create() {
-                    return new DefaultHttpHeaderEntry();
-                }
-
-                @Override
-                public void free(DefaultHttpHeaderEntry target) {
-                    RecycleObjectPool.free(RECYCLE_INDEX, target);
-                }
-            };
-    private CharSequence                                              name;
-    private CharSequence                                              value;
-    private ByteBuf                                                   source;
-    private int                                                       nameOffset;
-    private int                                                       nameLength;
-    private int                                                       valueOffset;
-    private int                                                       valueLength;
+    static final RecycleObjectPool.Recycler<DefaultHttpHeaderEntry> RECYCLER = RecycleObjectPool.recycler(//
+            DefaultHttpHeaderEntry::new, DefaultHttpHeaderEntry::resetState, DefaultHttpHeaderEntry::onRecycle);
+    private      CharSequence                                         name;
+    private      CharSequence                                         value;
+    private      ByteBuf                                              source;
+    private      int                                                  nameOffset;
+    private      int                                                  nameLength;
+    private      int                                                  valueOffset;
+    private      int                                                  valueLength;
 
     private DefaultHttpHeaderEntry() {
+    }
+
+    private void resetState() {
+        this.name = null;
+        this.value = null;
+        this.source = null;
+        this.nameOffset = 0;
+        this.nameLength = 0;
+        this.valueOffset = 0;
+        this.valueLength = 0;
+    }
+
+    private void onRecycle() {
+        if (this.name != null && !(this.name instanceof String)) {
+            HttpCharSequences.release(this.name);
+        }
+        if (this.value != null && !(this.value instanceof String)) {
+            HttpCharSequences.release(this.value);
+        }
+        if (this.source != null && !this.source.isFree()) {
+            this.source.release();
+        }
+        this.resetState();
     }
 
     /**
@@ -66,13 +79,13 @@ public class DefaultHttpHeaderEntry extends AbstractReferenceHolder {
     }
 
     static DefaultHttpHeaderEntry newEntry(CharSequence name, CharSequence value) {
-        DefaultHttpHeaderEntry entry = RecycleObjectPool.get(RECYCLE_INDEX, RECYCLE_HANDLER);
+        DefaultHttpHeaderEntry entry = RECYCLER.get();
         entry.initEntry(name, value);
         return entry;
     }
 
     static DefaultHttpHeaderEntry newOwnedEntry(ByteBuf source, int nameOffset, int nameLength, int valueOffset, int valueLength) {
-        DefaultHttpHeaderEntry entry = RecycleObjectPool.get(RECYCLE_INDEX, RECYCLE_HANDLER);
+        DefaultHttpHeaderEntry entry = RECYCLER.get();
         entry.initEntry(source, nameOffset, nameLength, valueOffset, valueLength, false);
         return entry;
     }
@@ -175,28 +188,32 @@ public class DefaultHttpHeaderEntry extends AbstractReferenceHolder {
         return HttpCharSequences.equalsIgnoreCase(this.name, headerName);
     }
 
-    CharSequence valueText() {
+    long parseLongValue() {
         if (this.value == null && this.source != null) {
-            String resolved = this.resolveValue();
-            this.value = resolved;
-            this.releaseSourceIfResolved();
-            return resolved;
+            return HttpCharSequences.parseLong(this.source, this.valueOffset, this.valueLength);
         }
-        return this.value;
+        return HttpCharSequences.parseLong(this.value);
     }
 
-    long parseLongValue(long defaultValue) {
-        try {
-            if (this.value != null) {
-                return HttpCharSequences.parseLong(this.value);
-            }
-            if (this.source != null) {
-                return HttpCharSequences.parseLong(this.source, this.valueOffset, this.valueLength);
-            }
-        } catch (NumberFormatException e) {
-            return defaultValue;
+    boolean hasNonBlankValue() {
+        if (this.value == null && this.source != null) {
+            return !HttpCharSequences.isBlank(this.source, this.valueOffset, this.valueLength);
         }
-        return defaultValue;
+        return !HttpCharSequences.isBlank(this.value);
+    }
+
+    boolean valueEqualsIgnoreCase(CharSequence expected) {
+        if (this.value == null && this.source != null) {
+            return HttpCharSequences.equalsIgnoreCase(this.source, this.valueOffset, this.valueLength, expected);
+        }
+        return HttpCharSequences.equalsIgnoreCase(this.value, expected);
+    }
+
+    boolean valueContainsIgnoreCase(CharSequence expected) {
+        if (this.value == null && this.source != null) {
+            return HttpCharSequences.containsIgnoreCase(this.source, this.valueOffset, this.valueLength, expected);
+        }
+        return HttpCharSequences.containsIgnoreCase(this.value, expected);
     }
 
     DefaultHttpHeaderEntry materializeCopy() {
@@ -205,19 +222,7 @@ public class DefaultHttpHeaderEntry extends AbstractReferenceHolder {
 
     @Override
     protected void deallocate() {
-        HttpCharSequences.release(this.name);
-        HttpCharSequences.release(this.value);
-        if (this.source != null && !this.source.isFree()) {
-            this.source.release();
-        }
-        this.name = null;
-        this.value = null;
-        this.source = null;
-        this.nameOffset = 0;
-        this.nameLength = 0;
-        this.valueOffset = 0;
-        this.valueLength = 0;
-        RECYCLE_HANDLER.free(this);
+        RECYCLER.recycle(this);
     }
 
     private String resolveName() {

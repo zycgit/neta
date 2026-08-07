@@ -20,7 +20,6 @@ import java.util.Queue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import org.junit.Assume;
 import org.junit.Test;
 
 import net.hasor.neta.channel.PlayLoad;
@@ -61,9 +60,6 @@ public class SslProtocolTest extends AbstractSslTest {
 
             assert server != null : "Server channel was not accepted";
             boolean handshakeCompleted = handshakeDone.await(10, TimeUnit.SECONDS);
-            if (isLegacyProtocol(protocol)) {
-                Assume.assumeTrue("Protocol is disabled by current JDK: " + protocol, handshakeCompleted);
-            }
             assert handshakeCompleted : "SSL handshake did not complete in time";
 
             CountDownLatch dataReceived = new CountDownLatch(2);
@@ -85,10 +81,6 @@ public class SslProtocolTest extends AbstractSslTest {
             assert clientRcvData.poll().equals("Hello Client, this message form server.");
             assert serverRcvData.poll().equals("Hello Server, this message form client.");
         });
-    }
-
-    private boolean isLegacyProtocol(String protocol) {
-        return SslProtocol.SSL_v3.equals(protocol) || SslProtocol.TLS_v1.equals(protocol) || SslProtocol.TLS_v1_1.equals(protocol);
     }
 
     @Test

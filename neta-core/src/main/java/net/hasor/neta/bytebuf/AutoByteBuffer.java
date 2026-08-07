@@ -17,6 +17,7 @@ package net.hasor.neta.bytebuf;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import net.hasor.cobble.ref.RecycleObjectPool;
+
 /**
  * Auto-resizing {@link ByteBuf} backed by a {@link java.nio.ByteBuffer}.
  * <p>Similar to {@link AutoArrayByteBuf} but uses a {@link java.nio.ByteBuffer}
@@ -32,7 +33,7 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  *   | discarded |         readable data         |   writable    |
  *   +-----------------------------------------------------------+
  *   0        markedReaderIndex               writerIndex      target.capacity()
- *   
+ *
  * when resize or recycle happens
  *   old target  --copy readable window-->  new ByteBuffer
  *   +-----------+                         +---------------------+
@@ -46,31 +47,35 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * if it is direct memory).
  * <p><b>Recycle:</b> on {@link #markReader()}, consumed bytes are dropped and
  * the buffer may shrink.  Recycled instances go back to the
- * {@link net.hasor.cobble.ref.RecycleObjectPool} of type {@link #RECYCLE_INDEX}.
+ * its dedicated {@link RecycleObjectPool.Recycler}.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  * @see AutoArrayByteBuf
  * @see RingByteBuffer
  */
 final class AutoByteBuffer extends AbstractByteBuf {
-    static final int                                    RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    static RecycleObjectPool.ObjHandler<AutoByteBuffer> RECYCLE_HANDLER = //
-            new RecycleObjectPool.ObjHandler<AutoByteBuffer>() {
-                public AutoByteBuffer create() {
-                    return new AutoByteBuffer();
-                }
-
-                @Override
-                public void free(AutoByteBuffer tar) {
-                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
-                }
-            };
-    ByteBuffer                                          target;
-    private int                                         extensionSize;
+    static final RecycleObjectPool.Recycler<AutoByteBuffer> RECYCLER = RecycleObjectPool.recycler(//
+            AutoByteBuffer::new, AutoByteBuffer::resetState, AutoByteBuffer::onRecycle);
+    ByteBuffer target;
+    private int extensionSize;
 
     // ------------------------------------------------------------------------
 
     private AutoByteBuffer() {
+    }
+
+    private void resetState() {
+        this.target = null;
+        this.extensionSize = 0;
+    }
+
+    private void onRecycle() {
+        ByteBuffer oldTarget = this.target;
+        this.target = null;
+        this.extensionSize = 0;
+        if (oldTarget != null && !SmallBufferCache.freeDirect(oldTarget) && ByteBufUtils.CLEANER != null) {
+            ByteBufUtils.CLEANER.freeDirectBuffer(oldTarget);
+        }
     }
 
     void initBuffer(ByteBufAllocator alloc, int maxCapacity, int extensionSize, ByteBuffer initData) {
@@ -302,29 +307,19 @@ final class AutoByteBuffer extends AbstractByteBuf {
         this.markedReaderIndex = Math.max(0, this.markedReaderIndex - splitOffset);
         this.markedWriterIndex = Math.max(0, this.markedWriterIndex - splitOffset);
 
-        WrapByteBuffer slicedBuf = RecycleObjectPool.get(WrapByteBuffer.RECYCLE_INDEX, WrapByteBuffer.RECYCLE_HANDLER);
+        WrapByteBuffer slicedBuf = WrapByteBuffer.RECYCLER.get();
         slicedBuf.initBuffer(newBuf, false);
         return slicedBuf;
     }
 
     @Override
     protected void _free() {
-        try {
-            ByteBuffer oldTarget = this.target;
-            if (oldTarget != null && !SmallBufferCache.freeDirect(oldTarget)) {
-                if (ByteBufUtils.CLEANER != null) {
-                    ByteBufUtils.CLEANER.freeDirectBuffer(oldTarget);
-                }
-            }
-        } finally {
-            this.target = null;
-            RECYCLE_HANDLER.free(this);
-        }
+        RECYCLER.recycle(this);
     }
 
     @Override
     public int capacity() {
-        return this.target.capacity();
+        return Math.min(this.target.capacity(), this.getMaxCapacity());
     }
 
     @Override
@@ -340,7 +335,7 @@ final class AutoByteBuffer extends AbstractByteBuf {
         ((Buffer) this.target).clear();
         copyBuffer.put(this.target);
 
-        AutoByteBuffer byteBuf = RecycleObjectPool.get(AutoByteBuffer.RECYCLE_INDEX, AutoByteBuffer.RECYCLE_HANDLER);
+        AutoByteBuffer byteBuf = AutoByteBuffer.RECYCLER.get();
         byteBuf.initBuffer(this.alloc, this.getMaxCapacity(), this.extensionSize, copyBuffer);
         byteBuf.writerIndex = this.writerIndex;
         byteBuf.markedWriterIndex = this.markedWriterIndex;

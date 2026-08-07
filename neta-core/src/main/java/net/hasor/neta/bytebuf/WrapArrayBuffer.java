@@ -37,21 +37,19 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * @version : 2022-11-01
  */
 final class WrapArrayBuffer extends AbstractByteBuf {
-    static final int                                     RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    static RecycleObjectPool.ObjHandler<WrapArrayBuffer> RECYCLE_HANDLER = //
-            new RecycleObjectPool.ObjHandler<WrapArrayBuffer>() {
-                public WrapArrayBuffer create() {
-                    return new WrapArrayBuffer();
-                }
-
-                @Override
-                public void free(WrapArrayBuffer tar) {
-                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
-                }
-            };
+    static final RecycleObjectPool.Recycler<WrapArrayBuffer> RECYCLER = RecycleObjectPool.recycler(//
+            WrapArrayBuffer::new, WrapArrayBuffer::resetState, WrapArrayBuffer::onRecycle);
     byte[]                                               target;
 
     private WrapArrayBuffer() {
+    }
+
+    private void resetState() {
+        this.target = null;
+    }
+
+    private void onRecycle() {
+        this.target = null;
     }
 
     // ------------------------------------------------------------------------
@@ -184,8 +182,7 @@ final class WrapArrayBuffer extends AbstractByteBuf {
 
     @Override
     protected void _free() {
-        this.target = null;
-        RECYCLE_HANDLER.free(this);
+        RECYCLER.recycle(this);
     }
 
     @Override
@@ -203,7 +200,7 @@ final class WrapArrayBuffer extends AbstractByteBuf {
         checkFree();
 
         byte[] copyArray = this.target.clone();
-        WrapArrayBuffer byteBuf = RecycleObjectPool.get(WrapArrayBuffer.RECYCLE_INDEX, WrapArrayBuffer.RECYCLE_HANDLER);
+        WrapArrayBuffer byteBuf = WrapArrayBuffer.RECYCLER.get();
         byteBuf.initBuffer(copyArray, true);
 
         byteBuf.writerIndex = this.writerIndex;
@@ -213,6 +210,15 @@ final class WrapArrayBuffer extends AbstractByteBuf {
         byteBuf.byteOrder = this.byteOrder;
         byteBuf.bigEndian = this.bigEndian;
         return byteBuf;
+    }
+
+    @Override
+    public ByteBuf slice(int offset, int length) {
+        if (length <= 0) {
+            return ByteBuf.EMPTY;
+        }
+        int baseOffset = offsetReadable(offset, length);
+        return ArraySliceByteBuf.newSlice(null, this.target, baseOffset, length);
     }
 
     @Override

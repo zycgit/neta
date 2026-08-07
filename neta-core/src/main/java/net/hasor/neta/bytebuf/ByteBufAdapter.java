@@ -84,6 +84,16 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
+    public ByteBuf copy(int offset, int length) {
+        return this.byteBuf.copy(offset, length);
+    }
+
+    @Override
+    public ByteBuf slice(int offset, int length) {
+        return this.byteBuf.slice(offset, length);
+    }
+
+    @Override
     public ByteBuf asReadOnly() {
         return new ReadOnlyByteBuf(this);
     }

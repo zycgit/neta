@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http.websocket;
 import net.hasor.cobble.ref.RecycleObjectPool;
-import net.hasor.cobble.ref.RecycleObjectPool.ObjHandler;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.codec.http.AbstractHttpObject;
 /**
@@ -27,32 +26,32 @@ import net.hasor.neta.codec.http.AbstractHttpObject;
  * @version : 2026-02-18
  */
 final class DefaultWebSocketFrame extends AbstractHttpObject<WebSocketFrame> implements WebSocketFrame {
-    private static final int                               RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    private static final ObjHandler<DefaultWebSocketFrame> RECYCLE_HANDLER = //
-            new ObjHandler<DefaultWebSocketFrame>() {
-                @Override
-                public DefaultWebSocketFrame create() {
-                    return new DefaultWebSocketFrame();
-                }
-
-                @Override
-                public void free(DefaultWebSocketFrame tar) {
-                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
-                }
-            };
+    private static final RecycleObjectPool.Recycler<DefaultWebSocketFrame> RECYCLER = RecycleObjectPool.recycler(//
+            DefaultWebSocketFrame::new, DefaultWebSocketFrame::resetState, DefaultWebSocketFrame::onRecycle);
 
     private boolean         finalFragment;
     private boolean         rsv1;
     private boolean         rsv2;
     private boolean         rsv3;
     private boolean         masked;
+    private boolean         hasMaskingKey;
     private boolean         active;
-    private byte[]          maskingKey;
+    private final byte[]    maskingKey = new byte[4];
     private ByteBuf         content;
     private int             payloadLength;
     private WebSocketOpcode opcode;
 
     private DefaultWebSocketFrame() {
+    }
+
+    private void resetState() {
+        this.opcode = null;
+        this.resetHttpObjectState();
+    }
+
+    private void onRecycle() {
+        this.opcode = null;
+        this.resetHttpObjectState();
     }
 
     /**
@@ -116,7 +115,7 @@ final class DefaultWebSocketFrame extends AbstractHttpObject<WebSocketFrame> imp
      */
     @Override
     public byte[] maskingKey() {
-        return this.maskingKey;
+        return this.masked && this.hasMaskingKey ? this.maskingKey : null;
     }
 
     /**
@@ -164,14 +163,13 @@ final class DefaultWebSocketFrame extends AbstractHttpObject<WebSocketFrame> imp
         this.rsv2 = false;
         this.rsv3 = false;
         this.masked = false;
-        this.maskingKey = null;
+        this.hasMaskingKey = false;
         this.payloadLength = 0;
         this.recycle();
     }
 
     private void recycle() {
-        this.opcode = null;
-        RECYCLE_HANDLER.free(this);
+        RECYCLER.recycle(this);
     }
 
     /**
@@ -203,15 +201,22 @@ final class DefaultWebSocketFrame extends AbstractHttpObject<WebSocketFrame> imp
             throw new IllegalArgumentException("content must not be null");
         }
 
-        DefaultWebSocketFrame frame = RecycleObjectPool.get(RECYCLE_INDEX, RECYCLE_HANDLER);
+        DefaultWebSocketFrame frame = RECYCLER.get();
         frame.resetHttpObjectState();
         frame.finalFragment = finalFragment;
         frame.rsv1 = rsv1;
         frame.rsv2 = rsv2;
         frame.rsv3 = rsv3;
         frame.masked = masked;
+        frame.hasMaskingKey = false;
         frame.active = true;
-        frame.maskingKey = masked ? maskingKey : null;
+        if (masked && maskingKey != null && maskingKey.length >= 4) {
+            frame.maskingKey[0] = maskingKey[0];
+            frame.maskingKey[1] = maskingKey[1];
+            frame.maskingKey[2] = maskingKey[2];
+            frame.maskingKey[3] = maskingKey[3];
+            frame.hasMaskingKey = true;
+        }
         frame.content = content;
         frame.payloadLength = payloadLength;
         frame.opcode = opcode;

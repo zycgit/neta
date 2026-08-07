@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
+import net.hasor.cobble.ref.RecycleObjectPool;
 import net.hasor.neta.bytebuf.ByteBuf;
+
 /**
  * Default implementation of {@link HttpByteBuf}.
  * <p>
@@ -23,7 +25,28 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @version : 2026-02-18
  */
 public class DefaultHttpByteBuf extends AbstractHttpObject<HttpByteBuf> implements HttpByteBuf {
-    private ByteBuf content;
+    private static final RecycleObjectPool.Recycler<DefaultHttpByteBuf> RECYCLER = RecycleObjectPool.recycler(//
+            DefaultHttpByteBuf::new, DefaultHttpByteBuf::resetState, DefaultHttpByteBuf::onRecycle);
+    private              ByteBuf                                          content;
+    private              boolean                                          active;
+
+    private DefaultHttpByteBuf() {
+    }
+
+    private void resetState() {
+        this.content = null;
+        this.active = false;
+        this.resetHttpObjectState();
+    }
+
+    private void onRecycle() {
+        this.active = false;
+        if (this.content != null) {
+            this.content.release();
+            this.content = null;
+        }
+        this.resetHttpObjectState();
+    }
 
     /**
      * Create a raw byte wrapper with the specified payload.
@@ -39,7 +62,25 @@ public class DefaultHttpByteBuf extends AbstractHttpObject<HttpByteBuf> implemen
      * @param streamId stream identifier
      */
     public DefaultHttpByteBuf(ByteBuf content, long streamId) {
+        this.init(content, streamId);
+    }
+
+    /**
+     * Create or reuse a raw byte wrapper with a stream identifier.
+     * @param content chunk payload
+     * @param streamId stream identifier
+     * @return initialized wrapper
+     */
+    public static DefaultHttpByteBuf newInstance(ByteBuf content, long streamId) {
+        DefaultHttpByteBuf wrapper = RECYCLER.get();
+        wrapper.init(content, streamId);
+        return wrapper;
+    }
+
+    private void init(ByteBuf content, long streamId) {
+        this.resetHttpObjectState();
         this.content = content == null ? ByteBuf.EMPTY : content;
+        this.active = true;
         this.streamId(streamId);
     }
 
@@ -78,10 +119,9 @@ public class DefaultHttpByteBuf extends AbstractHttpObject<HttpByteBuf> implemen
      */
     @Override
     public void release() {
-        if (this.content != null) {
-            this.content.release();
-            this.content = null;
+        if (!this.active) {
+            return;
         }
-        this.resetHttpObjectState();
+        RECYCLER.recycle(this);
     }
 }

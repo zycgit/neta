@@ -26,6 +26,8 @@ import net.hasor.neta.channel.*;
  * @version : 2023-09-24
  */
 public class VrtChannel extends AbstractVrtChannel {
+    private static final Object[] EMPTY_OBJECTS = new Object[0];
+
     /**
      * Create a virtual channel.
      * @param channelId the channel ID
@@ -49,6 +51,40 @@ public class VrtChannel extends AbstractVrtChannel {
     public void receiveData(Object... object) {
         if (object != null) {
             this.soContext.notifyRcvChannelData(this.getChannelId(), object);
+        }
+    }
+
+    /**
+     * Write messages into the RCV_UP direction and return the pipeline output directly.
+     * <p>Unlike {@link #receiveData(Object...)}, this entry point bypasses the transport: the RCV
+     * pipeline runs on the caller thread and the produced output is returned instead of being
+     * dispatched through {@code PlayLoad} subscriptions. The returned objects combine the received
+     * (decoded) output and any SND-up response produced while processing the input.
+     * @param object the messages to write
+     * @return the output produced by the RCV pipeline, or an empty array when there is no output
+     * @throws Throwable thrown when pipeline execution fails
+     */
+    public Object[] receiveDataAndReturning(Object... object) throws Throwable {
+        if (object == null || object.length == 0) {
+            return EMPTY_OBJECTS;
+        } else {
+            return this.receiveDataDirect(object);
+        }
+    }
+
+    /**
+     * Write messages into the SND_UP direction and return the pipeline output directly.
+     * <p>Unlike {@code sendData}, this entry point bypasses the transport: the SND pipeline runs on
+     * the caller thread and the encoded output is returned instead of being queued for sending.
+     * @param object the messages to write
+     * @return the output produced by the SND pipeline, or an empty array when there is no output
+     * @throws Throwable thrown when pipeline execution fails
+     */
+    public Object[] sendDataAndReturning(Object... object) throws Throwable {
+        if (object == null || object.length == 0) {
+            return EMPTY_OBJECTS;
+        } else {
+            return this.sendDataDirect(object);
         }
     }
 

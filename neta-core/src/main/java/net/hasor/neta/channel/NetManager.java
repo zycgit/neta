@@ -193,10 +193,12 @@ public class NetManager extends AbstractNetManager {
     @Override
     protected void shutdown0(boolean now) {
         // Close all channels.
-        if (now) {
-            logger.info("close all channel for now.");
-        } else {
-            logger.info("close all channel.");
+        if (this.config.isPrintLog()) {
+            if (now) {
+                logger.info("close all channel for now.");
+            } else {
+                logger.info("close all channel.");
+            }
         }
         this.context.closeAll(now);
 

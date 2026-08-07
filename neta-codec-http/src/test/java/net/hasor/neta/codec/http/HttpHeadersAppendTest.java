@@ -15,16 +15,13 @@
  */
 package net.hasor.neta.codec.http;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
 import java.util.List;
 import java.util.Set;
-
-import org.junit.Test;
-
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
+import org.junit.Test;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class HttpHeadersAppendTest extends AbstractHttpTest {
     private FullHttpRequest roundTripRequestOnSingleEndedPipes(NetManager neta, FullHttpRequest request) throws Throwable {
@@ -91,5 +88,21 @@ public class HttpHeadersAppendTest extends AbstractHttpTest {
             assertEquals("example.com", hostValues.get(0));
             assertEquals("example.org", hostValues.get(1));
         });
+    }
+
+    @Test
+    public void testAppendFullMessageHeadersUsesIndependentCopies() {
+        DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/append/full");
+        request.addHeader("X-Test", "value-1");
+        request.addHeader("X-Test", "value-2");
+
+        DefaultHttpHeaders target = new DefaultHttpHeaders();
+        target.appendHeaders(request);
+        request.release();
+
+        assertEquals(2, target.getValues("X-Test").size());
+        assertEquals("value-1", target.getValues("X-Test").get(0));
+        assertEquals("value-2", target.getValues("X-Test").get(1));
+        target.release();
     }
 }

@@ -18,7 +18,6 @@ import java.util.List;
 import net.hasor.cobble.ObjectUtils;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoHandler;
 import net.hasor.neta.channel.ProtoStatus;
@@ -91,7 +90,7 @@ public class LimitFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
                     copy(buf, dstBuf, this.maxLength);
                     if (dstBuf.writerIndex() == this.maxLength) {
                         dstBuf.markWriter();
-                        if (!ByteBufUtils.offerOwnedBuffer(dst, dstBuf)) {
+                        if (!CodecHandlerUtils.offerOwnedBuffer(dst, dstBuf)) {
                             hasSlot = false;
                             dstBuf = null;
                             break;
@@ -108,7 +107,7 @@ public class LimitFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
             if (dstBuf != null) {
                 if (dstBuf.writerIndex() >= this.minLength && hasSlot) {
                     dstBuf.markWriter();
-                    if (ByteBufUtils.offerOwnedBuffer(dst, dstBuf)) {
+                    if (CodecHandlerUtils.offerOwnedBuffer(dst, dstBuf)) {
                         offerDataSize += dstBuf.readableBytes();
                         dstBuf = null;
                     }

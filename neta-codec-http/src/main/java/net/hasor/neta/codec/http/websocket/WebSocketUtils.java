@@ -40,6 +40,10 @@ import net.hasor.neta.codec.http.cookie.CookieEncoder;
  * @version : 2026-03-15
  */
 public final class WebSocketUtils {
+    private static final Base64.Encoder                    BASE64_ENCODER         = Base64.getEncoder();
+    private static final ThreadLocal<byte[]>               RFC6455_KEY_BYTES      = ThreadLocal.withInitial(() -> new byte[16]);
+    private static final ThreadLocal<HandshakeTargetCache> HANDSHAKE_TARGET_CACHE = ThreadLocal.withInitial(HandshakeTargetCache::new);
+
     private static final class HandshakeTarget {
         private final String requestUri;
         private final String hostHeader;
@@ -52,6 +56,11 @@ public final class WebSocketUtils {
             this.originHeader = originHeader;
             this.schemeHeader = schemeHeader;
         }
+    }
+
+    private static final class HandshakeTargetCache {
+        private String          uri;
+        private HandshakeTarget target;
     }
 
     private WebSocketUtils() {
@@ -301,6 +310,21 @@ public final class WebSocketUtils {
     }
 
     private static HandshakeTarget resolveHandshakeTarget(String uri, HttpHeaders headers) {
+        if (headers == null) {
+            HandshakeTargetCache cache = HANDSHAKE_TARGET_CACHE.get();
+            if (uri != null && uri.equals(cache.uri)) {
+                return cache.target;
+            }
+
+            HandshakeTarget target = resolveHandshakeTargetUncached(uri, null);
+            cache.uri = uri;
+            cache.target = target;
+            return target;
+        }
+        return resolveHandshakeTargetUncached(uri, headers);
+    }
+
+    private static HandshakeTarget resolveHandshakeTargetUncached(String uri, HttpHeaders headers) {
         if (StringUtils.isBlank(uri)) {
             throw new IllegalArgumentException("handshake uri must not be blank");
         }
@@ -390,7 +414,9 @@ public final class WebSocketUtils {
     }
 
     private static String randomRfc6455Key() {
-        return Base64.getEncoder().encodeToString(RandomUtils.nextBytes(16));
+        byte[] keyBytes = RFC6455_KEY_BYTES.get();
+        RandomUtils.nextBytes(keyBytes);
+        return BASE64_ENCODER.encodeToString(keyBytes);
     }
 
     private static String randomHixie76Key() {

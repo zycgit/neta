@@ -17,6 +17,7 @@ package net.hasor.neta.bytebuf;
 import java.nio.ByteBuffer;
 import net.hasor.cobble.ObjectUtils;
 import net.hasor.cobble.ref.RecycleObjectPool;
+
 /**
  * Auto-resizing {@link ByteBuf} backed by a plain Java {@code byte[]} array.
  * <p>Allocated from {@link ByteBufAllocator} when an unpooled heap buffer is
@@ -30,7 +31,7 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  *   | discarded |         readable data         |   writable    |
  *   +-----------------------------------------------------------+
  *   0        markedReaderIndex               writerIndex      target.length
- *   
+ *
  * after markReader() triggers recycle() new or compacted target byte[]
  *   +-------------------------------------------+
  *   |         readable data         | writable  |
@@ -41,8 +42,7 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * and the reader has advanced past the start, the consumed prefix is discarded
  * by copying the remaining readable bytes to a smaller array (or the same array
  * starting at offset 0).  A recycled {@code AutoArrayByteBuf} is returned to
- * the {@link net.hasor.cobble.ref.RecycleObjectPool} of type
- * {@link #RECYCLE_INDEX} to amortise allocation overhead.
+ * its dedicated {@link RecycleObjectPool.Recycler} to amortise allocation overhead.
  * <p><b>Use case:</b> suitable for heap-allocated accumulation buffers where the
  * message size is not known in advance (e.g. assembling a delimited frame from
  * multiple incoming chunks).
@@ -52,26 +52,32 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * @see RingArrayByteBuf
  */
 final class AutoArrayByteBuf extends AbstractByteBuf {
-    static final int                                      RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    static RecycleObjectPool.ObjHandler<AutoArrayByteBuf> RECYCLE_HANDLER = //
-            new RecycleObjectPool.ObjHandler<AutoArrayByteBuf>() {
-                public AutoArrayByteBuf create() {
-                    return new AutoArrayByteBuf();
-                }
-
-                @Override
-                public void free(AutoArrayByteBuf tar) {
-                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
-                }
-            };
-    byte[]                                                target;
-    private int                                           extensionSize;
+    static final RecycleObjectPool.Recycler<AutoArrayByteBuf> RECYCLER = RecycleObjectPool.recycler(//
+            AutoArrayByteBuf::new, AutoArrayByteBuf::resetState, AutoArrayByteBuf::onRecycle);
+    byte[] target;
+    private int extensionSize;
     /** Cached effective write limit = Math.min(target.length, maxCapacity). */
-    private int                                           writeLimit;
+    private int writeLimit;
 
     // ------------------------------------------------------------------------
 
     private AutoArrayByteBuf() {
+    }
+
+    private void resetState() {
+        this.target = null;
+        this.extensionSize = 0;
+        this.writeLimit = 0;
+    }
+
+    private void onRecycle() {
+        this.writeLimit = 0;
+        byte[] oldTarget = this.target;
+        this.target = null;
+        this.extensionSize = 0;
+        if (oldTarget != null) {
+            SmallBufferCache.freeHeap(oldTarget);
+        }
     }
 
     void initBuffer(ByteBufAllocator alloc, int maxCapacity, int extensionSize, byte[] initData) {
@@ -248,7 +254,7 @@ final class AutoArrayByteBuf extends AbstractByteBuf {
     public short readInt16() {
         checkFree();
         int idx = nextReadableN(2);
-        if (UnsafeMemory.HAS_UNSAFE) {
+        if (UnsafeMemory.HAS_FAST_ARRAY_ACCESS) {
             return UnsafeMemory.getInt16(this.target, idx, bigEndian);
         }
         byte[] t = this.target;
@@ -273,7 +279,7 @@ final class AutoArrayByteBuf extends AbstractByteBuf {
                 t = this.target;
             }
         }
-        if (UnsafeMemory.HAS_UNSAFE) {
+        if (UnsafeMemory.HAS_FAST_ARRAY_ACCESS) {
             UnsafeMemory.putInt16(t, idx, n, bigEndian);
             return;
         }
@@ -290,7 +296,7 @@ final class AutoArrayByteBuf extends AbstractByteBuf {
     public int readInt32() {
         checkFree();
         int idx = nextReadableN(4);
-        if (UnsafeMemory.HAS_UNSAFE) {
+        if (UnsafeMemory.HAS_FAST_ARRAY_ACCESS) {
             return UnsafeMemory.getInt32(this.target, idx, bigEndian);
         }
         byte[] t = this.target;
@@ -317,7 +323,7 @@ final class AutoArrayByteBuf extends AbstractByteBuf {
                 t = this.target;
             }
         }
-        if (UnsafeMemory.HAS_UNSAFE) {
+        if (UnsafeMemory.HAS_FAST_ARRAY_ACCESS) {
             UnsafeMemory.putInt32(t, idx, n, bigEndian);
             return;
         }
@@ -348,7 +354,7 @@ final class AutoArrayByteBuf extends AbstractByteBuf {
                 t = this.target;
             }
         }
-        if (UnsafeMemory.HAS_UNSAFE) {
+        if (UnsafeMemory.HAS_FAST_ARRAY_ACCESS) {
             UnsafeMemory.putUInt32(t, idx, n, bigEndian);
             return;
         }
@@ -369,7 +375,7 @@ final class AutoArrayByteBuf extends AbstractByteBuf {
     public long readInt64() {
         checkFree();
         int idx = nextReadableN(8);
-        if (UnsafeMemory.HAS_UNSAFE) {
+        if (UnsafeMemory.HAS_FAST_ARRAY_ACCESS) {
             return UnsafeMemory.getInt64(this.target, idx, bigEndian);
         }
         byte[] t = this.target;
@@ -394,7 +400,7 @@ final class AutoArrayByteBuf extends AbstractByteBuf {
                 t = this.target;
             }
         }
-        if (UnsafeMemory.HAS_UNSAFE) {
+        if (UnsafeMemory.HAS_FAST_ARRAY_ACCESS) {
             UnsafeMemory.putInt64(t, idx, n, bigEndian);
             return;
         }
@@ -539,28 +545,19 @@ final class AutoArrayByteBuf extends AbstractByteBuf {
         // AutoArrayByteBuf is always heap-based, wrap directly
         ByteBuffer newBuf = ByteBuffer.wrap(sliceData);
 
-        WrapByteBuffer slicedBuf = RecycleObjectPool.get(WrapByteBuffer.RECYCLE_INDEX, WrapByteBuffer.RECYCLE_HANDLER);
+        WrapByteBuffer slicedBuf = WrapByteBuffer.RECYCLER.get();
         slicedBuf.initBuffer(newBuf, false);
         return slicedBuf;
     }
 
     @Override
     protected void _free() {
-        this.writeLimit = 0;
-        try {
-            byte[] oldTarget = this.target;
-            if (oldTarget != null) {
-                SmallBufferCache.freeHeap(oldTarget);
-            }
-        } finally {
-            this.target = null;
-            RECYCLE_HANDLER.free(this);
-        }
+        RECYCLER.recycle(this);
     }
 
     @Override
     public int capacity() {
-        return this.target.length;
+        return Math.min(this.target.length, this.getMaxCapacity());
     }
 
     @Override
@@ -573,7 +570,7 @@ final class AutoArrayByteBuf extends AbstractByteBuf {
         checkFree();
 
         byte[] copyArray = this.target.clone();
-        AutoArrayByteBuf byteBuf = RecycleObjectPool.get(AutoArrayByteBuf.RECYCLE_INDEX, AutoArrayByteBuf.RECYCLE_HANDLER);
+        AutoArrayByteBuf byteBuf = AutoArrayByteBuf.RECYCLER.get();
         byteBuf.initBuffer(this.alloc, this.getMaxCapacity(), this.extensionSize, copyArray);
 
         byteBuf.writerIndex = this.writerIndex;
@@ -583,6 +580,15 @@ final class AutoArrayByteBuf extends AbstractByteBuf {
         byteBuf.byteOrder = this.byteOrder;
         byteBuf.bigEndian = this.bigEndian;
         return byteBuf;
+    }
+
+    @Override
+    public ByteBuf slice(int offset, int length) {
+        if (length <= 0) {
+            return ByteBuf.EMPTY;
+        }
+        int baseOffset = offsetReadable(offset, length);
+        return ArraySliceByteBuf.newSlice(this, this.target, baseOffset, length);
     }
 
     @Override

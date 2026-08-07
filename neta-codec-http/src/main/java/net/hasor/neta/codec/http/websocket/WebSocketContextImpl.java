@@ -64,8 +64,8 @@ class WebSocketContextImpl implements WebSocketContext {
         this.requestPath = requestPath;
         this.requestHost = requestHost;
         this.requestOrigin = requestOrigin;
-        this.extResults = extResults != null ? Collections.unmodifiableList(extResults) : Collections.emptyList();
-        this.runExtensions = runExtensions != null ? Collections.unmodifiableList(runExtensions) : Collections.emptyList();
+        this.extResults = extResults == null || extResults.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(extResults);
+        this.runExtensions = runExtensions == null || runExtensions.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(runExtensions);
     }
 
     /**

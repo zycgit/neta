@@ -102,7 +102,9 @@ public abstract class AbstractNetManager {
             // Perform shutdown.
             this.shutdown0(true);
 
-            logger.info("service is shutdown.");
+            if (this.config.isPrintLog()) {
+                logger.info("service is shutdown.");
+            }
         } else {
             logger.error("service already shutdown.");
         }

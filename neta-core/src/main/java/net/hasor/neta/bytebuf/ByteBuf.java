@@ -24,7 +24,7 @@ import java.nio.channels.WritableByteChannel;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
-import net.hasor.cobble.ref.RecycleObjectPool;
+
 /**
  * Mutable byte buffer abstraction used throughout Neta codecs and transports.
  * <p>A {@code ByteBuf} keeps two moving cursors plus two marks:
@@ -90,7 +90,7 @@ public interface ByteBuf extends ByteChannel, ReferenceHolder {
     /** Wraps a byte array as a ByteBuf and optionally keeps it writable. */
     static ByteBuf wrap(byte[] bytes, boolean asWrite) {
         Objects.requireNonNull(bytes, "bytes is null.");
-        WrapArrayBuffer buf = RecycleObjectPool.get(WrapArrayBuffer.RECYCLE_INDEX, WrapArrayBuffer.RECYCLE_HANDLER);
+        WrapArrayBuffer buf = WrapArrayBuffer.RECYCLER.get();
         buf.initBuffer(bytes, asWrite);
         return buf;
     }
@@ -103,7 +103,7 @@ public interface ByteBuf extends ByteChannel, ReferenceHolder {
     /** Wraps a ByteBuffer as a ByteBuf and optionally keeps it writable. */
     static ByteBuf wrap(ByteBuffer buffer, boolean asWrite) {
         Objects.requireNonNull(buffer, "buffer is null.");
-        WrapByteBuffer buf = RecycleObjectPool.get(WrapByteBuffer.RECYCLE_INDEX, WrapByteBuffer.RECYCLE_HANDLER);
+        WrapByteBuffer buf = WrapByteBuffer.RECYCLER.get();
         buf.initBuffer(buffer, asWrite);
         return buf;
     }
@@ -128,6 +128,18 @@ public interface ByteBuf extends ByteChannel, ReferenceHolder {
 
     /** Returns a copy including the current buffer contents. */
     ByteBuf copy();
+
+    /**
+     * Returns a copy of the requested readable range without moving either index.
+     */
+    ByteBuf copy(int offset, int length);
+
+    /**
+     * Returns a slice of the requested readable range without moving either index.
+     * The returned slice owns the source storage needed for its lifetime and must
+     * be released independently.
+     */
+    ByteBuf slice(int offset, int length);
 
     /** Returns a read-only view of this buffer. Write operations on the returned buffer will throw {@link java.nio.ReadOnlyBufferException}. */
     ByteBuf asReadOnly();

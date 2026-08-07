@@ -16,7 +16,6 @@
 package net.hasor.neta.channel.transport.quic;
 import net.hasor.cobble.function.Release;
 import net.hasor.cobble.ref.RecycleObjectPool;
-import net.hasor.cobble.ref.RecycleObjectPool.ObjHandler;
 import net.hasor.neta.bytebuf.ByteBuf;
 /**
  * Reassembled QUIC stream payload delivered on the connection pipeline when {@link QuicChannelMode#CHANNEL} is enabled.
@@ -28,25 +27,29 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class QuicMessage implements Release {
-    private static final int                     RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    private static final ObjHandler<QuicMessage> RECYCLE_HANDLER = //
-            new ObjHandler<QuicMessage>() {
-                @Override
-                public QuicMessage create() {
-                    return new QuicMessage();
-                }
-
-                @Override
-                public void free(QuicMessage tar) {
-                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
-                }
-            };
+    private static final RecycleObjectPool.Recycler<QuicMessage> RECYCLER = RecycleObjectPool.recycler(//
+            QuicMessage::new, QuicMessage::resetState, QuicMessage::onRecycle);
 
     private long    streamId;
     private ByteBuf byteBuf;
     private boolean fin;
 
     private QuicMessage() {
+    }
+
+    private void resetState() {
+        this.streamId = 0L;
+        this.byteBuf = null;
+        this.fin = false;
+    }
+
+    private void onRecycle() {
+        if (this.byteBuf != null) {
+            this.byteBuf.release();
+            this.byteBuf = null;
+        }
+        this.streamId = 0L;
+        this.fin = false;
     }
 
     private void init(long streamId, ByteBuf byteBuf, boolean fin) {
@@ -66,7 +69,7 @@ public class QuicMessage implements Release {
      * Creates a QUIC message with explicit FIN metadata.
      */
     public static QuicMessage of(long streamId, ByteBuf byteBuf, boolean fin) {
-        QuicMessage message = RecycleObjectPool.get(RECYCLE_INDEX, RECYCLE_HANDLER);
+        QuicMessage message = RECYCLER.get();
         message.init(streamId, byteBuf, fin);
         return message;
     }
@@ -115,12 +118,6 @@ public class QuicMessage implements Release {
 
     @Override
     public void release() {
-        if (this.byteBuf != null) {
-            this.byteBuf.release();
-            this.byteBuf = null;
-        }
-        this.streamId = 0L;
-        this.fin = false;
-        RECYCLE_HANDLER.free(this);
+        RECYCLER.recycle(this);
     }
 }

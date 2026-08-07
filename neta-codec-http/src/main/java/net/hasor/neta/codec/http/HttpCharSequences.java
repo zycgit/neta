@@ -35,10 +35,6 @@ final class HttpCharSequences {
         }
     }
 
-    static boolean isOwned(CharSequence value) {
-        return value instanceof Release;
-    }
-
     static boolean equalsIgnoreCase(CharSequence left, CharSequence right) {
         if (left == right) {
             return true;

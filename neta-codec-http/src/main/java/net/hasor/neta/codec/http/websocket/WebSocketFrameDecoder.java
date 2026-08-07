@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.nio.ByteOrder;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
@@ -23,11 +26,11 @@ import net.hasor.neta.channel.ProtoExceptionHolder;
 import net.hasor.neta.channel.ProtoHandler;
 import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
-import net.hasor.neta.channel.data.ProtoRcvQueueView;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.codec.http.HttpByteBuf;
 import net.hasor.neta.codec.http.HttpContent;
 import net.hasor.neta.codec.http.HttpObject;
+
 /**
  * Decode upgraded HTTP payloads into {@link WebSocketFrame} objects.
  * <p>
@@ -53,19 +56,23 @@ import net.hasor.neta.codec.http.HttpObject;
  * @version : 2026-02-18
  */
 public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocketFrame> {
-    private static final String           PAYLOAD_STAGE_QUEUE_KEY = WebSocketFrameDecoder.class.getName() + ".payload.stage";
-    private static final Logger           logger                  = Logger.getLogger(WebSocketFrameDecoder.class);
-    private static final int              XOR_SCRATCH_SIZE        = 4096;
-    private final byte[]                  maskKeyBuf              = new byte[4];
-    private final byte[]                  headerBuf               = new byte[14]; // 2 base + 8 ext-len + 4 mask-key
-    private final byte[]                  xorScratch              = new byte[XOR_SCRATCH_SIZE];
-    private final WebSocketVersion        defaultVersion;
-    private final boolean                 detectVersion;
-    private final int                     maxPayloadChunkLength;
-    private ByteBuf                       accumulator;
-    private ProtoRcvQueueView<HttpObject> bufferedPayloadViewRef;
-    private Rfc6455PayloadState           streamingState;
-    private long                          currentStreamId;
+    private static final Logger              logger                  = Logger.getLogger(WebSocketFrameDecoder.class);
+    private static final int                 XOR_SCRATCH_SIZE        = 4096;
+    private static final int                 MAX_CUMULATION_PREALLOC = 64 * 1024;
+    private static final byte                MASK_RULE_UNKNOWN       = 0;
+    private static final byte                MASK_RULE_REQUIRE       = 1;
+    private static final byte                MASK_RULE_REJECT        = 2;
+    private static final VarHandle           MASK_INT_BE             = MethodHandles.byteArrayViewVarHandle(int[].class, ByteOrder.BIG_ENDIAN);
+    private final        byte[]              maskKeyBuf              = new byte[4];
+    private final        byte[]              headerBuf               = new byte[14]; // 2 base + 8 ext-len + 4 mask-key
+    private final        byte[]              xorScratch              = new byte[XOR_SCRATCH_SIZE];
+    private final        WebSocketVersion    defaultVersion;
+    private final        boolean             detectVersion;
+    private final        int                 maxPayloadChunkLength;
+    private              ByteBuf             accumulator;
+    private              Rfc6455PayloadState streamingState;
+    private              byte                inboundMaskRule;
+    private              long                currentStreamId;
 
     /**
      * Streaming state used when a large RFC 6455 payload is emitted as multiple
@@ -84,27 +91,37 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         private final boolean         rsv3;
         /** Whether the original frame is masked. */
         private final boolean         masked;
-        /** Masking key copied from the original header when MASK is present. */
-        private final byte[]          maskKey;
+        /** First byte of masking key copied from the original header when MASK is present. */
+        private final byte            maskKey0;
+        /** Second byte of masking key copied from the original header when MASK is present. */
+        private final byte            maskKey1;
+        /** Third byte of masking key copied from the original header when MASK is present. */
+        private final byte            maskKey2;
+        /** Fourth byte of masking key copied from the original header when MASK is present. */
+        private final byte            maskKey3;
         /** Total payload length of the original wire frame. */
         private final long            payloadLength;
         /** Remaining bytes still to be emitted. */
-        private long                  remainingPayloadLength;
+        private       long            remainingPayloadLength;
         /** Payload bytes that have already been emitted. */
-        private long                  emittedPayloadLength;
+        private       long            emittedPayloadLength;
 
-        private Rfc6455PayloadState(WebSocketOpcode opcode, boolean finalFragment, boolean rsv1, boolean rsv2, boolean rsv3, boolean masked, byte[] maskKey, long payloadLength) {
+        private Rfc6455PayloadState(WebSocketOpcode opcode, boolean finalFragment, boolean rsv1, boolean rsv2, boolean rsv3, boolean masked, byte maskKey0, byte maskKey1, byte maskKey2, byte maskKey3, long payloadLength) {
             this.opcode = opcode;
             this.finalFragment = finalFragment;
             this.rsv1 = rsv1;
             this.rsv2 = rsv2;
             this.rsv3 = rsv3;
             this.masked = masked;
-            this.maskKey = maskKey;
+            this.maskKey0 = maskKey0;
+            this.maskKey1 = maskKey1;
+            this.maskKey2 = maskKey2;
+            this.maskKey3 = maskKey3;
             this.payloadLength = payloadLength;
             this.remainingPayloadLength = payloadLength;
             this.emittedPayloadLength = 0L;
         }
+
     }
 
     /**
@@ -178,29 +195,148 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
      */
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<WebSocketFrame> dst) throws Throwable {
-        this.stageInboundPayload(src);
-        this.accumulator = this.buildAccumulator();
+        WebSocketVersion version = resolveVersion(context);
 
-        if (this.accumulator != null && this.accumulator.readableBytes() > 0) {
-            WebSocketVersion version = resolveVersion(context);
-            try {
-                if (version.isRfc6455Framing()) {
-                    while (decodeRfc6455Frame(context, dst)) {
-                        /* loop */
-                    }
-                } else {
-                    while (decodeHixie76Frame(context, dst)) {
-                        /* loop */
-                    }
+        if (this.accumulator == null && this.streamingState == null) {
+            ByteBuf directPayload;
+            while ((directPayload = this.takeCompleteSinglePayload(src, version)) != null) {
+                this.accumulator = directPayload;
+                try {
+                    this.decodeAvailable(context, dst, version);
+                } finally {
+                    this.accumulator.release();
+                    this.accumulator = null;
                 }
-                this.consumeBufferedPayload(this.accumulator.readBytes());
+            }
+        }
+
+        this.appendInboundPayload(context, src, version);
+        if (this.accumulator != null && this.accumulator.readableBytes() > 0) {
+            try {
+                this.decodeAvailable(context, dst, version);
             } finally {
-                this.accumulator.free();
-                this.accumulator = null;
+                if (this.accumulator.readableBytes() == 0) {
+                    this.accumulator.release();
+                    this.accumulator = null;
+                }
             }
         }
 
         return ProtoStatus.Next;
+    }
+
+    private void decodeAvailable(ProtoContext context, ProtoSndQueue<WebSocketFrame> dst, WebSocketVersion version) {
+        if (version.isRfc6455Framing()) {
+            while (decodeRfc6455Frame(context, dst)) {
+                /* loop */
+            }
+        } else {
+            while (decodeHixie76Frame(context, dst)) {
+                /* loop */
+            }
+        }
+    }
+
+    private ByteBuf takeCompleteSinglePayload(ProtoRcvQueue<HttpObject> src, WebSocketVersion version) {
+        if (src == null || !src.hasMore()) {
+            return null;
+        }
+
+        HttpObject candidate = src.peekMessage();
+        if (candidate == null) {
+            return null;
+        }
+        ByteBuf content = rawContent(candidate);
+        boolean complete = version.isRfc6455Framing() ? isExactlyOneCompleteRfc6455Frame(content) : isExactlyOneCompleteHixieFrame(content);
+        if (!complete) {
+            return null;
+        }
+
+        HttpObject owned = src.takeMessage();
+        if (owned == null) {
+            return null;
+        }
+        this.currentStreamId = owned.streamId() > 0 ? owned.streamId() : this.currentStreamId;
+        ByteBuf payload;
+        if (owned instanceof HttpByteBuf) {
+            payload = ((HttpByteBuf) owned).transferContent();
+        } else {
+            payload = ((HttpContent) owned).transferContent();
+        }
+        owned.release();
+        return payload;
+    }
+
+    private static boolean isExactlyOneCompleteRfc6455Frame(ByteBuf content) {
+        if (content == null) {
+            return false;
+        }
+        int readable = content.readableBytes();
+        if (readable < 2) {
+            return false;
+        }
+
+        int second = content.getByte(1) & 0xFF;
+        long payloadLength = second & 0x7F;
+        int headerLength = 2;
+        if (payloadLength == 126) {
+            if (readable < 4) {
+                return false;
+            }
+            payloadLength = ((content.getByte(2) & 0xFFL) << 8) | (content.getByte(3) & 0xFFL);
+            headerLength = 4;
+        } else if (payloadLength == 127) {
+            if (readable < 10 || (content.getByte(2) & 0x80) != 0) {
+                return false;
+            }
+            payloadLength = 0;
+            for (int i = 0; i < 8; i++) {
+                payloadLength = (payloadLength << 8) | (content.getByte(2 + i) & 0xFFL);
+            }
+            headerLength = 10;
+        }
+        if ((second & 0x80) != 0) {
+            headerLength += 4;
+        }
+        return payloadLength <= Integer.MAX_VALUE && headerLength + payloadLength == readable;
+    }
+
+    private static boolean isExactlyOneCompleteHixieFrame(ByteBuf content) {
+        if (content == null) {
+            return false;
+        }
+        int readable = content.readableBytes();
+        if (readable < 2) {
+            return false;
+        }
+
+        int frameType = content.getByte(0) & 0xFF;
+        if ((frameType & 0x80) == 0) {
+            for (int i = 1; i < readable; i++) {
+                if ((content.getByte(i) & 0xFF) == 0xFF) {
+                    return i == readable - 1;
+                }
+            }
+            return false;
+        }
+        if (frameType == 0xFF) {
+            return readable == 2 && content.getByte(1) == 0;
+        }
+
+        long payloadLength = 0L;
+        int lengthBytes = 0;
+        for (int i = 1; i < readable; i++) {
+            int value = content.getByte(i) & 0xFF;
+            if (payloadLength > (Integer.MAX_VALUE >>> 7)) {
+                return false;
+            }
+            payloadLength = (payloadLength << 7) | (value & 0x7F);
+            lengthBytes++;
+            if ((value & 0x80) == 0) {
+                return payloadLength <= Integer.MAX_VALUE && 1L + lengthBytes + payloadLength == readable;
+            }
+        }
+        return false;
     }
 
     private static ByteBuf rawContent(HttpObject obj) {
@@ -213,16 +349,14 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         throw new ClassCastException(obj.getClass().getName() + " cannot be cast to HttpByteBuf or HttpContent");
     }
 
-    private void stageInboundPayload(ProtoRcvQueue<HttpObject> src) {
+    private void appendInboundPayload(ProtoContext context, ProtoRcvQueue<HttpObject> src, WebSocketVersion version) {
         if (src == null) {
             return;
         }
 
-        this.bufferedPayloadViewRef = src.queueView(PAYLOAD_STAGE_QUEUE_KEY);
         while (src.hasMore()) {
-            HttpObject next = src.peekMessage();
+            HttpObject next = src.takeMessage();
             if (next == null) {
-                src.skipMessage(1);
                 continue;
             }
 
@@ -232,80 +366,93 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
 
             ByteBuf content;
             try {
-                content = rawContent(next);
-            } catch (RuntimeException e) {
-                HttpObject invalid = src.takeMessage();
-                if (invalid != null) {
-                    invalid.release();
+                if (next instanceof HttpByteBuf) {
+                    content = ((HttpByteBuf) next).transferContent();
+                } else if (next instanceof HttpContent) {
+                    content = ((HttpContent) next).transferContent();
+                } else {
+                    throw new ClassCastException(next.getClass().getName() + " cannot be cast to HttpByteBuf or HttpContent");
                 }
+            } catch (RuntimeException e) {
+                next.release();
                 throw e;
             }
+            next.release();
 
             if (content != null && content.readableBytes() > 0) {
-                src.drainToQueue(PAYLOAD_STAGE_QUEUE_KEY, 1);
-                this.bufferedPayloadViewRef = src.queueView(PAYLOAD_STAGE_QUEUE_KEY);
+                this.appendAccumulator(context, content, version);
                 continue;
             }
-
-            HttpObject empty = src.takeMessage();
-            if (empty != null) {
-                empty.release();
+            if (content != null) {
+                content.release();
             }
         }
     }
 
-    private ByteBuf buildAccumulator() {
-        if (this.bufferedPayloadViewRef == null || !this.bufferedPayloadViewRef.hasMore()) {
-            return null;
-        }
-
-        CompositeByteBuf composite = ByteBufUtils.compositeBuffer();
-        for (HttpObject obj : this.bufferedPayloadViewRef.peekMessage(-1)) {
-            ByteBuf content = rawContent(obj);
-            if (content != null && content.readableBytes() > 0) {
-                composite.addComponent(content.retain());
+    private void appendAccumulator(ProtoContext context, ByteBuf content, WebSocketVersion version) {
+        if (this.accumulator == null) {
+            int readable = content.readableBytes();
+            int expectedLength = version.isRfc6455Framing() ? expectedRfc6455FrameLength(content) : -1;
+            if (expectedLength > readable && expectedLength <= MAX_CUMULATION_PREALLOC) {
+                ByteBuf target = context.byteBufAllocator().buffer(expectedLength, expectedLength);
+                content.readBuffer(target, readable);
+                target.markWriter();
+                content.release();
+                this.accumulator = target;
+            } else {
+                this.accumulator = content;
             }
-        }
-
-        if (composite.readableBytes() <= 0) {
-            composite.free();
-            return null;
-        }
-        return composite;
-    }
-
-    private void consumeBufferedPayload(int consumedBytes) {
-        if (consumedBytes <= 0 || this.bufferedPayloadViewRef == null) {
             return;
         }
 
-        int remaining = consumedBytes;
-        while (remaining > 0 && this.bufferedPayloadViewRef.hasMore()) {
-            HttpObject next = this.bufferedPayloadViewRef.peekMessage();
-            if (next == null) {
-                this.bufferedPayloadViewRef.skipMessage(1);
-                continue;
-            }
-
-            ByteBuf content = rawContent(next);
-            int readable = content == null ? 0 : content.readableBytes();
-            if (readable <= 0) {
-                this.bufferedPayloadViewRef.skipMessage(1);
-                continue;
-            }
-
-            if (remaining >= readable) {
-                remaining -= readable;
-                this.bufferedPayloadViewRef.skipMessage(1);
-            } else {
-                content.skipReadableBytes(remaining);
-                remaining = 0;
-            }
+        int readable = content.readableBytes();
+        if (this.accumulator.readerIndex() == 0 && this.accumulator.writableBytes() >= readable) {
+            content.readBuffer(this.accumulator, readable);
+            this.accumulator.markWriter();
+            content.release();
+            return;
         }
 
-        if (!this.bufferedPayloadViewRef.hasMore()) {
-            this.bufferedPayloadViewRef = null;
+        if (this.accumulator instanceof CompositeByteBuf) {
+            ((CompositeByteBuf) this.accumulator).addComponent(content);
+            return;
         }
+
+        CompositeByteBuf composite = ByteBufUtils.compositeBuffer(context.byteBufAllocator());
+        composite.addComponent(this.accumulator);
+        composite.addComponent(content);
+        this.accumulator = composite;
+    }
+
+    private static int expectedRfc6455FrameLength(ByteBuf content) {
+        int readable = content.readableBytes();
+        if (readable < 2) {
+            return -1;
+        }
+        int second = content.getByte(1) & 0xFF;
+        long payloadLength = second & 0x7F;
+        int headerLength = 2;
+        if (payloadLength == 126) {
+            if (readable < 4) {
+                return -1;
+            }
+            payloadLength = ((content.getByte(2) & 0xFFL) << 8) | (content.getByte(3) & 0xFFL);
+            headerLength = 4;
+        } else if (payloadLength == 127) {
+            if (readable < 10 || (content.getByte(2) & 0x80) != 0) {
+                return -1;
+            }
+            payloadLength = 0L;
+            for (int i = 0; i < 8; i++) {
+                payloadLength = (payloadLength << 8) | (content.getByte(2 + i) & 0xFFL);
+            }
+            headerLength = 10;
+        }
+        if ((second & 0x80) != 0) {
+            headerLength += 4;
+        }
+        long totalLength = headerLength + payloadLength;
+        return totalLength <= Integer.MAX_VALUE ? (int) totalLength : -1;
     }
 
     /**
@@ -423,7 +570,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         }
 
         if (shouldStreamPayload(opcodeVal, payloadLen)) {
-            this.streamingState = new Rfc6455PayloadState(opcode, fin, rsv1, rsv2, rsv3, masked, masked ? new byte[] { this.maskKeyBuf[0], this.maskKeyBuf[1], this.maskKeyBuf[2], this.maskKeyBuf[3] } : null, payloadLen);
+            this.streamingState = new Rfc6455PayloadState(opcode, fin, rsv1, rsv2, rsv3, masked, this.maskKeyBuf[0], this.maskKeyBuf[1], this.maskKeyBuf[2], this.maskKeyBuf[3], payloadLen);
             return emitRfc6455PayloadSlice(context, dst);
         }
 
@@ -434,32 +581,32 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
             contentBuf = ByteBuf.EMPTY;
         } else if (masked) {
             contentBuf = context.byteBufAllocator().buffer(len, Integer.MAX_VALUE);
-            int remaining = len;
-            while (remaining > 0) {
-                int chunk = Math.min(remaining, XOR_SCRATCH_SIZE);
-                this.accumulator.readBytes(this.xorScratch, 0, chunk);
-                int j = 0;
-                int chunk4 = chunk & ~3;
-                for (; j < chunk4; j += 4) {
-                    this.xorScratch[j] ^= maskKey[0];
-                    this.xorScratch[j + 1] ^= maskKey[1];
-                    this.xorScratch[j + 2] ^= maskKey[2];
-                    this.xorScratch[j + 3] ^= maskKey[3];
+            boolean completed = false;
+            try {
+                int remaining = len;
+                int payloadOffset = 0;
+                while (remaining > 0) {
+                    int chunk = Math.min(remaining, this.xorScratch.length);
+                    this.accumulator.readBytes(this.xorScratch, 0, chunk);
+                    unmaskPayload(this.xorScratch, chunk, maskKey, payloadOffset);
+                    contentBuf.writeBytes(this.xorScratch, 0, chunk);
+                    remaining -= chunk;
+                    payloadOffset += chunk;
                 }
-                for (; j < chunk; j++) {
-                    this.xorScratch[j] ^= maskKey[j & 3];
+                contentBuf.markWriter();
+                completed = true;
+            } finally {
+                if (!completed) {
+                    contentBuf.release();
                 }
-                contentBuf.writeBytes(this.xorScratch, 0, chunk);
-                remaining -= chunk;
             }
-            contentBuf.markWriter();
         } else {
             contentBuf = context.byteBufAllocator().buffer(len, Integer.MAX_VALUE);
             this.accumulator.readBuffer(contentBuf, len);
             contentBuf.markWriter();
         }
 
-        byte[] frameMaskKey = masked ? new byte[] { this.maskKeyBuf[0], this.maskKeyBuf[1], this.maskKeyBuf[2], this.maskKeyBuf[3] } : null;
+        byte[] frameMaskKey = masked ? this.maskKeyBuf : null;
         WebSocketFrame frame;
         switch (opcode) {
             case TEXT:
@@ -490,6 +637,20 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         frame.streamId(this.currentStreamId);
         dst.offerMessage(frame);
         return true;
+    }
+
+    private static void unmaskPayload(byte[] data, int length, byte[] maskKey, int payloadOffset) {
+        int maskOffset = payloadOffset & 3;
+        int mask = ((maskKey[maskOffset] & 0xFF) << 24) | ((maskKey[(maskOffset + 1) & 3] & 0xFF) << 16) | ((maskKey[(maskOffset + 2) & 3] & 0xFF) << 8) | (maskKey[(maskOffset + 3) & 3] & 0xFF);
+        int alignedLength = length & ~3;
+        int i = 0;
+        for (; i < alignedLength; i += 4) {
+            int value = (int) MASK_INT_BE.get(data, i);
+            MASK_INT_BE.set(data, i, value ^ mask);
+        }
+        for (; i < length; i++) {
+            data[i] ^= maskKey[(payloadOffset + i) & 3];
+        }
     }
 
     private boolean shouldStreamPayload(int opcodeValue, long payloadLen) {
@@ -523,15 +684,17 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
             contentBuf = ByteBuf.EMPTY;
         } else if (this.streamingState.masked) {
             contentBuf = context.byteBufAllocator().buffer(chunkLength, Integer.MAX_VALUE);
+            this.maskKeyBuf[0] = this.streamingState.maskKey0;
+            this.maskKeyBuf[1] = this.streamingState.maskKey1;
+            this.maskKeyBuf[2] = this.streamingState.maskKey2;
+            this.maskKeyBuf[3] = this.streamingState.maskKey3;
             int remaining = chunkLength;
             int emittedOffset = 0;
             while (remaining > 0) {
                 int chunk = Math.min(remaining, XOR_SCRATCH_SIZE);
                 this.accumulator.readBytes(this.xorScratch, 0, chunk);
                 long payloadOffset = this.streamingState.emittedPayloadLength + emittedOffset;
-                for (int i = 0; i < chunk; i++) {
-                    this.xorScratch[i] ^= this.streamingState.maskKey[(int) ((payloadOffset + i) & 3L)];
-                }
+                unmaskPayload(this.xorScratch, chunk, this.maskKeyBuf, (int) payloadOffset);
                 contentBuf.writeBytes(this.xorScratch, 0, chunk);
                 emittedOffset += chunk;
                 remaining -= chunk;
@@ -547,7 +710,14 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         boolean lastSlice = this.streamingState.remainingPayloadLength == chunkLength;
         WebSocketOpcode emittedOpcode = firstSlice ? this.streamingState.opcode : WebSocketOpcode.CONTINUATION;
         boolean finalFragment = lastSlice && this.streamingState.finalFragment;
-        byte[] maskKey = this.streamingState.masked ? new byte[] { this.streamingState.maskKey[0], this.streamingState.maskKey[1], this.streamingState.maskKey[2], this.streamingState.maskKey[3] } : null;
+        byte[] maskKey = null;
+        if (this.streamingState.masked) {
+            this.maskKeyBuf[0] = this.streamingState.maskKey0;
+            this.maskKeyBuf[1] = this.streamingState.maskKey1;
+            this.maskKeyBuf[2] = this.streamingState.maskKey2;
+            this.maskKeyBuf[3] = this.streamingState.maskKey3;
+            maskKey = this.maskKeyBuf;
+        }
         WebSocketFrame frame = WebSocketFrame.create(emittedOpcode, finalFragment, firstSlice && this.streamingState.rsv1, firstSlice && this.streamingState.rsv2, firstSlice && this.streamingState.rsv3, this.streamingState.masked, maskKey, contentBuf, chunkLength);
         frame.streamId(this.currentStreamId);
 
@@ -562,14 +732,19 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
     }
 
     private void validateMasking(ProtoContext context, boolean masked) {
-        WebSocketContext wsContext = resolveHandshakeContext(context);
-        if (wsContext == null || !WebSocketVersion.of(wsContext.version()).isRfc6455Framing()) {
-            return;
+        byte rule = this.inboundMaskRule;
+        if (rule == MASK_RULE_UNKNOWN) {
+            WebSocketContext wsContext = resolveHandshakeContext(context);
+            if (wsContext == null || !WebSocketVersion.of(wsContext.version()).isRfc6455Framing()) {
+                return;
+            }
+            rule = wsContext.isServer() ? MASK_RULE_REQUIRE : MASK_RULE_REJECT;
+            this.inboundMaskRule = rule;
         }
-        if (wsContext.isServer() && !masked) {
+        if (rule == MASK_RULE_REQUIRE && !masked) {
             throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "client-to-server websocket frames must be masked.");
         }
-        if (wsContext.isClient() && masked) {
+        if (rule == MASK_RULE_REJECT && masked) {
             throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "server-to-client websocket frames must not be masked.");
         }
     }
@@ -606,7 +781,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
             // Length-prefixed binary: read variable-length integer
             int lengthBytes = 0;
             long payloadLen = 0;
-            for (int i = 1;; i++) {
+            for (int i = 1; ; i++) {
                 if (i >= readable) {
                     return false; // need more data for length field
                 }
@@ -658,9 +833,8 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         if (textLen == 0) {
             contentBuf = ByteBuf.EMPTY;
         } else {
-            contentBuf = context.byteBufAllocator().buffer(textLen, Integer.MAX_VALUE);
-            this.accumulator.readBuffer(contentBuf, textLen);
-            contentBuf.markWriter();
+            contentBuf = this.accumulator.slice(0, textLen);
+            this.accumulator.skipReadableBytes(textLen);
         }
         // Skip the 0xFF terminator
         this.accumulator.skipReadableBytes(1);
@@ -671,13 +845,10 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
 
     private void resetAccumulator() {
         if (this.accumulator != null) {
-            this.accumulator.free();
+            this.accumulator.release();
             this.accumulator = null;
         }
-        if (this.bufferedPayloadViewRef != null) {
-            this.bufferedPayloadViewRef.discard();
-            this.bufferedPayloadViewRef = null;
-        }
         this.streamingState = null;
+        this.inboundMaskRule = MASK_RULE_UNKNOWN;
     }
 }

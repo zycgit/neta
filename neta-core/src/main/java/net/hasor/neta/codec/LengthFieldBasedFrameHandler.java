@@ -187,7 +187,7 @@ public class LengthFieldBasedFrameHandler implements ProtoHandler<ByteBuf, ByteB
                     ByteBuf byteBuf = context.byteBufAllocator().buffer(len <= 0 ? 1 : len);
 
                     offerDataSize += this.readFrame(i, peekAll, haderBuf, byteBuf, this.initialBytesToStrip, (int) fieldLength);
-                    if (!ByteBufUtils.offerOwnedBuffer(dst, byteBuf)) {
+                    if (!CodecHandlerUtils.offerOwnedBuffer(dst, byteBuf)) {
                         ByteBufUtils.resetReader(peekAll);
                         haderBuf.free();
                         return ProtoStatus.Stop;

@@ -32,7 +32,6 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  *      +--> target : Buffer --------------------------+
  *      |        |                                     |
  *      |        +--> heapArray / heapOffset           |
- *      |        \--> directAddress                    |
  *      |
  *      +--> pool : BufferPool
  *      |
@@ -47,42 +46,52 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * <p>To reduce churn during small growth cycles, recently freed pooled buffers
  * may be kept in a per-thread cache and reused before another pool request is
  * made.
- * <p>The implementation also caches heap-array access or direct-memory address
- * metadata internally so bulk read and write paths can avoid repeated buffer
- * introspection.
+ * <p>The implementation also caches heap-array metadata internally so bulk read
+ * and write paths can avoid repeated buffer introspection.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  * @see BufferPool
  * @see BasicByteBufAllocator
  */
 final class PooledByteBuf extends AbstractByteBuf {
-    static final int                                       RECYCLE_INDEX    = RecycleObjectPool.registerType();
     static final ThreadLocal<java.util.ArrayDeque<Buffer>> BUFFER_CACHE     = ThreadLocal.withInitial(java.util.ArrayDeque::new);
     /** Thread-local cache for recently freed pooled Buffers (pages stay allocated). */
     private static final int                               MAX_BUFFER_CACHE = 8;
-    static RecycleObjectPool.ObjHandler<PooledByteBuf>     RECYCLE_HANDLER  = new RecycleObjectPool.ObjHandler<PooledByteBuf>() {
-                                                                                public PooledByteBuf create() {
-                                                                                    return new PooledByteBuf();
-                                                                                }
-
-                                                                                @Override
-                                                                                public void free(PooledByteBuf tar) {
-                                                                                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
-                                                                                }
-                                                                            };
+    static final RecycleObjectPool.Recycler<PooledByteBuf> RECYCLER        = RecycleObjectPool.recycler(//
+            PooledByteBuf::new, PooledByteBuf::resetState, PooledByteBuf::onRecycle);
     Buffer                                                 target;
     private BufferPool                                     pool;
     // Cached heap array + offset for fast-path access (null for direct buffers)
     private byte[] heapArray;
     private int    heapOffset;
-    // Cached direct buffer base address for Unsafe off-heap access (0 for heap buffers)
-    private long directAddress;
 
     // ------------------------------------------------------------------------
     private int initSize;
     private int extensionSize;
 
     private PooledByteBuf() {
+    }
+
+    private void resetState() {
+        this.target = null;
+        this.pool = null;
+        this.heapArray = null;
+        this.heapOffset = 0;
+        this.initSize = 0;
+        this.extensionSize = 0;
+    }
+
+    private void onRecycle() {
+        Buffer oldTarget = this.target;
+        this.resetState();
+        if (oldTarget != null) {
+            ArrayDeque<Buffer> cache = BUFFER_CACHE.get();
+            if (cache.size() < MAX_BUFFER_CACHE) {
+                cache.push(oldTarget);
+            } else {
+                oldTarget.free();
+            }
+        }
     }
 
     void initBuffer(ByteBufAllocator alloc, int maxCapacity, int extensionSize, Buffer target, BufferPool pool) {
@@ -102,15 +111,6 @@ final class PooledByteBuf extends AbstractByteBuf {
             if (ha != null) {
                 this.heapArray = ha;
                 this.heapOffset = t.heapArrayOffset() + t.getOffset();
-                this.directAddress = 0;
-                return;
-            }
-            // Direct buffer path: use Unsafe for direct address
-            if (t.isDirect() && UnsafeMemory.HAS_UNSAFE) {
-                ByteBuffer bb = t.getTarget();
-                this.heapArray = null;
-                this.heapOffset = 0;
-                this.directAddress = UnsafeMemory.getDirectAddress(bb) + t.getOffset();
                 return;
             }
             // Fallback: use getTarget() for non-direct buffers that don't support heapArray()
@@ -119,14 +119,12 @@ final class PooledByteBuf extends AbstractByteBuf {
                 if (bb != null && bb.hasArray()) {
                     this.heapArray = bb.array();
                     this.heapOffset = bb.arrayOffset() + t.getOffset();
-                    this.directAddress = 0;
                     return;
                 }
             }
         }
         this.heapArray = null;
         this.heapOffset = 0;
-        this.directAddress = 0;
     }
 
     @Override
@@ -231,7 +229,7 @@ final class PooledByteBuf extends AbstractByteBuf {
             newBuf = ByteBuffer.wrap(arr);
         }
 
-        WrapByteBuffer slicedBuf = RecycleObjectPool.get(WrapByteBuffer.RECYCLE_INDEX, WrapByteBuffer.RECYCLE_HANDLER);
+        WrapByteBuffer slicedBuf = WrapByteBuffer.RECYCLER.get();
         slicedBuf.initBuffer(newBuf, false);
         return slicedBuf;
     }
@@ -413,10 +411,6 @@ final class PooledByteBuf extends AbstractByteBuf {
         if (arr != null) {
             return arr[this.heapOffset + idx];
         }
-        long addr = this.directAddress;
-        if (addr != 0) {
-            return UnsafeMemory.getByteDirect(addr + idx);
-        }
         return this.target.get(idx);
     }
 
@@ -430,11 +424,6 @@ final class PooledByteBuf extends AbstractByteBuf {
             arr[this.heapOffset + idx] = n;
             return;
         }
-        long addr = this.directAddress;
-        if (addr != 0) {
-            UnsafeMemory.putByteDirect(addr + idx, n);
-            return;
-        }
         this.target.put(idx, n);
     }
 
@@ -445,7 +434,7 @@ final class PooledByteBuf extends AbstractByteBuf {
         byte[] arr = this.heapArray;
         if (arr != null) {
             int i = this.heapOffset + idx;
-            if (UnsafeMemory.HAS_UNSAFE) {
+            if (UnsafeMemory.HAS_FAST_ARRAY_ACCESS) {
                 return UnsafeMemory.getInt16(arr, i, bigEndian);
             }
             if (bigEndian) {
@@ -453,10 +442,6 @@ final class PooledByteBuf extends AbstractByteBuf {
             } else {
                 return (short) ((arr[i + 1] << 8) | (arr[i] & 0xff));
             }
-        }
-        long addr = this.directAddress;
-        if (addr != 0) {
-            return UnsafeMemory.getInt16Direct(addr + idx, bigEndian);
         }
         return Bits.decodeInt16(this, idx, bigEndian);
     }
@@ -469,7 +454,7 @@ final class PooledByteBuf extends AbstractByteBuf {
         byte[] arr = this.heapArray;
         if (arr != null) {
             int i = this.heapOffset + idx;
-            if (UnsafeMemory.HAS_UNSAFE) {
+            if (UnsafeMemory.HAS_FAST_ARRAY_ACCESS) {
                 UnsafeMemory.putInt16(arr, i, n, bigEndian);
                 return;
             }
@@ -482,11 +467,6 @@ final class PooledByteBuf extends AbstractByteBuf {
             }
             return;
         }
-        long addr = this.directAddress;
-        if (addr != 0) {
-            UnsafeMemory.putInt16Direct(addr + idx, n, bigEndian);
-            return;
-        }
         Bits.encodeInt16(this, idx, n, bigEndian);
     }
 
@@ -497,7 +477,7 @@ final class PooledByteBuf extends AbstractByteBuf {
         byte[] arr = this.heapArray;
         if (arr != null) {
             int i = this.heapOffset + idx;
-            if (UnsafeMemory.HAS_UNSAFE) {
+            if (UnsafeMemory.HAS_FAST_ARRAY_ACCESS) {
                 return UnsafeMemory.getInt32(arr, i, bigEndian);
             }
             if (bigEndian) {
@@ -505,10 +485,6 @@ final class PooledByteBuf extends AbstractByteBuf {
             } else {
                 return (arr[i + 3] << 24) | ((arr[i + 2] & 0xff) << 16) | ((arr[i + 1] & 0xff) << 8) | (arr[i] & 0xff);
             }
-        }
-        long addr = this.directAddress;
-        if (addr != 0) {
-            return UnsafeMemory.getInt32Direct(addr + idx, bigEndian);
         }
         return Bits.decodeInt32(this, idx, bigEndian);
     }
@@ -521,7 +497,7 @@ final class PooledByteBuf extends AbstractByteBuf {
         byte[] arr = this.heapArray;
         if (arr != null) {
             int i = this.heapOffset + idx;
-            if (UnsafeMemory.HAS_UNSAFE) {
+            if (UnsafeMemory.HAS_FAST_ARRAY_ACCESS) {
                 UnsafeMemory.putInt32(arr, i, n, bigEndian);
                 return;
             }
@@ -538,11 +514,6 @@ final class PooledByteBuf extends AbstractByteBuf {
             }
             return;
         }
-        long addr = this.directAddress;
-        if (addr != 0) {
-            UnsafeMemory.putInt32Direct(addr + idx, n, bigEndian);
-            return;
-        }
         Bits.encodeInt32(this, idx, n, bigEndian);
     }
 
@@ -553,7 +524,7 @@ final class PooledByteBuf extends AbstractByteBuf {
         byte[] arr = this.heapArray;
         if (arr != null) {
             int i = this.heapOffset + idx;
-            if (UnsafeMemory.HAS_UNSAFE) {
+            if (UnsafeMemory.HAS_FAST_ARRAY_ACCESS) {
                 return UnsafeMemory.getInt64(arr, i, bigEndian);
             }
             if (bigEndian) {
@@ -561,10 +532,6 @@ final class PooledByteBuf extends AbstractByteBuf {
             } else {
                 return ((long) arr[i + 7] << 56) | ((long) (arr[i + 6] & 0xff) << 48) | ((long) (arr[i + 5] & 0xff) << 40) | ((long) (arr[i + 4] & 0xff) << 32) | ((long) (arr[i + 3] & 0xff) << 24) | ((long) (arr[i + 2] & 0xff) << 16) | ((long) (arr[i + 1] & 0xff) << 8) | ((long) (arr[i] & 0xff));
             }
-        }
-        long addr = this.directAddress;
-        if (addr != 0) {
-            return UnsafeMemory.getInt64Direct(addr + idx, bigEndian);
         }
         return Bits.decodeInt64(this, idx, bigEndian);
     }
@@ -577,7 +544,7 @@ final class PooledByteBuf extends AbstractByteBuf {
         byte[] arr = this.heapArray;
         if (arr != null) {
             int i = this.heapOffset + idx;
-            if (UnsafeMemory.HAS_UNSAFE) {
+            if (UnsafeMemory.HAS_FAST_ARRAY_ACCESS) {
                 UnsafeMemory.putInt64(arr, i, n, bigEndian);
                 return;
             }
@@ -600,11 +567,6 @@ final class PooledByteBuf extends AbstractByteBuf {
                 arr[i + 6] = (byte) (n >> 48);
                 arr[i + 7] = (byte) (n >> 56);
             }
-            return;
-        }
-        long addr = this.directAddress;
-        if (addr != 0) {
-            UnsafeMemory.putInt64Direct(addr + idx, n, bigEndian);
             return;
         }
         Bits.encodeInt64(this, idx, n, bigEndian);
@@ -644,24 +606,7 @@ final class PooledByteBuf extends AbstractByteBuf {
 
     @Override
     protected void _free() {
-        try {
-            Buffer t = this.target;
-            if (t != null) {
-                ArrayDeque<Buffer> cache = BUFFER_CACHE.get();
-                if (cache.size() < MAX_BUFFER_CACHE) {
-                    cache.push(t); // Cache the memory, pages stay allocated
-                } else {
-                    t.free(); // Cache full, return pages to buddy tree
-                }
-            }
-        } finally {
-            this.target = null;
-            this.heapArray = null;
-            this.heapOffset = 0;
-            this.directAddress = 0;
-            this.pool = null;
-            RECYCLE_HANDLER.free(this);
-        }
+        RECYCLER.recycle(this);
     }
 
     @Override
@@ -687,7 +632,7 @@ final class PooledByteBuf extends AbstractByteBuf {
             this._getBytes(0, targetBuf, copyLen);
         }
 
-        PooledByteBuf byteBuf = RecycleObjectPool.get(PooledByteBuf.RECYCLE_INDEX, PooledByteBuf.RECYCLE_HANDLER);
+        PooledByteBuf byteBuf = PooledByteBuf.RECYCLER.get();
         byteBuf.initBuffer(this.alloc, this.getMaxCapacity(), this.extensionSize, target, this.pool);
 
         byteBuf.writerIndex = this.writerIndex;
@@ -697,6 +642,19 @@ final class PooledByteBuf extends AbstractByteBuf {
         byteBuf.byteOrder = this.byteOrder;
         byteBuf.bigEndian = this.bigEndian;
         return byteBuf;
+    }
+
+    @Override
+    public ByteBuf slice(int offset, int length) {
+        if (length <= 0) {
+            return ByteBuf.EMPTY;
+        }
+        int baseOffset = offsetReadable(offset, length);
+        byte[] array = this.heapArray;
+        if (array != null) {
+            return ArraySliceByteBuf.newSlice(this, array, this.heapOffset + baseOffset, length);
+        }
+        return ArraySliceByteBuf.newSlice(this, baseOffset, length);
     }
 
     @Override

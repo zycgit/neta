@@ -40,21 +40,29 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * @version : 2022-11-01
  */
 class WrapByteBuffer extends AbstractByteBuf {
-    static final int                                    RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    static RecycleObjectPool.ObjHandler<WrapByteBuffer> RECYCLE_HANDLER = //
-            new RecycleObjectPool.ObjHandler<WrapByteBuffer>() {
-                public WrapByteBuffer create() {
-                    return new WrapByteBuffer();
-                }
-
-                @Override
-                public void free(WrapByteBuffer tar) {
-                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
-                }
-            };
+    static final RecycleObjectPool.Recycler<WrapByteBuffer> RECYCLER = RecycleObjectPool.recycler(//
+            WrapByteBuffer::new, WrapByteBuffer::resetState, WrapByteBuffer::onRecycle);
     protected ByteBuffer                                target;
 
     private WrapByteBuffer() {
+    }
+
+    private void resetState() {
+        this.target = null;
+    }
+
+    private void onRecycle() {
+        ByteBuffer buf = this.target;
+        this.target = null;
+        if (buf != null) {
+            if (buf.isDirect()) {
+                if (!SmallBufferCache.freeDirect(buf) && ByteBufUtils.CLEANER != null) {
+                    ByteBufUtils.CLEANER.freeDirectBuffer(buf);
+                }
+            } else if (buf.hasArray()) {
+                SmallBufferCache.freeHeap(buf.array());
+            }
+        }
     }
 
     // ------------------------------------------------------------------------
@@ -122,7 +130,7 @@ class WrapByteBuffer extends AbstractByteBuf {
         newBuf.put(this.target);
         ((Buffer) newBuf).flip();
 
-        WrapByteBuffer slicedBuf = RecycleObjectPool.get(WrapByteBuffer.RECYCLE_INDEX, WrapByteBuffer.RECYCLE_HANDLER);
+        WrapByteBuffer slicedBuf = WrapByteBuffer.RECYCLER.get();
         slicedBuf.initBuffer(newBuf, false);
 
         int remaining = this.capacity() - splitOffset;
@@ -235,23 +243,7 @@ class WrapByteBuffer extends AbstractByteBuf {
 
     @Override
     protected void _free() {
-        try {
-            ByteBuffer buf = this.target;
-            if (buf != null) {
-                if (buf.isDirect()) {
-                    // Try SmallBufferCache first; fall back to cleaner for non-small direct buffers
-                    if (!SmallBufferCache.freeDirect(buf) && ByteBufUtils.CLEANER != null) {
-                        ByteBufUtils.CLEANER.freeDirectBuffer(buf);
-                    }
-                } else if (buf.hasArray()) {
-                    // Return heap byte[] to SmallBufferCache (no-op for non-size-class arrays)
-                    SmallBufferCache.freeHeap(buf.array());
-                }
-            }
-        } finally {
-            this.target = null;
-            RECYCLE_HANDLER.free(this);
-        }
+        RECYCLER.recycle(this);
     }
 
     @Override
@@ -277,7 +269,7 @@ class WrapByteBuffer extends AbstractByteBuf {
 
         ((Buffer) this.target).clear();
         copyBuffer.put(this.target);
-        WrapByteBuffer byteBuf = RecycleObjectPool.get(WrapByteBuffer.RECYCLE_INDEX, WrapByteBuffer.RECYCLE_HANDLER);
+        WrapByteBuffer byteBuf = WrapByteBuffer.RECYCLER.get();
         byteBuf.initBuffer(copyBuffer, true);
 
         byteBuf.writerIndex = this.writerIndex;

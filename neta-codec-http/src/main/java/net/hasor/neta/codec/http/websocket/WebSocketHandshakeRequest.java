@@ -53,6 +53,14 @@ public class WebSocketHandshakeRequest {
      * @param headers request headers
      */
     public WebSocketHandshakeRequest(WebSocketVersion version, String requestPath, String requestedProtocols, String requestedExtensions, HttpHeaders headers) {
+        this(version, requestPath, requestedProtocols, requestedExtensions, headers, true);
+    }
+
+    static WebSocketHandshakeRequest fromOwnedHeaders(WebSocketVersion version, String requestPath, String requestedProtocols, String requestedExtensions, DefaultHttpHeaders headers) {
+        return new WebSocketHandshakeRequest(version, requestPath, requestedProtocols, requestedExtensions, headers, false);
+    }
+
+    private WebSocketHandshakeRequest(WebSocketVersion version, String requestPath, String requestedProtocols, String requestedExtensions, HttpHeaders headers, boolean copyHeaders) {
         if (version == null) {
             throw new IllegalArgumentException("version must not be null");
         }
@@ -60,8 +68,12 @@ public class WebSocketHandshakeRequest {
         this.requestPath = requestPath;
         this.requestedProtocols = requestedProtocols;
         this.requestedExtensions = requestedExtensions;
-        this.headers = new DefaultHttpHeaders();
-        if (headers != null) {
+        if (!copyHeaders && headers instanceof DefaultHttpHeaders) {
+            this.headers = (DefaultHttpHeaders) headers;
+        } else {
+            this.headers = new DefaultHttpHeaders();
+        }
+        if (copyHeaders && headers != null) {
             this.headers.appendHeaders(headers);
         }
     }

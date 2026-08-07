@@ -32,6 +32,7 @@ final class HttpMessageParts {
     private String             uri;
     private long               streamId;
     private DefaultHttpHeaders headers;
+    private HttpHeaders        borrowedHeaders;
     private CompositeByteBuf   body;
     private boolean            active;
     private boolean            complete;
@@ -40,7 +41,7 @@ final class HttpMessageParts {
      * Determine whether aggregation has started for the current message.
      * @return {@code true} once at least one start-line fragment has been seen
      */
-    public boolean isActive() {
+    boolean isActive() {
         return this.active;
     }
 
@@ -48,7 +49,7 @@ final class HttpMessageParts {
      * Determine whether the current aggregated message has reached its end marker.
      * @return {@code true} when the request or response is complete
      */
-    public boolean isComplete() {
+    boolean isComplete() {
         return this.complete;
     }
 
@@ -56,7 +57,7 @@ final class HttpMessageParts {
      * Return the aggregated protocol version.
      * @return request or response protocol version
      */
-    public HttpVersion protocolVersion() {
+    HttpVersion protocolVersion() {
         return this.protocolVersion;
     }
 
@@ -64,7 +65,7 @@ final class HttpMessageParts {
      * Return the aggregated request method.
      * @return request method, or {@code null} for responses
      */
-    public HttpMethod method() {
+    HttpMethod method() {
         return this.method;
     }
 
@@ -72,7 +73,7 @@ final class HttpMessageParts {
      * Return the aggregated response status.
      * @return response status, or {@code null} for requests
      */
-    public HttpStatus status() {
+    HttpStatus status() {
         return this.status;
     }
 
@@ -80,7 +81,7 @@ final class HttpMessageParts {
      * Return the aggregated request URI.
      * @return request URI, or {@code null} for responses
      */
-    public String uri() {
+    String uri() {
         return this.uri;
     }
 
@@ -88,7 +89,7 @@ final class HttpMessageParts {
      * Return the stream identifier associated with the aggregated message.
      * @return stream identifier
      */
-    public long streamId() {
+    long streamId() {
         return this.streamId;
     }
 
@@ -97,34 +98,37 @@ final class HttpMessageParts {
      * @param name header name to resolve
      * @return header value, or {@code null} when absent
      */
-    public String header(String name) {
+    String header(String name) {
+        if (this.borrowedHeaders != null) {
+            return this.borrowedHeaders.getString(name);
+        }
         return this.headers == null ? null : this.headers.getString(name);
     }
 
     /**
-     * Create a defensive copy of the aggregated headers.
-     * @return copied header set
+     * Return the currently aggregated headers without creating a defensive copy.
      */
-    public HttpHeaders headersSnapshot() {
-        DefaultHttpHeaders copy = new DefaultHttpHeaders();
-        if (this.headers != null) {
-            copy.appendHeaders(this.headers);
+    DefaultHttpHeaders headersView() {
+        if (this.borrowedHeaders != null) {
+            DefaultHttpHeaders copy = new DefaultHttpHeaders();
+            copy.appendHeaders(this.borrowedHeaders);
+            return copy;
         }
-        return copy;
+        return this.headers;
     }
 
     /**
      * Return the aggregated body content.
      * @return aggregated body buffer, or {@link ByteBuf#EMPTY} when no body exists
      */
-    public ByteBuf body() {
+    ByteBuf body() {
         return this.body == null ? ByteBuf.EMPTY : this.body;
     }
 
     /**
      * Reset the aggregation state so it can be reused for the next message.
      */
-    public void reset() {
+    void reset() {
         if (this.body != null) {
             this.body.free();
         }
@@ -135,6 +139,7 @@ final class HttpMessageParts {
         this.uri = null;
         this.streamId = 0;
         this.headers = null;
+        this.borrowedHeaders = null;
         this.body = null;
         this.active = false;
         this.complete = false;
@@ -151,7 +156,7 @@ final class HttpMessageParts {
      * Append one request-side HTTP fragment into the current aggregation state.
      * @param msg request-side HTTP fragment
      */
-    public void appendRequest(HttpObject msg) {
+    void appendRequest(HttpObject msg) {
         boolean aggregateLike = msg instanceof HttpRequest && msg instanceof HttpContent;
         if (msg instanceof HttpRequest) {
             this.captureRequestStart((HttpRequest) msg);
@@ -163,6 +168,23 @@ final class HttpMessageParts {
         }
 
         this.markComplete(msg, aggregateLike);
+    }
+
+    /**
+     * Append a complete request while borrowing its headers for the duration of
+     * the current pipeline call. Fragmented requests fall back to owned aggregation.
+     */
+    void appendBorrowedRequest(HttpObject msg) {
+        boolean aggregateLike = msg instanceof HttpRequest && msg instanceof HttpContent;
+        if (!aggregateLike || !(msg instanceof HttpHeaders)) {
+            this.appendRequest(msg);
+            return;
+        }
+
+        this.captureRequestStart((HttpRequest) msg);
+        this.borrowedHeaders = (HttpHeaders) msg;
+        this.appendSharedBody(((HttpContent) msg).content());
+        this.markComplete(msg, true);
     }
 
     /**
@@ -172,33 +194,20 @@ final class HttpMessageParts {
      * except to release the remainder of its state.
      * @param msg request-side HTTP fragment
      */
-    public void appendOwnedRequest(HttpObject msg) {
+    void appendOwnedRequest(HttpObject msg) {
         boolean aggregateLike = msg instanceof HttpRequest && msg instanceof HttpContent;
+        boolean borrowHeaders = aggregateLike && msg instanceof HttpHeaders && ((HttpContent) msg).content().readableBytes() == 0;
         if (msg instanceof HttpRequest) {
             this.captureRequestStart((HttpRequest) msg);
         }
 
-        this.appendHeaders(msg);
+        if (borrowHeaders) {
+            this.borrowedHeaders = (HttpHeaders) msg;
+        } else {
+            this.appendHeaders(msg);
+        }
         if (msg instanceof HttpContent) {
             this.appendOwnedBody(((HttpContent) msg).transferContent());
-        }
-
-        this.markComplete(msg, aggregateLike);
-    }
-
-    /**
-     * Append one response-side HTTP fragment into the current aggregation state.
-     * @param msg response-side HTTP fragment
-     */
-    public void appendResponse(HttpObject msg) {
-        boolean aggregateLike = msg instanceof HttpResponse && msg instanceof HttpContent;
-        if (msg instanceof HttpResponse) {
-            this.captureResponseStart((HttpResponse) msg);
-        }
-
-        this.appendHeaders(msg);
-        if (msg instanceof HttpContent) {
-            this.appendSharedBody(((HttpContent) msg).content());
         }
 
         this.markComplete(msg, aggregateLike);
@@ -211,13 +220,17 @@ final class HttpMessageParts {
      * except to release the remainder of its state.
      * @param msg response-side HTTP fragment
      */
-    public void appendOwnedResponse(HttpObject msg) {
+    void appendOwnedResponse(HttpObject msg) {
         boolean aggregateLike = msg instanceof HttpResponse && msg instanceof HttpContent;
         if (msg instanceof HttpResponse) {
             this.captureResponseStart((HttpResponse) msg);
         }
 
-        this.appendHeaders(msg);
+        if (aggregateLike && msg instanceof HttpHeaders) {
+            this.borrowedHeaders = (HttpHeaders) msg;
+        } else {
+            this.appendHeaders(msg);
+        }
         if (msg instanceof HttpContent) {
             this.appendOwnedBody(((HttpContent) msg).transferContent());
         }
@@ -271,6 +284,10 @@ final class HttpMessageParts {
 
     private void appendOwnedBody(ByteBuf content) {
         if (content == null) {
+            return;
+        }
+        if (content.readableBytes() == 0) {
+            content.release();
             return;
         }
         this.ensureBody().addComponent(content);

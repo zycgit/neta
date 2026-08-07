@@ -31,19 +31,21 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
  * @see ProtoStackChain
  */
 class ProtoContextService implements ProtoBuildContext {
-    private final SoChannel<?>          channel;
-    private final SoContext             soContext;
-    private final Map<Class<?>, Object> contextData;  // local to this ctx; upward lookup via context(Class<T>)
-    private final ProtoStackChain       chainRoot;
-    private final Map<String, Object>   namedHandlerMap;
-    private final ProtoContextService   parentCtx;
-    private final String                parentPrevStackName; // node before Router in parent chain (SND direction); null if Router is head-most
-    private final String                parentNextStackName; // node after Router in parent chain (RCV direction); null if Router is tail-most
+    private final    SoChannel<?>          channel;
+    private final    SoContext             soContext;
+    private final    Map<Class<?>, Object> contextData;  // local to this ctx; upward lookup via context(Class<T>)
+    private final    ProtoStackChain       chainRoot;
+    private final    Map<String, Object>   namedHandlerMap;
+    private final    ProtoContextService   parentCtx;
+    private final    String                parentPrevStackName; // node before Router in parent chain (SND direction); null if Router is head-most
+    private final    String                parentNextStackName; // node after Router in parent chain (RCV direction); null if Router is tail-most
     //
-    private final Map<String, Object> flashMap;
-    private final Deque<ProtoStatus>  statusStack;
-    private volatile ProtoStatus      statusCurrent;
-    private final ProtoRecoveryState  recoveryState;
+    private final    Map<String, Object>   flashMap;
+    private          Deque<ProtoStatus>    statusStack;
+    private          ProtoStatus           statusPrevious;
+    private          ProtoStatus           freeStatus;
+    private volatile ProtoStatus           statusCurrent;
+    private final    ProtoRecoveryState    recoveryState;
 
     ProtoContextService(SoChannel<?> channel, SoContext soContext) {
         this.channel = channel;
@@ -54,9 +56,7 @@ class ProtoContextService implements ProtoBuildContext {
         this.parentNextStackName = null;
         //
         this.flashMap = new HashMap<>();
-        this.statusStack = new ArrayDeque<>();
-        this.statusStack.push(new ProtoStatus());
-        this.statusCurrent = this.statusStack.peek();
+        this.statusCurrent = new ProtoStatus();
         this.recoveryState = new ProtoRecoveryState();
         //
         this.chainRoot = new ProtoStackChain(channel.getConfig());
@@ -73,9 +73,7 @@ class ProtoContextService implements ProtoBuildContext {
         this.parentNextStackName = parentNextStackName; // pre-computed at branch creation time, never changes
         //
         this.flashMap = parent.flashMap;
-        this.statusStack = new ArrayDeque<>();
-        this.statusStack.push(new ProtoStatus());
-        this.statusCurrent = this.statusStack.peek();
+        this.statusCurrent = new ProtoStatus();
         this.recoveryState = new ProtoRecoveryState();
         //
         this.chainRoot = new ProtoStackChain(rcvSlotSize, sndSlotSize, true);
@@ -194,19 +192,44 @@ class ProtoContextService implements ProtoBuildContext {
 
     /** Enter a new reentrant pipeline frame. */
     void pushStatus() {
-        this.statusStack.push(new ProtoStatus());
-        this.statusCurrent = this.statusStack.peek();
+        ProtoStatus previous = this.statusCurrent;
+        ProtoStatus next = this.freeStatus;
+        if (next == null) {
+            next = new ProtoStatus();
+        } else {
+            this.freeStatus = next.nextFree;
+            next.nextFree = null;
+        }
+        if (this.statusPrevious == null) {
+            this.statusPrevious = previous;
+        } else {
+            if (this.statusStack == null) {
+                this.statusStack = new ArrayDeque<>();
+            }
+            this.statusStack.push(previous);
+        }
+        this.statusCurrent = next;
     }
 
     void popStatus() {
-        if (this.statusStack.size() > 1) {
-            this.statusStack.pop();
+        if (this.statusPrevious == null) {
+            return;
         }
+
+        ProtoStatus popped = this.statusCurrent;
+        if (this.statusStack != null && !this.statusStack.isEmpty()) {
+            this.statusCurrent = this.statusStack.pop();
+        } else {
+            this.statusCurrent = this.statusPrevious;
+            this.statusPrevious = null;
+        }
+        popped.clear();
+        popped.nextFree = this.freeStatus;
+        this.freeStatus = popped;
     }
 
     void clearStatus() {
-        this.statusStack.peek().clear();
-        this.statusCurrent = this.statusStack.peek();
+        this.statusCurrent.clear();
     }
 
     void clearFlash() {
@@ -216,7 +239,9 @@ class ProtoContextService implements ProtoBuildContext {
     // --- Package-private fast internal flash accessors (bypass HashMap) ---
 
     void beginRcv(Throwable error) {
-        this.pushStatus();
+        if (this.statusCurrent.inRcv || this.statusCurrent.inSnd) {
+            this.pushStatus();
+        }
         this.statusCurrent.inRcv = true;
         this.statusCurrent.rcvError = error;
         if (this.channel instanceof NetChannel) {
@@ -225,7 +250,9 @@ class ProtoContextService implements ProtoBuildContext {
     }
 
     void beginSnd(Throwable error) {
-        this.pushStatus();
+        if (this.statusCurrent.inRcv || this.statusCurrent.inSnd) {
+            this.pushStatus();
+        }
         this.statusCurrent.inSnd = true;
         this.statusCurrent.sndError = error;
         if (this.channel instanceof NetChannel) {
@@ -237,7 +264,6 @@ class ProtoContextService implements ProtoBuildContext {
     void end() {
         this.statusCurrent.clear();
         this.popStatus();
-        this.statusCurrent = this.statusStack.peek();
         if (this.channel instanceof NetChannel) {
             NetChannel.exitPipeline((NetChannel) this.channel);
         }
@@ -723,11 +749,12 @@ class ProtoContextService implements ProtoBuildContext {
     }
 
     private static final class ProtoStatus {
-        boolean   inRcv     = false;
-        boolean   inSnd     = false;
-        String    stackName = null;
-        Throwable rcvError  = null;
-        Throwable sndError  = null;
+        boolean     inRcv     = false;
+        boolean     inSnd     = false;
+        String      stackName = null;
+        Throwable   rcvError  = null;
+        Throwable   sndError  = null;
+        ProtoStatus nextFree  = null;
 
         void clear() {
             this.inRcv = false;

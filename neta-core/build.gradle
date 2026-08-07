@@ -11,3 +11,10 @@ dependencies {
 
     testImplementation "junit:junit:${property('lib.junit')}"
 }
+
+def legacyTlsSecurityProperties = layout.projectDirectory.file('src/test/resources/ssl/legacy-protocols.security')
+
+tasks.named('test', Test) {
+    inputs.file(legacyTlsSecurityProperties)
+    jvmArgs "-Djava.security.properties=${legacyTlsSecurityProperties.asFile.toURI()}"
+}

@@ -15,13 +15,35 @@
  */
 package net.hasor.neta.bytebuf;
 import java.nio.ByteBuffer;
+import net.hasor.cobble.ref.RecycleObjectPool;
 
 final class ArraySliceByteBuf extends AbstractByteBuf {
-    private ByteBuf source;
-    private byte[]  target;
-    private int     startOffset;
+    private static final RecycleObjectPool.Recycler<ArraySliceByteBuf> RECYCLER = RecycleObjectPool.recycler(//
+            ArraySliceByteBuf::new, ArraySliceByteBuf::resetState, ArraySliceByteBuf::onRecycle);
+    private              ByteBuf                                       source;
+    private              byte[]                                        target;
+    private              int                                           startOffset;
 
-    ArraySliceByteBuf(ByteBuf source, byte[] target, int startOffset, int length) {
+    private ArraySliceByteBuf() {
+    }
+
+    private void resetState() {
+        this.source = null;
+        this.target = null;
+        this.startOffset = 0;
+    }
+
+    private void onRecycle() {
+        ByteBuf current = this.source;
+        this.source = null;
+        this.target = null;
+        this.startOffset = 0;
+        if (current != null && !current.isFree()) {
+            current.release();
+        }
+    }
+
+    private void initSlice(ByteBuf source, byte[] target, int startOffset, int length) {
         ByteBufAllocator allocator = source != null && source.alloc() != null ? source.alloc() : ByteBufAllocator.DEFAULT;
         super.initByteBuf(allocator, length);
         this.source = source != null ? source.retain() : null;
@@ -29,6 +51,19 @@ final class ArraySliceByteBuf extends AbstractByteBuf {
         this.startOffset = startOffset;
         this.writerIndex = length;
         this.markedWriterIndex = length;
+    }
+
+    static ArraySliceByteBuf newSlice(ByteBuf source, byte[] target, int startOffset, int length) {
+        ArraySliceByteBuf slice = RECYCLER.get();
+        slice.initSlice(source, target, startOffset, length);
+        return slice;
+    }
+
+    static ArraySliceByteBuf newSlice(ByteBuf source, int startOffset, int length) {
+        if (source == null) {
+            throw new NullPointerException("source");
+        }
+        return newSlice(source, null, startOffset, length);
     }
 
     @Override
@@ -48,8 +83,20 @@ final class ArraySliceByteBuf extends AbstractByteBuf {
     }
 
     @Override
+    public ByteBuf slice(int offset, int length) {
+        if (length <= 0) {
+            return ByteBuf.EMPTY;
+        }
+        int baseOffset = offsetReadable(offset, length);
+        if (this.target == null) {
+            return ArraySliceByteBuf.newSlice(this, baseOffset, length);
+        }
+        return ArraySliceByteBuf.newSlice(this, this.target, this.startOffset + baseOffset, length);
+    }
+
+    @Override
     public boolean isDirect() {
-        return false;
+        return this.target == null && this.source != null && this.source.isDirect();
     }
 
     @Override
@@ -91,9 +138,19 @@ final class ArraySliceByteBuf extends AbstractByteBuf {
 
         int start = this.startOffset + this.readerIndex;
         int end = start + scanLength;
-        for (int i = start; i < end; i++) {
-            if (this.target[i] == expected) {
-                return i - start;
+        byte[] array = this.target;
+        if (array != null) {
+            for (int i = start; i < end; i++) {
+                if (array[i] == expected) {
+                    return i - start;
+                }
+            }
+        } else {
+            ByteBuf source = this.source;
+            for (int i = start; i < end; i++) {
+                if (((AbstractByteBuf) source)._getByte(i) == expected) {
+                    return i - start;
+                }
             }
         }
         return -1;
@@ -109,9 +166,19 @@ final class ArraySliceByteBuf extends AbstractByteBuf {
         }
 
         int start = this.startOffset + this.readerIndex;
-        for (int i = start + scanLength - 1; i >= start; i--) {
-            if (this.target[i] == expected) {
-                return i - start;
+        byte[] array = this.target;
+        if (array != null) {
+            for (int i = start + scanLength - 1; i >= start; i--) {
+                if (array[i] == expected) {
+                    return i - start;
+                }
+            }
+        } else {
+            ByteBuf source = this.source;
+            for (int i = start + scanLength - 1; i >= start; i--) {
+                if (((AbstractByteBuf) source)._getByte(i) == expected) {
+                    return i - start;
+                }
             }
         }
         return -1;
@@ -145,38 +212,47 @@ final class ArraySliceByteBuf extends AbstractByteBuf {
     @Override
     protected byte _getByte(int offset) {
         checkFree();
-        return this.target[this.startOffset + offset];
+        byte[] array = this.target;
+        return array != null ? array[this.startOffset + offset] : ((AbstractByteBuf) this.source)._getByte(this.startOffset + offset);
     }
 
     @Override
     protected int _getBytes(int offset, byte[] dst, int dstOffset, int dstLen) {
         checkFree();
-        System.arraycopy(this.target, this.startOffset + offset, dst, dstOffset, dstLen);
+        byte[] array = this.target;
+        if (array != null) {
+            System.arraycopy(array, this.startOffset + offset, dst, dstOffset, dstLen);
+        } else {
+            ((AbstractByteBuf) this.source)._getBytes(this.startOffset + offset, dst, dstOffset, dstLen);
+        }
         return dstLen;
     }
 
     @Override
     protected int _getBytes(int offset, ByteBuffer dst, int dstLen) {
         checkFree();
-        dst.put(this.target, this.startOffset + offset, dstLen);
+        byte[] array = this.target;
+        if (array != null) {
+            dst.put(array, this.startOffset + offset, dstLen);
+        } else {
+            ((AbstractByteBuf) this.source)._getBytes(this.startOffset + offset, dst, dstLen);
+        }
         return dstLen;
     }
 
     @Override
     protected int _getBytes(int offset, ByteBuf dst, int dstLen) {
         checkFree();
-        return dst.writeBytes(this.target, this.startOffset + offset, dstLen);
+        byte[] array = this.target;
+        if (array != null) {
+            return dst.writeBytes(array, this.startOffset + offset, dstLen);
+        }
+        return ((AbstractByteBuf) this.source)._getBytes(this.startOffset + offset, dst, dstLen);
     }
 
     @Override
     protected void _free() {
-        ByteBuf current = this.source;
-        this.source = null;
-        this.target = null;
-        this.startOffset = 0;
-        if (current != null && !current.isFree()) {
-            current.release();
-        }
+        RECYCLER.recycle(this);
     }
 
     @Override

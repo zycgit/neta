@@ -278,4 +278,36 @@ public class HttpRoleAggregatorTest extends AbstractHttpTest {
             assertEquals("{}", text(clientResponse.content()));
         });
     }
+
+    @Test
+    public void testServerAggregatorPassesThroughFullRequest() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("server-agg", new HttpServerDuplexAggregator()), VrtSoConfig.asServer());
+            DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/full", ascii("body"));
+            request.setHeader(HttpHeaderNames.CONTENT_LENGTH, "4");
+
+            List<HttpObject> inbound = receiveAndIntBound(pipe, request);
+
+            assertEquals(1, inbound.size());
+            assertSame(request, inbound.get(0));
+            assertEquals("4", ((FullHttpRequest) inbound.get(0)).getString(HttpHeaderNames.CONTENT_LENGTH));
+            assertEquals("body", body((FullHttpRequest) inbound.get(0)));
+        });
+    }
+
+    @Test
+    public void testClientAggregatorPassesThroughFullResponse() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("client-agg", new HttpClientDuplexAggregator()), VrtSoConfig.asClient());
+            DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK, ascii("body"));
+            response.setHeader(HttpHeaderNames.CONTENT_LENGTH, "4");
+
+            List<HttpObject> inbound = receiveAndIntBound(pipe, response);
+
+            assertEquals(1, inbound.size());
+            assertSame(response, inbound.get(0));
+            assertEquals("4", ((FullHttpResponse) inbound.get(0)).getString(HttpHeaderNames.CONTENT_LENGTH));
+            assertEquals("body", body((FullHttpResponse) inbound.get(0)));
+        });
+    }
 }

@@ -17,12 +17,12 @@ package net.hasor.neta.codec.http;
 import java.nio.charset.StandardCharsets;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.bytebuf.QueueByteBuf;
 import net.hasor.neta.bytebuf.StringView;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
+
 /**
  * Decodes inbound socket bytes into staged HTTP/1.x request objects.
  * <p>
@@ -63,9 +63,9 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
     private static final int    DEFAULT_MAX_INITIAL_LINE_LENGTH = 4096;
     private static final int    DEFAULT_MAX_HEADER_SIZE         = 8192;
     private static final int    DEFAULT_MAX_CHUNK_SIZE          = 8192;
-    private final int           maxInitialLineLength;
-    private final int           maxHeaderSize;
-    private final int           maxChunkSize;
+    private final        int    maxInitialLineLength;
+    private final        int    maxHeaderSize;
+    private final        int    maxChunkSize;
 
     /**
      * Creates a request decoder with the default limits.
@@ -139,7 +139,7 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
 
                 ByteBuf msg = src.takeMessage();
                 if (msg != null) {
-                    dst.offerMessage(new DefaultHttpByteBuf(msg, Math.toIntExact(httpCtx.transparentStreamId())));
+                    dst.offerMessage(DefaultHttpByteBuf.newInstance(msg, Math.toIntExact(httpCtx.transparentStreamId())));
                 }
             }
             return ProtoStatus.Next;
@@ -380,11 +380,13 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
             }
 
             if (lineLength > this.maxInitialLineLength) {
+                consumeRejectedInitialLine(accumulator, consumedBytes);
                 throw new HttpInitialLineTooLongException("request line too long: " + lineLength + " > " + maxInitialLineLength, maxInitialLineLength, lineLength);
             }
 
             int firstSpace = accumulator.expect((byte) ' ', lineLength);
             if (firstSpace <= 0) {
+                consumeRejectedInitialLine(accumulator, consumedBytes);
                 throw new HttpBadRequestException("invalid request line");
             }
 
@@ -396,10 +398,11 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                 }
             }
             if (secondSpace <= firstSpace + 1 || secondSpace >= lineLength - 1) {
+                consumeRejectedInitialLine(accumulator, consumedBytes);
                 throw new HttpBadRequestException("invalid request line");
             }
 
-            ByteBuf requestLine = ByteBufUtils.stableSlice(accumulator, 0, lineLength);
+            ByteBuf requestLine = accumulator.slice(0, lineLength);
             accumulator.skipReadableBytes(consumedBytes);
             accumulator.markReaderDeferred();
             try {
@@ -409,6 +412,11 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                 requestLine.release();
             }
         }
+    }
+
+    private static void consumeRejectedInitialLine(QueueByteBuf accumulator, int consumedBytes) {
+        accumulator.skipReadableBytes(consumedBytes);
+        accumulator.markReaderDeferred();
     }
 
     // header
@@ -455,7 +463,7 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
 
             headerEntriesRef[0].add(DefaultHttpHeaderEntry.newOwnedEntry(line, nameStart, nameLength, valueStart, valueLength));
             return valueLength > 0;
-        }).isComplete();
+        });
         headerEntries = headerEntriesRef[0];
 
         if (headerEntries == null) {
@@ -601,7 +609,7 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         boolean complete = HttpHeaderStreamingScanner.scan(src, reqCtx, this.maxHeaderSize, (line, nameStart, nameLength, valueStart, valueLength) -> {
             reqCtx.currentHeaders.addHeaderEntry(DefaultHttpHeaderEntry.newOwnedEntry(line, nameStart, nameLength, valueStart, valueLength));
             return valueLength > 0;
-        }).isComplete();
+        });
         if (!complete) {
             return null;
         }
@@ -630,51 +638,6 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
     }
 
     // utils
-
-    private HttpMethod resolveHttpMethod(ByteBuf line, int offset, int length) {
-        switch (length) {
-            case 3:
-                if (matchesAsciiIgnoreCase(line, offset, HttpMethod.GET.name())) {
-                    return HttpMethod.GET;
-                }
-                if (matchesAsciiIgnoreCase(line, offset, HttpMethod.PUT.name())) {
-                    return HttpMethod.PUT;
-                }
-                break;
-            case 4:
-                if (matchesAsciiIgnoreCase(line, offset, HttpMethod.POST.name())) {
-                    return HttpMethod.POST;
-                }
-                if (matchesAsciiIgnoreCase(line, offset, HttpMethod.HEAD.name())) {
-                    return HttpMethod.HEAD;
-                }
-                break;
-            case 5:
-                if (matchesAsciiIgnoreCase(line, offset, HttpMethod.PATCH.name())) {
-                    return HttpMethod.PATCH;
-                }
-                if (matchesAsciiIgnoreCase(line, offset, HttpMethod.TRACE.name())) {
-                    return HttpMethod.TRACE;
-                }
-                break;
-            case 6:
-                if (matchesAsciiIgnoreCase(line, offset, HttpMethod.DELETE.name())) {
-                    return HttpMethod.DELETE;
-                }
-                break;
-            case 7:
-                if (matchesAsciiIgnoreCase(line, offset, HttpMethod.OPTIONS.name())) {
-                    return HttpMethod.OPTIONS;
-                }
-                if (matchesAsciiIgnoreCase(line, offset, HttpMethod.CONNECT.name())) {
-                    return HttpMethod.CONNECT;
-                }
-                break;
-            default:
-                break;
-        }
-        return HttpMethod.valueOf(this.materializeAscii(line, offset, length));
-    }
 
     private HttpVersion resolveHttpVersion(ByteBuf line, int offset, int length) {
         if (length == 8 && matchesAsciiIgnoreCase(line, offset, "HTTP/1.1")) {

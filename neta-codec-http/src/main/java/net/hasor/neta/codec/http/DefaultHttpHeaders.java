@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.codec.http;
 import java.util.*;
+
 /**
  * Default implementation of {@link HttpHeaders} backed by plain string header entries.
  * @author 赵永春 (zyc@hasor.net)
@@ -22,7 +23,7 @@ import java.util.*;
  */
 public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implements HttpHeaders {
     private final HeaderEntryStore entries;
-    private boolean                releasableEntries;
+    private       boolean          releasableEntries;
 
     /**
      * Create an empty header block.
@@ -55,7 +56,8 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
     @Override
     public void release() {
         if (this.releasableEntries) {
-            for (DefaultHttpHeaderEntry entry : this.entries) {
+            for (int i = 0; i < this.entries.size(); i++) {
+                DefaultHttpHeaderEntry entry = this.entries.get(i);
                 if (entry != null) {
                     entry.release();
                 }
@@ -128,8 +130,8 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
             return this;
         }
 
-        if (headers instanceof DefaultHttpHeaders) {
-            DefaultHttpHeaders source = (DefaultHttpHeaders) headers;
+        DefaultHttpHeaders source = defaultHeaderBlock(headers);
+        if (source != null) {
             if (source == this) {
                 List<DefaultHttpHeaderEntry> copies = new ArrayList<>(source.entries.size());
                 for (DefaultHttpHeaderEntry entry : source.entries) {
@@ -229,14 +231,26 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
             return Collections.emptyList();
         }
 
-        List<String> result = new ArrayList<>();
+        String first = null;
+        List<String> result = null;
         for (DefaultHttpHeaderEntry entry : this.entries) {
             if (entry.matchesName(name)) {
-                result.add(entry.getValue());
+                if (first == null) {
+                    first = entry.getValue();
+                } else {
+                    if (result == null) {
+                        result = new ArrayList<>(4);
+                        result.add(first);
+                    }
+                    result.add(entry.getValue());
+                }
             }
         }
 
-        return result.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(result);
+        if (result != null) {
+            return Collections.unmodifiableList(result);
+        }
+        return first == null ? Collections.emptyList() : Collections.singletonList(first);
     }
 
     @Override
@@ -259,20 +273,45 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
 
     @Override
     public long getLong(String name, long defaultValue) {
-        String value = this.getString(name);
-        if (value == null) {
-            return defaultValue;
+        if (name != null) {
+            for (DefaultHttpHeaderEntry entry : this.entries) {
+                if (entry.matchesName(name)) {
+                    try {
+                        return entry.parseLongValue();
+                    } catch (NumberFormatException e) {
+                        return defaultValue;
+                    }
+                }
+            }
         }
-        try {
-            return Long.parseLong(value.trim());
-        } catch (NumberFormatException e) {
-            return defaultValue;
-        }
+        return defaultValue;
     }
 
     @Override
     public boolean containsHeader(String name) {
-        return this.findFirst(name) != null;
+        if (name != null) {
+            for (DefaultHttpHeaderEntry entry : this.entries) {
+                if (entry.matchesName(name)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    boolean hasNonBlankValue(String name) {
+        DefaultHttpHeaderEntry entry = this.findFirstEntry(name);
+        return entry != null && entry.hasNonBlankValue();
+    }
+
+    boolean valueEqualsIgnoreCase(String name, CharSequence expected) {
+        DefaultHttpHeaderEntry entry = this.findFirstEntry(name);
+        return entry != null && entry.valueEqualsIgnoreCase(expected);
+    }
+
+    boolean valueContainsIgnoreCase(String name, CharSequence expected) {
+        DefaultHttpHeaderEntry entry = this.findFirstEntry(name);
+        return entry != null && entry.valueContainsIgnoreCase(expected);
     }
 
     @Override
@@ -295,21 +334,36 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
     }
 
     private String findFirst(String name) {
-        if (name == null) {
-            return null;
-        }
+        DefaultHttpHeaderEntry entry = this.findFirstEntry(name);
+        return entry != null ? entry.getValue() : null;
+    }
 
-        for (DefaultHttpHeaderEntry entry : this.entries) {
-            if (entry.matchesName(name)) {
-                return entry.getValue();
+    private DefaultHttpHeaderEntry findFirstEntry(String name) {
+        if (name != null) {
+            for (DefaultHttpHeaderEntry entry : this.entries) {
+                if (entry.matchesName(name)) {
+                    return entry;
+                }
             }
         }
-
         return null;
     }
 
     List<DefaultHttpHeaderEntry> headerEntries() {
         return this.entries;
+    }
+
+    private static DefaultHttpHeaders defaultHeaderBlock(HttpHeaders headers) {
+        if (headers instanceof DefaultHttpHeaders) {
+            return (DefaultHttpHeaders) headers;
+        }
+        if (headers instanceof DefaultFullHttpRequest) {
+            return ((DefaultFullHttpRequest) headers).headerBlock();
+        }
+        if (headers instanceof DefaultFullHttpResponse) {
+            return ((DefaultFullHttpResponse) headers).headerBlock();
+        }
+        return null;
     }
 
     private void ensureEntryCapacity(int additional) {

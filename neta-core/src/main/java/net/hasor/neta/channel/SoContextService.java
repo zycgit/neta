@@ -45,24 +45,24 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
  * @see NetManager
  */
 public class SoContextService implements SoContext {
-    private static final Logger    logger = Logger.getLogger(SoContextService.class);
-    private final AtomicLong       nextID = new AtomicLong(0);
-    private final NetConfig        config;
-    private final NetManager       manager;
-    private final ByteBufAllocator allocator;
-    private final ClassLoader      useClassLoader;
-    private final SoThreadFactory  useSoThreadFactory;
+    private static final Logger                   logger    = Logger.getLogger(SoContextService.class);
+    private final        AtomicLong               nextID    = new AtomicLong(0);
+    private final        NetConfig                config;
+    private final        NetManager               manager;
+    private final        ByteBufAllocator         allocator;
+    private final        ClassLoader              useClassLoader;
+    private final        SoThreadFactory          useSoThreadFactory;
     //
-    private final List<SubscriptionEntry> listeners = new CopyOnWriteArrayList<>();
+    private final        Queue<SubscriptionEntry> listeners = new ConcurrentLinkedQueue<>();
     //
-    private final HashedWheelTimer        globalTimer;
-    private final ExecutorService         ioExecutor;
-    private final SoTaskExecutor          eventExecutor;
-    private final ReentrantReadWriteLock  closeSyncLock;
-    private final Map<Long, SoChannel<?>> channelMap;
-    private final Queue<NetChannel>       channelList;
-    private final Queue<NetListen>        listenList;
-    private volatile boolean              closeStatus;
+    private final        HashedWheelTimer         globalTimer;
+    private final        ExecutorService          ioExecutor;
+    private final        SoTaskExecutor           eventExecutor;
+    private final        ReentrantReadWriteLock   closeSyncLock;
+    private final        Map<Long, SoChannel<?>>  channelMap;
+    private final        Queue<NetChannel>        channelList;
+    private final        Queue<NetListen>         listenList;
+    private volatile     boolean                  closeStatus;
 
     SoContextService(NetConfig netConf, NetManager manager) {
         this.manager = manager;
@@ -94,7 +94,7 @@ public class SoContextService implements SoContext {
         if (taskWorkSize < 1) {
             taskWorkSize = Runtime.getRuntime().availableProcessors();
         }
-        this.eventExecutor = new SoTaskExecutor(this.useClassLoader, this.useSoThreadFactory, taskWorkSize, this.globalTimer);
+        this.eventExecutor = new SoTaskExecutor(this.config, this.useClassLoader, this.useSoThreadFactory, taskWorkSize, this.globalTimer);
 
         //
         this.closeStatus = false;
@@ -359,7 +359,9 @@ public class SoContextService implements SoContext {
                 this.ioExecutor.shutdownNow();
                 Thread.currentThread().interrupt();
             }
-            logger.info("shutdown ioExecutor done.");
+            if (this.config.isPrintLog()) {
+                logger.info("shutdown ioExecutor done.");
+            }
         }
 
         if (this.eventExecutor != null) {
@@ -582,7 +584,9 @@ public class SoContextService implements SoContext {
 
     private void doCloseChannel(SoChannel<?> channel, String message, Throwable e) {
         if (e == null) {
-            logger.info("channel(" + channel.getChannelId() + ") " + message);
+            if (this.config.isPrintLog()) {
+                logger.info("channel(" + channel.getChannelId() + ") " + message);
+            }
         } else {
             logger.error(message, e);
         }

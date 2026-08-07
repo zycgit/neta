@@ -31,6 +31,12 @@ import net.hasor.neta.codec.http.websocket.extensions.XWebkitDeflateFrameSupport
  * @version : 2026-04-07
  */
 public class WebSocketSettings {
+    static final WebSocketHandshakeAuthorizer DEFAULT_HANDSHAKE_AUTHORIZER = (event, c) -> c.accept();
+    private static final WebSocketSettings     DEFAULT_V0                  = new WebSocketSettings(WebSocketVersion.V0);
+    private static final WebSocketSettings     DEFAULT_V7                  = new WebSocketSettings(WebSocketVersion.V7);
+    private static final WebSocketSettings     DEFAULT_V8                  = new WebSocketSettings(WebSocketVersion.V8);
+    private static final WebSocketSettings     DEFAULT_V13                 = new WebSocketSettings(WebSocketVersion.V13);
+
     private final WebSocketVersion         version;
     private WebSocketAutoHandshakeConfig   handshakeAutoConfig;
     private WebSocketHandshakeAuthorizer   handshakeAuthorizer;
@@ -51,7 +57,7 @@ public class WebSocketSettings {
      */
     public WebSocketSettings(WebSocketVersion version) {
         this.version = Objects.requireNonNull(version, "version is null");
-        this.handshakeAuthorizer = (event, c) -> c.accept();
+        this.handshakeAuthorizer = DEFAULT_HANDSHAKE_AUTHORIZER;
         this.extensionSupports = new ArrayList<>(1);
     }
 
@@ -99,8 +105,28 @@ public class WebSocketSettings {
      * @return current settings object
      */
     public WebSocketSettings handshakeAuthorizer(WebSocketHandshakeAuthorizer handshakeAuthorizer) {
-        this.handshakeAuthorizer = handshakeAuthorizer != null ? handshakeAuthorizer : (event, c) -> c.accept();
+        this.handshakeAuthorizer = handshakeAuthorizer != null ? handshakeAuthorizer : DEFAULT_HANDSHAKE_AUTHORIZER;
         return this;
+    }
+
+    static boolean isDefaultHandshakeAuthorizer(WebSocketHandshakeAuthorizer handshakeAuthorizer) {
+        return handshakeAuthorizer == DEFAULT_HANDSHAKE_AUTHORIZER;
+    }
+
+    static WebSocketSettings defaultSettings(WebSocketVersion version) {
+        Objects.requireNonNull(version, "version is null");
+        switch (version) {
+            case V0:
+                return DEFAULT_V0;
+            case V7:
+                return DEFAULT_V7;
+            case V8:
+                return DEFAULT_V8;
+            case V13:
+                return DEFAULT_V13;
+            default:
+                throw new IllegalArgumentException("unsupported websocket version: " + version);
+        }
     }
 
     /**

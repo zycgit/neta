@@ -20,7 +20,7 @@ import java.util.ArrayDeque;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
-import net.hasor.cobble.ref.RecycleObjectPool;
+
 /**
  * Two-level cache for small buffer allocations, similar to Netty's PoolThreadCache.
  * <p>
@@ -256,11 +256,13 @@ class SmallBufferCache {
      * @return a Buffer backed by a small cached buffer
      */
     static net.hasor.neta.bytebuf.Buffer allocSmallBuffer(boolean isDirect, int capacity) {
-        BufferWrap wrap = RecycleObjectPool.get(BufferWrap.RECYCLE_INDEX, BufferWrap.RECYCLE_HANDLER);
+        int normalizedCapacity = normalizeCapacity(capacity);
+        int allocationSize = normalizedCapacity > 0 ? normalizedCapacity : capacity;
+        BufferWrap wrap = BufferWrap.RECYCLER.get();
         if (isDirect) {
-            wrap.initSmallBuffer(allocDirect(capacity));
+            wrap.initSmallBuffer(allocDirect(allocationSize));
         } else {
-            wrap.initSmallHeapBuffer(allocHeap(capacity));
+            wrap.initSmallHeapBuffer(allocHeap(allocationSize));
         }
         return wrap;
     }

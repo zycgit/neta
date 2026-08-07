@@ -91,9 +91,8 @@ public class HttpResponseAggregator extends AbstractHttpAggregator<HttpResponse>
         boolean handled = false;
         boolean success = false;
         try {
-            HttpContext.ResponseDecodeState respCtx = HttpContext.getOrCreate(context).resp;
             int contentLength = 0;
-            long declaredLength = respCtx.contentLength;
+            long declaredLength = -1;
             while ((current = staged.takeMessage()) != null) {
                 HttpObject part = current;
                 current = null;
@@ -147,7 +146,7 @@ public class HttpResponseAggregator extends AbstractHttpAggregator<HttpResponse>
 
             mergedHeaders = this.ensureMergedHeaders(mergedHeaders, response.streamId());
             fullResp = new DefaultFullHttpResponse(responseLine, mergedHeaders, aggregatedContent);
-            this.completeFullResponse(response, fullResp, respCtx, contentLength);
+            this.completeFullResponse(response, fullResp, contentLength);
             dst.offerMessage(fullResp);
 
             this.logAggregatedResponse(context, response, contentLength);
@@ -161,11 +160,13 @@ public class HttpResponseAggregator extends AbstractHttpAggregator<HttpResponse>
     /**
      * Finalizes the aggregated response headers and propagates response-line metadata.
      */
-    private void completeFullResponse(HttpResponse response, DefaultFullHttpResponse fullResp, HttpContext.ResponseDecodeState respCtx, int contentLength) {
-        if (respCtx.contentLength != contentLength || respCtx.chunked || respCtx.contentLength < 0) {
+    private void completeFullResponse(HttpResponse response, DefaultFullHttpResponse fullResp, int contentLength) {
+        boolean chunked = HttpCharSequences.containsIgnoreCase(fullResp.getString(HttpHeaderNames.TRANSFER_ENCODING), HttpHeaderValues.CHUNKED);
+        long declaredLength = fullResp.getLong(HttpHeaderNames.CONTENT_LENGTH, -1);
+        if (declaredLength != contentLength || chunked || declaredLength < 0) {
             fullResp.setHeader(HttpHeaderNames.CONTENT_LENGTH, String.valueOf(contentLength));
         }
-        if (respCtx.chunked) {
+        if (chunked) {
             fullResp.removeHeader(HttpHeaderNames.TRANSFER_ENCODING);
         }
 

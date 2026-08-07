@@ -83,6 +83,95 @@ public class BasicByteBufAllocatorTest {
         buf.free();
     }
 
+    @Test
+    public void fixedSmallHeapBuffer_normalizesReusableStorage() {
+        AutoArrayByteBuf buf = (AutoArrayByteBuf) ByteBufUtils.UNPOOLED_HEAP_ALLOCATOR.buffer(25);
+        assert buf.capacity() == 25;
+        assert buf.writableBytes() == 25;
+        byte[] storage = buf.target;
+        assert storage.length == 32;
+        buf.free();
+
+        byte[] cached = SmallBufferCache.allocHeap(32);
+        assert cached == storage;
+        SmallBufferCache.freeHeap(cached);
+    }
+
+    @Test
+    public void sliceKeepsDirectSourceAliveWithoutCopying() {
+        ByteBuf source = ByteBufUtils.UNPOOLED_DIRECT_ALLOCATOR.buffer(8);
+        source.writeBytes(new byte[] { 0x10, 0x20, 0x30, 0x40, 0x50, 0x60 });
+        source.markWriter();
+
+        ByteBuf slice = source.slice(1, 4);
+        assert slice.isDirect();
+        ((AutoByteBuffer) source).target.put(2, (byte) 0x33);
+        source.release();
+
+        assert !source.isFree();
+        assert slice.readByte() == 0x20;
+        assert slice.readByte() == 0x33;
+        assert slice.readByte() == 0x40;
+        assert slice.readByte() == 0x50;
+
+        slice.release();
+        assert source.isFree();
+    }
+
+    @Test
+    public void sliceUsesAbsoluteSourceOffsets() {
+        ByteBuf source = ByteBufUtils.UNPOOLED_DIRECT_ALLOCATOR.buffer(8);
+        source.writeBytes(new byte[] { 0x10, 0x20, 0x30, 0x40, 0x50, 0x60 });
+        source.markWriter();
+        source.skipReadableBytes(1);
+
+        ByteBuf slice = source.slice(1, 3);
+        source.skipReadableBytes(2);
+        source.release();
+
+        assert slice.readByte() == 0x30;
+        assert slice.readByte() == 0x40;
+        assert slice.readByte() == 0x50;
+
+        slice.release();
+        assert source.isFree();
+    }
+
+    @Test
+    public void sliceReusesHeapBackedSliceStorage() {
+        ByteBuf source = ByteBufUtils.UNPOOLED_HEAP_ALLOCATOR.buffer(8);
+        source.writeBytes(new byte[] { 0x10, 0x20, 0x30, 0x40, 0x50, 0x60 });
+        source.markWriter();
+        ByteBuf first = source.slice(1, 4);
+        ByteBuf second = first.slice(1, 2);
+
+        ((AutoArrayByteBuf) source).target[2] = 0x33;
+        source.release();
+        first.release();
+
+        assert !source.isFree();
+        assert second.readByte() == 0x33;
+        assert second.readByte() == 0x40;
+
+        second.release();
+        assert source.isFree();
+    }
+
+    @Test
+    public void rangeCopyDoesNotShareSourceStorage() {
+        ByteBuf source = ByteBufUtils.UNPOOLED_HEAP_ALLOCATOR.buffer(8);
+        source.writeBytes(new byte[] { 0x10, 0x20, 0x30, 0x40 });
+        source.markWriter();
+
+        ByteBuf copy = source.copy(1, 2);
+        ((AutoArrayByteBuf) source).target[1] = 0x55;
+        source.release();
+
+        assert copy.readByte() == 0x20;
+        assert copy.readByte() == 0x30;
+        copy.release();
+    }
+
     // ========================================================================
     // Direct buffer allocation
     // ========================================================================
@@ -116,6 +205,20 @@ public class BasicByteBufAllocatorTest {
         ByteBuf buf = ByteBufAllocator.DEFAULT.directBuffer(64);
         assert buf.toString().startsWith("AutoByteBuffer[") : "direct buffer should be AutoByteBuffer";
         buf.free();
+    }
+
+    @Test
+    public void fixedSmallDirectBuffer_normalizesReusableStorage() {
+        AutoByteBuffer buf = (AutoByteBuffer) ByteBufUtils.UNPOOLED_DIRECT_ALLOCATOR.buffer(25);
+        assert buf.capacity() == 25;
+        assert buf.writableBytes() == 25;
+        ByteBuffer storage = buf.target;
+        assert storage.capacity() == 32;
+        buf.free();
+
+        ByteBuffer cached = SmallBufferCache.allocDirect(32);
+        assert cached == storage;
+        SmallBufferCache.freeDirect(cached);
     }
 
     // ========================================================================

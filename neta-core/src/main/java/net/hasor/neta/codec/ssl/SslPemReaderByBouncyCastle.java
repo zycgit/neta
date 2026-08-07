@@ -18,6 +18,9 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.security.PrivateKey;
 import java.security.Provider;
+import net.hasor.cobble.ClassUtils;
+import net.hasor.cobble.io.input.AutoCloseReader;
+import net.hasor.cobble.logging.Logger;
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.openssl.PEMDecryptorProvider;
 import org.bouncycastle.openssl.PEMEncryptedKeyPair;
@@ -30,8 +33,7 @@ import org.bouncycastle.operator.InputDecryptorProvider;
 import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.pkcs.PKCS8EncryptedPrivateKeyInfo;
 import org.bouncycastle.pkcs.PKCSException;
-import net.hasor.cobble.io.input.AutoCloseReader;
-import net.hasor.cobble.logging.Logger;
+
 /**
  * Optional PEM private-key reader backed by BouncyCastle.
  * <p>The standard JDK path used by {@link SslUtils} is sufficient for plain
@@ -81,7 +83,7 @@ class SslPemReaderByBouncyCastle {
             Class<Provider> bcProviderClass = (Class<Provider>) Class.forName(BC_PROVIDER, true, classLoader);
             // Check for bcpkix-jdk15on:
             Class.forName(BC_PEMPARSER, true, classLoader);
-            bcProvider = bcProviderClass.getConstructor().newInstance();
+            bcProvider = ClassUtils.newInstance(bcProviderClass);
             logger.debug("Bouncy Castle provider available");
             attemptedLoading = true;
         } catch (Throwable e) {

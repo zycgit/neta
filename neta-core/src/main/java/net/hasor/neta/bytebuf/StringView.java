@@ -17,7 +17,6 @@ package net.hasor.neta.bytebuf;
 import java.nio.charset.StandardCharsets;
 import net.hasor.cobble.function.Release;
 import net.hasor.cobble.ref.RecycleObjectPool;
-import net.hasor.cobble.ref.RecycleObjectPool.ObjHandler;
 /**
  * A lightweight {@link CharSequence} view over a visible range of a {@link ByteBuf}.
  * <p>
@@ -32,19 +31,8 @@ import net.hasor.cobble.ref.RecycleObjectPool.ObjHandler;
  * stability of the underlying buffer content.
  */
 public class StringView implements CharSequence, Release {
-    private static final int                    RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    private static final ObjHandler<StringView> RECYCLE_HANDLER = //
-            new ObjHandler<StringView>() {
-                @Override
-                public StringView create() {
-                    return new StringView();
-                }
-
-                @Override
-                public void free(StringView tar) {
-                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
-                }
-            };
+    private static final RecycleObjectPool.Recycler<StringView> RECYCLER = RecycleObjectPool.recycler(//
+            StringView::new, StringView::resetState, StringView::onRecycle);
 
     private int     offset;
     private int     length;
@@ -54,8 +42,23 @@ public class StringView implements CharSequence, Release {
     protected StringView() {
     }
 
+    private void resetState() {
+        this.source = null;
+        this.offset = 0;
+        this.length = 0;
+        this.cachedValue = null;
+    }
+
+    private void onRecycle() {
+        this.releaseSource();
+        this.source = null;
+        this.offset = 0;
+        this.length = 0;
+        this.cachedValue = null;
+    }
+
     public static StringView request(ByteBuf source, int offset, int length) {
-        StringView view = RecycleObjectPool.get(RECYCLE_INDEX, RECYCLE_HANDLER);
+        StringView view = RECYCLER.get();
         view.init(source, offset, length);
         return view;
     }
@@ -72,7 +75,7 @@ public class StringView implements CharSequence, Release {
             return duplicate;
         }
 
-        StringView duplicate = RecycleObjectPool.get(RECYCLE_INDEX, RECYCLE_HANDLER);
+        StringView duplicate = RECYCLER.get();
         duplicate.source = null;
         duplicate.offset = 0;
         duplicate.length = this.length;
@@ -98,12 +101,7 @@ public class StringView implements CharSequence, Release {
 
     @Override
     public void release() {
-        this.releaseSource();
-        this.source = null;
-        this.offset = 0;
-        this.length = 0;
-        this.cachedValue = null;
-        RECYCLE_HANDLER.free(this);
+        RECYCLER.recycle(this);
     }
 
     //

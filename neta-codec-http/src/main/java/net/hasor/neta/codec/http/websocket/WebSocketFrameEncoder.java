@@ -50,9 +50,13 @@ import net.hasor.neta.codec.http.HttpObject;
 public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpObject> {
     private static final Logger              logger           = Logger.getLogger(WebSocketFrameEncoder.class);
     private static final int                 XOR_SCRATCH_SIZE = 4096;
+    private static final byte                MASK_RULE_UNKNOWN = 0;
+    private static final byte                MASK_RULE_REQUIRE = 1;
+    private static final byte                MASK_RULE_REJECT  = 2;
     private static final ThreadLocal<byte[]> XOR_SCRATCH      = ThreadLocal.withInitial(() -> new byte[XOR_SCRATCH_SIZE]);
     private final WebSocketVersion           defaultVersion;
     private final boolean                    detectVersion;
+    private byte                             outboundMaskRule;
 
     /**
      * Create an encoder for the specified WebSocket protocol version.
@@ -114,7 +118,7 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpO
                     encoded = encodeHixie76(context, inputFrame);
                 }
 
-                dst.offerMessage(new DefaultHttpByteBuf(encoded, inputFrame.streamId()));
+                dst.offerMessage(DefaultHttpByteBuf.newInstance(encoded, inputFrame.streamId()));
             } finally {
                 inputFrame.release();
             }
@@ -145,6 +149,7 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpO
      */
     @Override
     public void onClose(ProtoContext context) {
+        this.outboundMaskRule = MASK_RULE_UNKNOWN;
     }
 
     // Hixie-76 encoding (V0)
@@ -203,7 +208,6 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpO
                 (opcode.code() & 0x0F));
         out.writeByte(byte0);
 
-        // Byte 1: MASK flag + payload length indicator
         if (payloadLen < 126) {
             out.writeByte((byte) ((masked ? 0x80 : 0x00) | payloadLen));
         } else if (payloadLen <= 65535) {
@@ -319,18 +323,27 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpO
             throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "masked websocket frame requires a 4-byte masking key.");
         }
 
-        WebSocketContext wsContext = resolveHandshakeContext(context);
-        if (wsContext != null) {
-            if (wsContext.isClient() && !masked) {
-                throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "client-to-server websocket frames must be masked.");
+        byte maskRule = this.outboundMaskRule;
+        boolean senderIsClient = false;
+        if (maskRule == MASK_RULE_UNKNOWN) {
+            WebSocketContext wsContext = resolveHandshakeContext(context);
+            if (wsContext != null) {
+                senderIsClient = wsContext.isClient();
+                maskRule = senderIsClient ? MASK_RULE_REQUIRE : MASK_RULE_REJECT;
+                this.outboundMaskRule = maskRule;
             }
-            if (wsContext.isServer() && masked) {
-                throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "server-to-client websocket frames must not be masked.");
-            }
+        } else {
+            senderIsClient = maskRule == MASK_RULE_REQUIRE;
+        }
+        if (maskRule == MASK_RULE_REQUIRE && !masked) {
+            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "client-to-server websocket frames must be masked.");
+        }
+        if (maskRule == MASK_RULE_REJECT && masked) {
+            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "server-to-client websocket frames must not be masked.");
         }
 
         if (opcode == WebSocketOpcode.PING || opcode == WebSocketOpcode.PONG || opcode == WebSocketOpcode.CLOSE) {
-            WebSocketUtils.validateControlFrame(frame, wsContext != null && wsContext.isClient());
+            WebSocketUtils.validateControlFrame(frame, senderIsClient);
         }
     }
 

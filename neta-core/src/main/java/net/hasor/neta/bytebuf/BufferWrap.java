@@ -33,18 +33,8 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * @see BufferCleaner
  */
 class BufferWrap implements Buffer {
-    static final int                                RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    static RecycleObjectPool.ObjHandler<BufferWrap> RECYCLE_HANDLER = //
-            new RecycleObjectPool.ObjHandler<BufferWrap>() {
-                public BufferWrap create() {
-                    return new BufferWrap();
-                }
-
-                @Override
-                public void free(BufferWrap tar) {
-                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
-                }
-            };
+    static final RecycleObjectPool.Recycler<BufferWrap> RECYCLER = RecycleObjectPool.recycler(//
+            BufferWrap::new, BufferWrap::resetState, BufferWrap::onRecycle);
     private ByteBuffer                              buffer;
     private byte[]                                  heapArray;   // direct heap array (avoids ByteBuffer.wrap)
     private boolean                                 available;
@@ -55,14 +45,30 @@ class BufferWrap implements Buffer {
     private BufferWrap() {
     }
 
-    private static ByteBuffer clearAndPosition(ByteBuffer buffer, int index) {
-        if (index == 0) {
-            ((java.nio.Buffer) buffer).clear();
-        } else {
-            ((java.nio.Buffer) buffer).clear();
-            ((java.nio.Buffer) buffer).position(index);
+    private void resetState() {
+        this.buffer = null;
+        this.heapArray = null;
+        this.available = false;
+        this.fromSmallCache = false;
+    }
+
+    private void onRecycle() {
+        ByteBuffer buf = this.buffer;
+        byte[] ha = this.heapArray;
+        boolean wasSmallCache = this.fromSmallCache;
+        this.resetState();
+
+        if (ha != null && wasSmallCache) {
+            SmallBufferCache.freeHeap(ha);
+        } else if (buf != null) {
+            if (buf.isDirect()) {
+                if (!SmallBufferCache.freeDirect(buf) && ByteBufUtils.CLEANER != null) {
+                    ByteBufUtils.CLEANER.freeDirectBuffer(buf);
+                }
+            } else if (wasSmallCache && buf.hasArray()) {
+                SmallBufferCache.freeHeap(buf.array());
+            }
         }
-        return buffer;
     }
 
     void initBuffer(ByteBuffer buffer) {
@@ -154,9 +160,7 @@ class BufferWrap implements Buffer {
             System.arraycopy(ha, index, dst, dstOffset, dstLen);
             return;
         }
-        ByteBuffer dupBuf = this.buffer.duplicate();
-        clearAndPosition(dupBuf, index);
-        dupBuf.get(dst, dstOffset, dstLen);
+        this.buffer.get(index, dst, dstOffset, dstLen);
     }
 
     @Override
@@ -166,27 +170,19 @@ class BufferWrap implements Buffer {
             System.arraycopy(src, srcOffset, ha, index, srcLen);
             return;
         }
-        ByteBuffer dupBuf = this.buffer.duplicate();
-        clearAndPosition(dupBuf, index);
-        dupBuf.put(src, srcOffset, srcLen);
+        this.buffer.put(index, src, srcOffset, srcLen);
     }
 
     @Override
     public void get(int index, ByteBuffer dst, int dstLen) {
-        ByteBuffer dupBuf = ensureBuffer().duplicate();
-        clearAndPosition(dupBuf, index);
-        ((java.nio.Buffer) dupBuf).limit(index + dstLen);
-        dst.put(dupBuf);
+        int dstPosition = dst.position();
+        dst.put(dstPosition, ensureBuffer(), index, dstLen);
+        ((java.nio.Buffer) dst).position(dstPosition + dstLen);
     }
 
     @Override
     public void get(int index, ByteBuffer dst, int dstOffset, int dstLen) {
-        ByteBuffer dupBuf = ensureBuffer().duplicate();
-        clearAndPosition(dupBuf, index);
-        ((java.nio.Buffer) dupBuf).limit(index + dstLen);
-        ByteBuffer dup = dst.duplicate();
-        ((java.nio.Buffer) dup).position(dstOffset);
-        dup.put(dupBuf);
+        dst.put(dstOffset, ensureBuffer(), index, dstLen);
 
         int newPos = dstOffset + dstLen;
         if (newPos > dst.position()) {
@@ -201,12 +197,7 @@ class BufferWrap implements Buffer {
             throw new IllegalArgumentException("(src.position + srcLen) > limit: (" + newPos + " > " + src.limit() + ")");
         }
 
-        ByteBuffer dupBuf = ensureBuffer().duplicate();
-        clearAndPosition(dupBuf, index);
-
-        ByteBuffer srcDup = src.duplicate();
-        ((java.nio.Buffer) srcDup).limit(newPos);
-        dupBuf.put(srcDup);
+        ensureBuffer().put(index, src, src.position(), srcLen);
         ((java.nio.Buffer) src).position(newPos);
     }
 
@@ -217,16 +208,10 @@ class BufferWrap implements Buffer {
             throw new IllegalArgumentException("(srcOffset + srcLen) > limit: (" + newPos + " > " + src.limit() + ")");
         }
 
-        ByteBuffer dupBuf = ensureBuffer().duplicate();
-        clearAndPosition(dupBuf, index);
+        ensureBuffer().put(index, src, srcOffset, srcLen);
 
-        int limit = srcOffset + srcLen;
-        ByteBuffer dupSrc = clearAndPosition(src.duplicate(), srcOffset);
-        ((java.nio.Buffer) dupSrc).limit(limit);
-        dupBuf.put(dupSrc);
-
-        if (limit > src.position()) {
-            ((java.nio.Buffer) src).position(limit);
+        if (newPos > src.position()) {
+            ((java.nio.Buffer) src).position(newPos);
         }
     }
 
@@ -251,28 +236,6 @@ class BufferWrap implements Buffer {
 
     @Override
     public void free() {
-        this.available = false;
-        ByteBuffer buf = this.buffer;
-        byte[] ha = this.heapArray;
-        boolean wasSmallCache = this.fromSmallCache;
-        this.buffer = null;
-        this.heapArray = null;
-        this.fromSmallCache = false;
-
-        if (ha != null && wasSmallCache) {
-            // Small heap buffer stored directly as byte[] — return to cache
-            SmallBufferCache.freeHeap(ha);
-        } else if (buf != null) {
-            if (buf.isDirect()) {
-                // always attempt small cache return first; freeDirect validates size class internally
-                if (!SmallBufferCache.freeDirect(buf) && ByteBufUtils.CLEANER != null) {
-                    ByteBufUtils.CLEANER.freeDirectBuffer(buf);
-                }
-            } else if (wasSmallCache && buf.hasArray()) {
-                SmallBufferCache.freeHeap(buf.array());
-            }
-        }
-
-        RECYCLE_HANDLER.free(this);
+        RECYCLER.recycle(this);
     }
 }

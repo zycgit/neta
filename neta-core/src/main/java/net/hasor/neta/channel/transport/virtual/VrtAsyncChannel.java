@@ -181,27 +181,30 @@ class VrtAsyncChannel implements AsyncChannel {
      * @param wContext the send context
      */
     @Override
-    public void write(NetChannel channel, SoSndContext wContext) {
-        VrtChannel vrtChannel = (VrtChannel) channel;
+    public synchronized void write(NetChannel channel, SoSndContext wContext) {
         while (!wContext.isEmpty()) {
-            SoSndData sndData = wContext.popData();
-
-            if (!this.isOpen()) {
-                SoUnfinishedSndException err = new SoUnfinishedSndException("channel is closed.");
-                this.context.notifySndChannelException(channel.getChannelId(), true, err);
-                sndData.failed(err);
-                this.purgeSndData(err, wContext);
-                continue;
-            }
-
-            while (sndData.hasReadable()) {
-                Object data = sndData.transferTake();
-                PlayLoad playLoad = PlayLoadObject.of(vrtChannel, data, false, true);
-                this.context.trigger(playLoad);
-            }
-
-            sndData.completed();
+            this.writeOne(channel, wContext.popData(), wContext);
         }
+    }
+
+    private void writeOne(NetChannel channel, SoSndData sndData, SoSndContext queuedContext) {
+        VrtChannel vrtChannel = (VrtChannel) channel;
+        if (!this.isOpen()) {
+            SoUnfinishedSndException err = new SoUnfinishedSndException("channel is closed.");
+            this.context.notifySndChannelException(channel.getChannelId(), true, err);
+            sndData.failed(err);
+            if (queuedContext != null) {
+                this.purgeSndData(err, queuedContext);
+            }
+            return;
+        }
+
+        while (sndData.hasReadable()) {
+            Object data = sndData.transferTake();
+            PlayLoad playLoad = PlayLoadObject.of(vrtChannel, data, false, true);
+            this.context.trigger(playLoad);
+        }
+        sndData.completed();
     }
 
     /**

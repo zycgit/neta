@@ -251,7 +251,7 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
         while (offset < readableBytes) {
             int chunkLength = Math.min(this.maxFramePayloadLength, readableBytes - offset);
             boolean finalFragment = offset + chunkLength >= readableBytes;
-            ByteBuf chunk = copyChunk(context, content, offset, chunkLength);
+            ByteBuf chunk = sliceChunk(content, offset, chunkLength);
 
             WebSocketFrame frame;
             if (first) {
@@ -271,11 +271,8 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
         }
     }
 
-    private ByteBuf copyChunk(ProtoContext context, ByteBuf source, int offset, int length) {
-        ByteBuf chunk = context.byteBufAllocator().buffer(length, Integer.MAX_VALUE);
-        source.getBuffer(offset, chunk, length);
-        chunk.markWriter();
-        return chunk;
+    private ByteBuf sliceChunk(ByteBuf source, int offset, int length) {
+        return source.slice(offset, length);
     }
 
     /**

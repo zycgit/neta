@@ -10,7 +10,6 @@ import org.junit.Test;
 
 import net.hasor.cobble.RandomUtils;
 import net.hasor.cobble.codec.MD5;
-import net.hasor.cobble.ref.RecycleObjectPool;
 
 public class AutoArrayByteBufTest {
     @Test
@@ -62,7 +61,7 @@ public class AutoArrayByteBufTest {
 
     @Test
     public void basicTest05() {
-        AutoArrayByteBuf byteBuf = RecycleObjectPool.get(AutoArrayByteBuf.class, AutoArrayByteBuf.RECYCLE_HANDLER);
+        AutoArrayByteBuf byteBuf = AutoArrayByteBuf.RECYCLER.get();
         byteBuf.initBuffer(null, 10, 5, new byte[4]);
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });

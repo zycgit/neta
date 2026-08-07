@@ -18,7 +18,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.Iterator;
 import net.hasor.cobble.ObjectUtils;
-import net.hasor.cobble.ref.RecycleObjectPool;
+
 /**
  * Shared allocation strategy for concrete {@link ByteBufAllocator} variants.
  * <p>This base class centralises the routing rules that decide which concrete
@@ -47,10 +47,10 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * @see ByteBufAllocator
  */
 public abstract class BasicByteBufAllocator implements ByteBufAllocator {
-    protected final boolean              defaultUsingPooled;
-    protected final int                  initCapacityByDefault;
-    protected final int                  sliceSizeByDefault;
-    private final ByteBufAllocatorMetric metric = new ByteBufAllocatorMetric();
+    protected final boolean                defaultUsingPooled;
+    protected final int                    initCapacityByDefault;
+    protected final int                    sliceSizeByDefault;
+    private final   ByteBufAllocatorMetric metric = new ByteBufAllocatorMetric();
 
     /** Create new instance */
     protected BasicByteBufAllocator(boolean defaultUsingPooled, int initialCapacityByDefault, int sliceSizeByDefault) {
@@ -118,12 +118,12 @@ public abstract class BasicByteBufAllocator implements ByteBufAllocator {
 
     private ByteBuf ringByAllocator(ByteBufAllocator alloc, int capacity) {
         if (alloc.isDirect()) {
-            RingByteBuffer byteBuf = RecycleObjectPool.get(RingByteBuffer.RECYCLE_INDEX, RingByteBuffer.RECYCLE_HANDLER);
+            RingByteBuffer byteBuf = RingByteBuffer.RECYCLER.get();
             byteBuf.initBuffer(alloc, capacity);
             byteBuf.initMetricTracking(this.metric, true, capacity);
             return byteBuf;
         } else {
-            RingArrayByteBuf byteBuf = RecycleObjectPool.get(RingArrayByteBuf.RECYCLE_INDEX, RingArrayByteBuf.RECYCLE_HANDLER);
+            RingArrayByteBuf byteBuf = RingArrayByteBuf.RECYCLER.get();
             byteBuf.initBuffer(alloc, capacity);
             byteBuf.initMetricTracking(this.metric, false, capacity);
             return byteBuf;
@@ -167,15 +167,23 @@ public abstract class BasicByteBufAllocator implements ByteBufAllocator {
     }
 
     private ByteBuf bufferByAllocator(ByteBufAllocator alloc, int initCapacity, int maxCapacity) {
+        int storageCapacity = initCapacity;
+        if (SmallBufferCache.isSmallSize(initCapacity)) {
+            int normalizedCapacity = SmallBufferCache.normalizeCapacity(initCapacity);
+            if (normalizedCapacity > 0) {
+                storageCapacity = normalizedCapacity;
+            }
+        }
+
         if (alloc.isDirect()) {
-            AutoByteBuffer byteBuf = RecycleObjectPool.get(AutoByteBuffer.RECYCLE_INDEX, AutoByteBuffer.RECYCLE_HANDLER);
-            ByteBuffer jvmBuf = SmallBufferCache.isSmallSize(initCapacity) ? SmallBufferCache.allocDirect(initCapacity) : alloc.jvmBuffer(initCapacity);
+            AutoByteBuffer byteBuf = AutoByteBuffer.RECYCLER.get();
+            ByteBuffer jvmBuf = SmallBufferCache.isSmallSize(storageCapacity) ? SmallBufferCache.allocDirect(storageCapacity) : alloc.jvmBuffer(storageCapacity);
             byteBuf.initBuffer(alloc, maxCapacity, this.sliceSizeByDefault, jvmBuf);
             byteBuf.initMetricTracking(this.metric, true, jvmBuf.capacity());
             return byteBuf;
         } else {
-            AutoArrayByteBuf byteBuf = RecycleObjectPool.get(AutoArrayByteBuf.RECYCLE_INDEX, AutoArrayByteBuf.RECYCLE_HANDLER);
-            byte[] data = SmallBufferCache.allocHeap(initCapacity);
+            AutoArrayByteBuf byteBuf = AutoArrayByteBuf.RECYCLER.get();
+            byte[] data = SmallBufferCache.allocHeap(storageCapacity);
             byteBuf.initBuffer(alloc, maxCapacity, this.sliceSizeByDefault, data);
             byteBuf.initMetricTracking(this.metric, false, data.length);
             return byteBuf;
@@ -230,7 +238,7 @@ public abstract class BasicByteBufAllocator implements ByteBufAllocator {
         }
 
         try {
-            PooledByteBuf byteBuf = RecycleObjectPool.get(PooledByteBuf.RECYCLE_INDEX, PooledByteBuf.RECYCLE_HANDLER);
+            PooledByteBuf byteBuf = PooledByteBuf.RECYCLER.get();
             byteBuf.initBuffer(alloc, fmtMaxCap, this.sliceSizeByDefault, target, pool);
             byteBuf.initMetricTracking(this.metric, alloc.isDirect(), target.capacity());
             return byteBuf;

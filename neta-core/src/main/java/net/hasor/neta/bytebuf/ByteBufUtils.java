@@ -16,13 +16,12 @@
 package net.hasor.neta.bytebuf;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.List;
 import net.hasor.cobble.SystemUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndData;
-import net.hasor.neta.channel.data.ProtoSndQueue;
+
 /**
  * Central registry for the {@link ByteBufAllocator}s pre-wired in Neta and
  * a set of utility methods used by the framework internally.
@@ -52,15 +51,15 @@ import net.hasor.neta.channel.data.ProtoSndQueue;
  * @see BufferCleaner
  */
 public class ByteBufUtils {
-    public static final ByteBufAllocator DEFAULT_ALLOCATOR;
-    public static final ByteBufAllocator POOLED_HEAP_ALLOCATOR;
-    public static final ByteBufAllocator POOLED_DIRECT_ALLOCATOR;
-    public static final ByteBufAllocator UNPOOLED_HEAP_ALLOCATOR;
-    public static final ByteBufAllocator UNPOOLED_DIRECT_ALLOCATOR;
-    public static final BufferCleaner    CLEANER;
+    public static final  ByteBufAllocator DEFAULT_ALLOCATOR;
+    public static final  ByteBufAllocator POOLED_HEAP_ALLOCATOR;
+    public static final  ByteBufAllocator POOLED_DIRECT_ALLOCATOR;
+    public static final  ByteBufAllocator UNPOOLED_HEAP_ALLOCATOR;
+    public static final  ByteBufAllocator UNPOOLED_DIRECT_ALLOCATOR;
+    public static final  BufferCleaner    CLEANER;
     /** <p>The system default newline character.</p> */
-    static final String                  NEWLINE = SystemUtils.getSystemProperty("line.separator", "\n");
-    private static final Logger          logger  = Logger.getLogger(ByteBufUtils.class);
+    static final         String           NEWLINE = SystemUtils.getSystemProperty("line.separator", "\n");
+    private static final Logger           logger  = Logger.getLogger(ByteBufUtils.class);
 
     // ensure DEFAULT
     static {
@@ -243,41 +242,12 @@ public class ByteBufUtils {
         return new CompositeByteBuf(alloc);
     }
 
-    static ByteBuf lineSlice(ByteBuf buffer, int offset, int length) {
-        if (buffer == null || length <= 0) {
-            return ByteBuf.EMPTY;
-        }
-
-        int baseOffset = buffer.readerIndex() + offset;
-        if (buffer instanceof WrapArrayBuffer) {
-            return new ArraySliceByteBuf(null, ((WrapArrayBuffer) buffer).target, baseOffset, length);
-        }
-        if (buffer instanceof AutoArrayByteBuf) {
-            return new ArraySliceByteBuf(buffer, ((AutoArrayByteBuf) buffer).target, baseOffset, length);
-        }
-
-        byte[] copy = new byte[length];
-        buffer.getBytes(offset, copy, 0, length);
-        return ByteBuf.wrap(copy);
-    }
-
-    /**
-     * Creates a stable readable slice for a line-oriented readable region.
-     * <p>
-     * Heap-backed buffers reuse their underlying array when possible, while other buffer types
-     * fall back to a copy so the returned slice remains valid even if the source buffer keeps
-     * advancing its reader index.
-     */
-    public static ByteBuf stableSlice(ByteBuf buffer, int offset, int length) {
-        return lineSlice(buffer, offset, length);
-    }
-
     /**
      * Create a new {@link CompositeByteBuf} pre-populated with the given buffers.
      * <p>
-        * Each buffer's readable data becomes part of the composite and ownership is transferred
-        * to the returned composite. Callers that still need their own references should retain
-        * before passing buffers here.
+     * Each buffer's readable data becomes part of the composite and ownership is transferred
+     * to the returned composite. Callers that still need their own references should retain
+     * before passing buffers here.
      * @param buffers the buffers to combine
      * @return a new CompositeByteBuf containing all buffers
      */
@@ -295,22 +265,6 @@ public class ByteBufUtils {
             return true;
         }
         return queue != null && queue.slotSize() >= requiredSlots;
-    }
-
-    /** Counts how many non-null buffers are present in the array. */
-    public static int countBuffers(ByteBuf... buffers) {
-        if (buffers == null || buffers.length == 0) {
-            return 0;
-        }
-
-        int count = 0;
-        for (ByteBuf buffer : buffers) {
-            if (buffer != null) {
-                count++;
-            }
-        }
-
-        return count;
     }
 
     /** Releases every non-null buffer in the array. */
@@ -334,68 +288,6 @@ public class ByteBufUtils {
         for (ByteBuf buffer : buffers) {
             if (buffer != null) {
                 buffer.release();
-            }
-        }
-    }
-
-    /**
-     * Offers one owned buffer to the destination queue.
-     * <p>If the handoff fails, this method releases the buffer locally because ownership did not
-     * transfer downstream.</p>
-     */
-    public static boolean offerOwnedBuffer(ProtoSndQueue<ByteBuf> dst, ByteBuf buffer) {
-        if (buffer == null) {
-            return true;
-        }
-
-        boolean accepted = false;
-        try {
-            accepted = dst.offerMessage(buffer);
-            return accepted;
-        } finally {
-            if (!accepted) {
-                buffer.release();
-            }
-        }
-    }
-
-    /**
-     * Offers all owned buffers as one atomic batch.
-     * <p>Null buffers are ignored. If the handoff fails, every still-owned buffer is released
-     * locally because ownership did not transfer downstream.</p>
-     */
-    public static boolean offerOwnedBuffers(ProtoSndQueue<ByteBuf> dst, ByteBuf... buffers) {
-        if (buffers == null || buffers.length == 0) {
-            return true;
-        }
-
-        List<ByteBuf> offerList = new ArrayList<>(buffers.length);
-        for (ByteBuf buffer : buffers) {
-            if (buffer != null) {
-                offerList.add(buffer);
-            }
-        }
-
-        return offerOwnedBuffers(dst, offerList);
-    }
-
-    /**
-     * Offers all owned buffers in the list as one atomic batch.
-     * <p>If the handoff fails, every still-owned buffer is released locally because ownership did
-     * not transfer downstream.</p>
-     */
-    public static boolean offerOwnedBuffers(ProtoSndQueue<ByteBuf> dst, List<ByteBuf> buffers) {
-        if (buffers == null || buffers.isEmpty()) {
-            return true;
-        }
-
-        boolean accepted = false;
-        try {
-            accepted = dst.offerMessage(buffers);
-            return accepted;
-        } finally {
-            if (!accepted) {
-                releaseAll(buffers);
             }
         }
     }
@@ -457,96 +349,4 @@ public class ByteBufUtils {
         }
     }
 
-    /**
-     * Clear all SmallBufferCache L1 (thread-local) caches for the calling thread.
-     * Cached buffers are moved to L2 (global shared) if there is room; otherwise discarded for GC.
-     * <p>Call this when a thread is about to be retired, or periodically
-     * to keep per-thread memory usage bounded.
-     */
-    public static void trimSmallBufferCache() {
-        SmallBufferCache.trimCurrentThread();
-    }
-
-    /**
-     * Return the total number of cached objects held by SmallBufferCache L1
-     * for the calling thread. Useful for monitoring and diagnostics.
-     */
-    public static int smallBufferCacheSize() {
-        return SmallBufferCache.currentThreadCacheSize();
-    }
-
-    /** Lazy-init holder used to avoid circular allocator initialization. */
-    private static class AllocatorHolder {
-        static final ByteBufAllocator UNPOOLED_HEAP;
-        static final ByteBufAllocator POOLED_HEAP;
-        static final ByteBufAllocator UNPOOLED_DIRECT;
-        static final ByteBufAllocator POOLED_DIRECT;
-        static final ByteBufAllocator DEFAULT;
-
-        static {
-            String allocType = SystemUtils.getSystemProperty("neta.bytebuf.type", isPooled() ? "pooled" : "unpooled");
-            String memType = SystemUtils.getSystemProperty("neta.bytebuf.mem", isDirect() ? "direct" : "heap");
-            String sliceSize = SystemUtils.getSystemProperty("neta.bytebuf.sliceSize", String.valueOf(4 * 1024));
-            String initialSize = SystemUtils.getSystemProperty("neta.bytebuf.initialSize", String.valueOf(4 * 1024));
-
-            int sliceSizeByDefault = Integer.parseInt(sliceSize);
-            int initialCapacityByDefault = Integer.parseInt(initialSize);
-
-            UNPOOLED_HEAP = new BasicByteBufAllocator(false, initialCapacityByDefault, sliceSizeByDefault) {
-                @Override
-                public boolean isDirect() {
-                    return false;
-                }
-
-                @Override
-                public ByteBuffer jvmBuffer(int capacity) {
-                    return ByteBuffer.allocate(capacity);
-                }
-            };
-            POOLED_HEAP = new BasicByteBufAllocator(true, initialCapacityByDefault, sliceSizeByDefault) {
-                @Override
-                public boolean isDirect() {
-                    return false;
-                }
-
-                @Override
-                public ByteBuffer jvmBuffer(int capacity) {
-                    return ByteBuffer.allocate(capacity);
-                }
-            };
-            UNPOOLED_DIRECT = new BasicByteBufAllocator(false, initialCapacityByDefault, sliceSizeByDefault) {
-                @Override
-                public boolean isDirect() {
-                    return true;
-                }
-
-                @Override
-                public ByteBuffer jvmBuffer(int capacity) {
-                    return ByteBuffer.allocateDirect(capacity);
-                }
-            };
-            POOLED_DIRECT = new BasicByteBufAllocator(true, initialCapacityByDefault, sliceSizeByDefault) {
-                @Override
-                public boolean isDirect() {
-                    return true;
-                }
-
-                @Override
-                public ByteBuffer jvmBuffer(int capacity) {
-                    return ByteBuffer.allocateDirect(capacity);
-                }
-            };
-
-            allocType = allocType.toLowerCase().trim();
-            memType = memType.toLowerCase().trim();
-
-            if ("pooled".equals(allocType)) {
-                DEFAULT = "direct".equals(memType) ? POOLED_DIRECT : POOLED_HEAP;
-            } else {
-                DEFAULT = "direct".equals(memType) ? UNPOOLED_DIRECT : UNPOOLED_HEAP;
-            }
-
-            logger.debug(String.format("-Dneta.bytebuf.type: %s -Dneta.bytebuf.mem: %s", allocType, memType));
-        }
-    }
 }

@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.SoChannel;
@@ -28,8 +27,9 @@ import net.hasor.neta.channel.routing.PartitionKey;
  * @version : 2026-04-08
  */
 public final class WebSocketRegistry {
-    private static final String                               CLOSE_CLEANUP_BOUND_KEY = WebSocketRegistry.class.getName() + ".closeCleanupBound";
-    private final Map<WebSocketRegistryKey, WebSocketContext> contexts                = new ConcurrentHashMap<>();
+    private static final String                                           CLOSE_CLEANUP_BOUND_KEY = WebSocketRegistry.class.getName() + ".closeCleanupBound";
+    private volatile WebSocketContext                                     connectionContext;
+    private volatile ConcurrentHashMap<WebSocketRegistryKey, WebSocketContext> streamContexts;
 
     private WebSocketRegistry() {
     }
@@ -111,7 +111,9 @@ public final class WebSocketRegistry {
 
         WebSocketRegistry registry = ensure(context);
         registry.bind(key, wsContext);
-        bindCloseCleanup(context, registry);
+        if (!key.isConnectionScope()) {
+            bindCloseCleanup(context, registry);
+        }
     }
 
     /**
@@ -150,7 +152,11 @@ public final class WebSocketRegistry {
         if (webSocketContext == null) {
             throw new IllegalArgumentException("webSocketContext must not be null.");
         }
-        this.contexts.put(endpointKey, webSocketContext);
+        if (endpointKey.isConnectionScope()) {
+            this.connectionContext = webSocketContext;
+        } else {
+            this.streamContexts().put(endpointKey, webSocketContext);
+        }
     }
 
     /**
@@ -162,11 +168,21 @@ public final class WebSocketRegistry {
         if (endpointKey == null) {
             return null;
         }
-        return this.contexts.remove(endpointKey);
+        if (endpointKey.isConnectionScope()) {
+            WebSocketContext previous = this.connectionContext;
+            this.connectionContext = null;
+            return previous;
+        }
+        ConcurrentHashMap<WebSocketRegistryKey, WebSocketContext> contexts = this.streamContexts;
+        return contexts != null ? contexts.remove(endpointKey) : null;
     }
 
     void clear() {
-        this.contexts.clear();
+        this.connectionContext = null;
+        ConcurrentHashMap<WebSocketRegistryKey, WebSocketContext> contexts = this.streamContexts;
+        if (contexts != null) {
+            contexts.clear();
+        }
     }
 
     /**
@@ -178,7 +194,11 @@ public final class WebSocketRegistry {
         if (endpointKey == null) {
             return null;
         }
-        return this.contexts.get(endpointKey);
+        if (endpointKey.isConnectionScope()) {
+            return this.connectionContext;
+        }
+        ConcurrentHashMap<WebSocketRegistryKey, WebSocketContext> contexts = this.streamContexts;
+        return contexts != null ? contexts.get(endpointKey) : null;
     }
 
     /**
@@ -259,6 +279,21 @@ public final class WebSocketRegistry {
         context.context(WebSocketRegistry.class, registry);
         context.rootContext(WebSocketRegistry.class, registry);
         return registry;
+    }
+
+    private ConcurrentHashMap<WebSocketRegistryKey, WebSocketContext> streamContexts() {
+        ConcurrentHashMap<WebSocketRegistryKey, WebSocketContext> contexts = this.streamContexts;
+        if (contexts != null) {
+            return contexts;
+        }
+        synchronized (this) {
+            contexts = this.streamContexts;
+            if (contexts == null) {
+                contexts = new ConcurrentHashMap<>();
+                this.streamContexts = contexts;
+            }
+            return contexts;
+        }
     }
 
     static WebSocketRegistryKey resolveEndpointKey(ProtoContext context) {

@@ -576,4 +576,38 @@ public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
             assertTrue(serverEvents.isEmpty());
         });
     }
+
+    @Test
+    public void testInvalidAggregatedFragmentedTextRepliesWithInvalidDataCode() throws Throwable {
+        autoCloseNeta(neta -> {
+            List<Object> serverEvents = new ArrayList<>();
+            VirtualPipe pipe = openVirtualPipe(neta, //
+                    ctx -> {
+                        ctx.addLast("ws-client", new WebSocketClientHandshakeDuplex(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
+                    }, ctx -> {
+                        ctx.addLast("ws-server", new WebSocketServerHandshakeDuplex(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
+                        ctx.addLastEncoder("ws-outbound", new WebSocketOutboundHandler());
+                        ctx.addLastDecoder("ws-inbound", new WebSocketInboundHandler(true));
+                        ctx.addLastDecoder("events", recordEvents(serverEvents));
+                    }, VrtTransfer.direct());
+
+            completeHandshake(pipe);
+
+            pipe.client().sendData(WebSocketUtils.textFrame(false, true, new byte[] { 0x01, 0x02, 0x03, 0x04 }, ascii("Hel"))).get();
+            pipe.client().sendData(WebSocketUtils.continuationFrame(true, true, new byte[] { 0x05, 0x06, 0x07, 0x08 }, ByteBuf.wrap(new byte[] { (byte) 0xC3, (byte) 0x28 }))).get();
+            assertTrue(waitUntil(() -> !pipe.clientInbound().isEmpty(), 1000L));
+
+            List<HttpObject> result = drainQueue(pipe.serverInbound());
+            List<HttpObject> outbound = drainQueue(pipe.clientInbound());
+
+            assertTrue(result.isEmpty());
+            assertEquals(1, outbound.size());
+            WebSocketFrame close = (WebSocketFrame) outbound.get(0);
+            assertEquals(WebSocketOpcode.CLOSE, close.opcode());
+            assertEquals(WebSocketCode.INVALID_DATA, closeStatusCode(close));
+            assertTrue(serverEvents.isEmpty());
+        });
+    }
 }

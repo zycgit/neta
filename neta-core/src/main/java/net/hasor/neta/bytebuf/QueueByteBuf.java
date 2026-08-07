@@ -324,7 +324,7 @@ public final class QueueByteBuf extends AbstractByteBuf {
             Component c = this.components.get(0);
             boolean hasCarriageReturn = lineFeedIndex > 0 && c.buf.getUInt8(this.readerIndex + lineFeedIndex - 1) == '\r';
             int lineLength = hasCarriageReturn ? lineFeedIndex - 1 : lineFeedIndex;
-            ByteBuf line = lineLength <= 0 ? ByteBuf.EMPTY : ByteBufUtils.lineSlice(c.buf, this.readerIndex, lineLength);
+            ByteBuf line = lineLength <= 0 ? ByteBuf.EMPTY : c.buf.slice(this.readerIndex, lineLength);
             this.skipReadableBytes(lineLength + (hasCarriageReturn ? 2 : 1));
             return line;
         }
@@ -362,7 +362,7 @@ public final class QueueByteBuf extends AbstractByteBuf {
             int overlapLen = overlapEnd - overlapStart;
 
             if (result == null && overlapLen == length) {
-                return ByteBufUtils.lineSlice(c.buf, overlapStart, overlapLen);
+                return c.buf.slice(overlapStart, overlapLen);
             }
             if (result == null) {
                 result = ByteBufUtils.compositeBuffer(alloc());
@@ -370,7 +370,7 @@ public final class QueueByteBuf extends AbstractByteBuf {
             if (overlapStart == 0 && overlapLen == c.length) {
                 result.addComponent(c.buf.retain());
             } else {
-                result.addComponent(ByteBufUtils.lineSlice(c.buf, overlapStart, overlapLen));
+                result.addComponent(c.buf.slice(overlapStart, overlapLen));
             }
         }
         return result == null ? ByteBuf.EMPTY : result;
@@ -655,6 +655,43 @@ public final class QueueByteBuf extends AbstractByteBuf {
 
     // ---- Slice ----
 
+    @Override
+    public ByteBuf slice(int offset, int length) {
+        if (length <= 0) {
+            return ByteBuf.EMPTY;
+        }
+        int startOffset = offsetReadable(offset, length);
+        int endOffset = startOffset + length;
+        ByteBuf result = null;
+        CompositeByteBuf composite = null;
+
+        for (Component c : this.components) {
+            int cStart = c.compositeOffset;
+            int cEnd = c.compositeOffset + c.length;
+            if (cEnd <= startOffset) {
+                continue;
+            }
+            if (cStart >= endOffset) {
+                break;
+            }
+
+            int overlapStart = Math.max(cStart, startOffset) - cStart;
+            int overlapEnd = Math.min(cEnd, endOffset) - cStart;
+            int overlapLen = overlapEnd - overlapStart;
+            ByteBuf overlap = c.buf.slice(overlapStart, overlapLen);
+
+            if (result == null && overlapLen == length) {
+                return overlap;
+            }
+            if (composite == null) {
+                composite = ByteBufUtils.compositeBuffer(alloc());
+                result = composite;
+            }
+            composite.addComponent(overlap);
+        }
+        return result == null ? ByteBuf.EMPTY : result;
+    }
+
     /**
      * Splits off the front portion of this buffer as a zero-copy {@link CompositeByteBuf}.
      * <p>
@@ -688,7 +725,7 @@ public final class QueueByteBuf extends AbstractByteBuf {
         if (this.components.size() == 1) {
             Component c = this.components.get(0);
             int localStart = this.markedReaderIndex - c.compositeOffset;
-            ByteBuf result = localStart == 0 && frontLen == c.length ? c.buf.retain() : ByteBufUtils.lineSlice(c.buf, localStart, frontLen);
+            ByteBuf result = localStart == 0 && frontLen == c.length ? c.buf.retain() : c.buf.slice(localStart, frontLen);
 
             this.readerIndex = splitReaderIndex;
             this.markedReaderIndex = splitReaderIndex;
@@ -717,7 +754,7 @@ public final class QueueByteBuf extends AbstractByteBuf {
             int overlapEnd = Math.min(cEnd, endOffset) - cStart;
             int overlapLen = overlapEnd - overlapStart;
 
-            ByteBuf overlap = overlapStart == 0 && overlapLen == c.length ? c.buf.retain() : ByteBufUtils.lineSlice(c.buf, overlapStart, overlapLen);
+            ByteBuf overlap = overlapStart == 0 && overlapLen == c.length ? c.buf.retain() : c.buf.slice(overlapStart, overlapLen);
 
             if (result == null && overlapLen == frontLen) {
                 result = overlap;

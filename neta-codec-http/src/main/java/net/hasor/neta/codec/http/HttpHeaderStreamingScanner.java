@@ -1,9 +1,7 @@
 package net.hasor.neta.codec.http;
 
-import java.util.List;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 
 final class HttpHeaderStreamingScanner {
@@ -17,24 +15,12 @@ final class HttpHeaderStreamingScanner {
         private boolean stop;
     }
 
-    static final class ScanResult {
-        private final boolean complete;
-
-        ScanResult(boolean complete) {
-            this.complete = complete;
-        }
-
-        boolean isComplete() {
-            return this.complete;
-        }
-    }
-
     private HttpHeaderStreamingScanner() {
     }
 
-    static ScanResult scan(ProtoRcvQueue<ByteBuf> src, HttpContext.DecodeState<?> decodeState, int maxHeaderSize, HeaderLineConsumer consumer) {
+    static boolean scan(ProtoRcvQueue<ByteBuf> src, HttpContext.DecodeState<?> decodeState, int maxHeaderSize, HeaderLineConsumer consumer) {
         if (!src.hasMore()) {
-            return new ScanResult(false);
+            return false;
         }
 
         ScanCursor cursor = new ScanCursor();
@@ -69,7 +55,7 @@ final class HttpHeaderStreamingScanner {
                     line = detachScratch(decodeState);
                 } else {
                     int lineLength = chunkEndsWithCarriageReturn ? relativeEnd - 1 : relativeEnd;
-                    line = ByteBufUtils.stableSlice(buffer, 0, lineLength);
+                    line = buffer.slice(0, lineLength);
                 }
 
                 try {
@@ -145,7 +131,7 @@ final class HttpHeaderStreamingScanner {
         if (cursor.skipCount > 0) {
             src.skipMessage(cursor.skipCount);
         }
-        return new ScanResult(cursor.completed);
+        return cursor.completed;
     }
 
     private static void appendScratch(HttpContext.DecodeState<?> decodeState, ByteBuf source, int offset, int length, int maxHeaderSize) {

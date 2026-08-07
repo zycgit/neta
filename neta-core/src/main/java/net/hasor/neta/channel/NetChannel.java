@@ -288,7 +288,9 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
     @Override
     public void closeNow() {
         if (this.asyncChannel.isOpen() && this.closeStatus.compareAndSet(false, true)) {
-            logger.info("channel(" + this.channelId + ") closeNow");
+            if (this.soContext.getConfig().isPrintLog()) {
+                logger.info("channel(" + this.channelId + ") closeNow");
+            }
             new SoCloseTask(this.channelId, this.soContext, true).run();
         }
         this.closeFuture.completed(this);
@@ -451,6 +453,30 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         return future;
     }
 
+    /**
+     * Run the RCV pipeline on the caller thread and return its produced output directly,
+     * bypassing the transport and the {@code PlayLoad} subscription dispatch.
+     * @param rcvData the data to feed into the RCV pipeline
+     * @return the output produced by the RCV pipeline
+     * @throws Throwable thrown when pipeline execution fails
+     */
+    protected Object[] receiveDataDirect(Object[] rcvData) throws Throwable {
+        ChainResult cr = this.protoStack.onRcvDirect(this.protoCtx, null, rcvData, null);
+        return cr.data;
+    }
+
+    /**
+     * Run the SND pipeline on the caller thread and return its produced output directly,
+     * bypassing the transport send queue.
+     * @param sndData the data to feed into the SND pipeline
+     * @return the output produced by the SND pipeline
+     * @throws Throwable thrown when pipeline execution fails
+     */
+    protected Object[] sendDataDirect(Object[] sndData) throws Throwable {
+        ChainResult cr = this.protoStack.onSnd(this.protoCtx, null, sndData, null);
+        return cr.data;
+    }
+
     private Future<NetChannel> sendOrFlush(Object[] writeData, String stackName) {
         Future<NetChannel> future = newFutureForSend();
         if (future.isDone()) {
@@ -506,24 +532,27 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
             return new SoSndData(sendSize, dataArray, future, this);
         }
 
-        // Slow path: wrap non-ByteBuf elements.
+        // Slow path: only byte[] and ByteBuffer elements require replacement.
         sendSize = 0;
-        Object[] wrap = new Object[dataArray.length];
+        Object[] wrap = dataArray;
         for (int i = 0; i < dataArray.length; i++) {
             Object buf = dataArray[i];
             if (buf instanceof byte[]) {
+                if (wrap == dataArray) {
+                    wrap = dataArray.clone();
+                }
                 wrap[i] = ByteBuf.wrap((byte[]) buf);
                 sendSize = sendSize + ((byte[]) buf).length;
             } else if (buf instanceof ByteBuffer) {
+                if (wrap == dataArray) {
+                    wrap = dataArray.clone();
+                }
                 wrap[i] = ByteBuf.wrap((ByteBuffer) buf);
                 sendSize = sendSize + ((ByteBuffer) buf).remaining();
             } else if (buf instanceof ByteBuf) {
                 ByteBuf tmpBuf = (ByteBuf) buf;
                 sendSize = sendSize + tmpBuf.readableBytes();
                 tmpBuf.markWriter();
-                wrap[i] = tmpBuf;
-            } else {
-                wrap[i] = buf;
             }
         }
 

@@ -80,6 +80,16 @@ public class ByteBufProxy implements ByteBuf {
     }
 
     @Override
+    public ByteBuf copy(int offset, int length) {
+        return this.target.copy(offset, length);
+    }
+
+    @Override
+    public ByteBuf slice(int offset, int length) {
+        return this.target.slice(offset, length);
+    }
+
+    @Override
     public ByteBuf asReadOnly() {
         return new ReadOnlyByteBuf(this);
     }

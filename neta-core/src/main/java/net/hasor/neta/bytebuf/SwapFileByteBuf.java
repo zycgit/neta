@@ -18,7 +18,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
-import net.hasor.cobble.ref.RecycleObjectPool;
 /**
  * {@link ByteBuf} implementation that starts in memory and spills overflow to a
  * deque of temporary file segments.
@@ -469,7 +468,7 @@ public class SwapFileByteBuf extends AbstractByteBuf {
         this.markedReaderIndex = Math.max(0, this.markedReaderIndex - splitOffset);
 
         ByteBuffer nb = ByteBuffer.wrap(sliceData);
-        WrapByteBuffer sliceBuf = RecycleObjectPool.get(WrapByteBuffer.RECYCLE_INDEX, WrapByteBuffer.RECYCLE_HANDLER);
+        WrapByteBuffer sliceBuf = WrapByteBuffer.RECYCLER.get();
         sliceBuf.initBuffer(nb, false);
         return sliceBuf;
     }

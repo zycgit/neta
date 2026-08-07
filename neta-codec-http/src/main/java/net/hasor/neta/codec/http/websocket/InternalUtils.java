@@ -43,6 +43,33 @@ final class InternalUtils {
     private InternalUtils() {
     }
 
+    static ByteBuf decodeMaskedRange(ByteBuf source, int offset, int length, byte[] maskKey, long maskOffset) {
+        if (maskKey == null || maskKey.length != 4) {
+            throw new IllegalArgumentException("maskKey must contain exactly 4 bytes.");
+        }
+        if (maskOffset < 0) {
+            throw new IllegalArgumentException("maskOffset must not be negative.");
+        }
+        if (length <= 0) {
+            return ByteBuf.EMPTY;
+        }
+
+        byte[] decoded = new byte[length];
+        source.getBytes(offset, decoded, 0, length);
+        int keyIndex = (int) (maskOffset & 3L);
+        int i = 0;
+        for (; i + 4 <= length; i += 4) {
+            decoded[i] ^= maskKey[keyIndex];
+            decoded[i + 1] ^= maskKey[(keyIndex + 1) & 3];
+            decoded[i + 2] ^= maskKey[(keyIndex + 2) & 3];
+            decoded[i + 3] ^= maskKey[(keyIndex + 3) & 3];
+        }
+        for (; i < length; i++) {
+            decoded[i] ^= maskKey[(keyIndex + i) & 3];
+        }
+        return ByteBuf.wrap(decoded);
+    }
+
     static List<WebSocketExtensionResult> parseExtensions(String extensions) {
         if (StringUtils.isBlank(extensions)) {
             return Collections.emptyList();

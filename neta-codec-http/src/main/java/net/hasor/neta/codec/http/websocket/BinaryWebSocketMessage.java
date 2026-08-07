@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http.websocket;
 import net.hasor.cobble.ref.RecycleObjectPool;
-import net.hasor.cobble.ref.RecycleObjectPool.ObjHandler;
 import net.hasor.neta.bytebuf.ByteBuf;
 /**
  * Pooled binary message chunk.
@@ -25,21 +24,18 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @version : 2026-03-15
  */
 public final class BinaryWebSocketMessage extends AbstractWebSocketMessage {
-    private static final int                                RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    private static final ObjHandler<BinaryWebSocketMessage> RECYCLE_HANDLER = //
-            new ObjHandler<BinaryWebSocketMessage>() {
-                @Override
-                public BinaryWebSocketMessage create() {
-                    return new BinaryWebSocketMessage();
-                }
-
-                @Override
-                public void free(BinaryWebSocketMessage tar) {
-                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
-                }
-            };
+    private static final RecycleObjectPool.Recycler<BinaryWebSocketMessage> RECYCLER = RecycleObjectPool.recycler(//
+            BinaryWebSocketMessage::new, BinaryWebSocketMessage::resetState, BinaryWebSocketMessage::onRecycle);
 
     private BinaryWebSocketMessage() {
+    }
+
+    private void resetState() {
+        this.resetHttpObjectState();
+    }
+
+    private void onRecycle() {
+        this.resetHttpObjectState();
     }
 
     /**
@@ -58,7 +54,7 @@ public final class BinaryWebSocketMessage extends AbstractWebSocketMessage {
      * @return binary message object
      */
     public static BinaryWebSocketMessage request(int sequence, ByteBuf content) {
-        BinaryWebSocketMessage msg = RecycleObjectPool.get(RECYCLE_INDEX, RECYCLE_HANDLER);
+        BinaryWebSocketMessage msg = RECYCLER.get();
         msg.initMessage(sequence, content);
         return msg;
     }
@@ -76,6 +72,6 @@ public final class BinaryWebSocketMessage extends AbstractWebSocketMessage {
      */
     @Override
     protected void recycle() {
-        RECYCLE_HANDLER.free(this);
+        RECYCLER.recycle(this);
     }
 }

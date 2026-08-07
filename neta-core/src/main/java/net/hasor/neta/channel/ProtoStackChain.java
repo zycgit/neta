@@ -32,17 +32,17 @@ import net.hasor.neta.channel.data.ProtoQueue;
  * @version : 2023-10-20
  */
 class ProtoStackChain {
-    private static final Logger         logger   = Logger.getLogger(ProtoStackChain.class);
-    private static final ByteBuf[]      EMPTY    = new ByteBuf[0];
-    private final Object                pipeLock = new Object();
-    private final ProtoQueue<Object>    tailRcvDown;
-    private Runnable                    tailRcvDownWritable;
-    private final ProtoQueue<Object>    headSndDown;
-    private Runnable                    headSndDownWritable;
-    private final boolean               branchMode;
-    private ProtoInvocation<?, ?, ?, ?> head;
-    private ProtoInvocation<?, ?, ?, ?> tail;
-    private long                        channelID;
+    private static final Logger                      logger   = Logger.getLogger(ProtoStackChain.class);
+    private static final ByteBuf[]                   EMPTY    = new ByteBuf[0];
+    private final        Object                      pipeLock = new Object();
+    private final        ProtoQueue<Object>          tailRcvDown;
+    private              Runnable                    tailRcvDownWritable;
+    private final        ProtoQueue<Object>          headSndDown;
+    private              Runnable                    headSndDownWritable;
+    private final        boolean                     branchMode;
+    private              ProtoInvocation<?, ?, ?, ?> head;
+    private              ProtoInvocation<?, ?, ?, ?> tail;
+    private              long                        channelID;
 
     ProtoStackChain(SoConfig protoConf) {
         this(protoConf.getRcvSlotSize(), protoConf.getSndSlotSize(), false);
@@ -275,6 +275,21 @@ class ProtoStackChain {
         return result;
     }
 
+    /** Drain all pending data in {@code tailRcvDown} into an array. */
+    private Object[] drainTailRcvDown() {
+        int queueSize = this.tailRcvDown.queueSize();
+        if (queueSize == 0) {
+            return EMPTY;
+        }
+        Object[] result = this.tailRcvDown.takeMessageToArray(queueSize);
+
+        if (this.tailRcvDown.wasFull()) {
+            this.fireRcvRecover();
+        }
+
+        return result;
+    }
+
     // ------------------------------------------------------------
     // Recovery
     // ------------------------------------------------------------
@@ -357,15 +372,34 @@ class ProtoStackChain {
      * @throws Throwable thrown when pipeline execution fails
      */
     public ChainResult onRcv(ProtoContext protoCtx, String stackName, Object[] rcvData, Throwable rcvError) throws Throwable {
+        return this.onRcvInternal(protoCtx, stackName, rcvData, rcvError, false);
+    }
+
+    /**
+     * Run the RCV chain and return the produced output directly, bypassing the {@code PlayLoad}
+     * subscription dispatch. The returned data combines the received output (tail RCV-down queue)
+     * and any SND-up response (head SND-down queue) produced while processing the input.
+     * @param protoCtx current protocol context
+     * @param stackName start handler name; when {@code null}, start from the chain head
+     * @param rcvData input data
+     * @param rcvError initial receive error
+     * @return chain result produced by this run
+     * @throws Throwable thrown when pipeline execution fails
+     */
+    public ChainResult onRcvDirect(ProtoContext protoCtx, String stackName, Object[] rcvData, Throwable rcvError) throws Throwable {
+        return this.onRcvInternal(protoCtx, stackName, rcvData, rcvError, true);
+    }
+
+    private ChainResult onRcvInternal(ProtoContext protoCtx, String stackName, Object[] rcvData, Throwable rcvError, boolean direct) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         synchronized (this.pipeLock) {
             ctx.beginRcv(rcvError);
             try {
                 ChainResult result;
                 if (this.head == null) {
-                    result = this.triggerRcvWithEmpty(ctx, rcvData);
+                    result = direct ? ChainResult.EMPTY : this.triggerRcvWithEmpty(ctx, rcvData);
                 } else {
-                    result = this.onRcvLife(ctx, stackName, rcvData);
+                    result = this.onRcvLife(ctx, stackName, rcvData, direct);
                 }
 
                 if (this.branchMode || !ctx.hasRecovery()) {
@@ -405,6 +439,10 @@ class ProtoStackChain {
     }
 
     private ChainResult onRcvLife(ProtoContextService ctx, String stackName, Object[] rcvData) throws Throwable {
+        return this.onRcvLife(ctx, stackName, rcvData, false);
+    }
+
+    private ChainResult onRcvLife(ProtoContextService ctx, String stackName, Object[] rcvData, boolean direct) throws Throwable {
         boolean found = false;
         ProtoStatus lastStatus = ProtoStatus.Next;
         ProtoInvocation<?, ?, ?, ?> current = this.head;
@@ -457,16 +495,30 @@ class ProtoStackChain {
         }
 
         // Drain headSndDown once — all snd output from both rcv and snd pipeline execution ends up here.
+        ChainResult result = ChainResult.EMPTY;
         try {
             if (lastStatus == ProtoStatus.Stop) {
                 ctx.setRcvError(null);
             }
             Throwable residualError = ctx.getRcvError();
-            Object[] result = drainHeadSndDown();
-            return new ChainResult(result, lastStatus, residualError);
+            Object[] data = drainHeadSndDown();
+            if (data.length == 0 && lastStatus == ProtoStatus.Next && residualError == null) {
+                result = ChainResult.EMPTY;
+            } else {
+                result = new ChainResult(data, lastStatus, residualError);
+            }
         } finally {
-            this.triggerRcv(ctx);
+            if (direct) {
+                // Direct mode: collect the received output instead of dispatching it to subscribers.
+                Object[] received = drainTailRcvDown();
+                if (received.length > 0) {
+                    result = mergeResult(result, new ChainResult(received, ProtoStatus.Next, null));
+                }
+            } else {
+                this.triggerRcv(ctx);
+            }
         }
+        return result;
     }
 
     private void triggerRcv(ProtoContextService ctx) {

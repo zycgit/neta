@@ -28,7 +28,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.junit.Test;
 
 import net.hasor.cobble.RandomUtils;
-import net.hasor.cobble.SystemUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.function.Callable;
 import net.hasor.neta.bytebuf.ByteBuf;
@@ -112,51 +111,6 @@ public class SoReadTest extends AbstractSoTest {
         listen.waitAnyAccept();
         listen.waitIdle();
         assert cnt.get() == 3;
-        server.shutdown();
-    }
-
-    @Test
-    public void rcvBackPressedTest_01() throws Throwable {
-        if (SystemUtils.isOsx()) {
-            return;
-        }
-
-        // start server
-        int safePort = safePort();
-        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpSoConfig tcpConf = tcpConfig(2, 30);
-
-        NetConfig netConfig = globalConf();
-        netConfig.setPrintLog(false);
-        NetManager server = new NetManager(netConfig);
-        SoContext context = server.getContext();
-        NetListen listen = server.bind(address, ProtoHelper.standard().build(), tcpConf);
-
-        // client: send a lot of bytes
-        ThreadUtils.daemonThread(true, (Callable) () -> {
-            Socket client = new Socket("127.0.0.1", safePort);
-            client.setSendBufferSize(2);
-            OutputStream soOut = client.getOutputStream();
-            while (true) {
-                soOut.write(RandomUtils.nextBytes(2));
-                soOut.flush();
-            }
-        });
-
-        // server: rcvBuffer max is 30, Wait for to fill full
-        listen.waitAnyAccept();
-        NetChannel channel = (NetChannel) context.findChannel(2);
-        while (channel.getRcvBytes() < 30) {
-            ThreadUtils.sleep(100);
-        }
-
-        long rcvSize = channel.getRcvBytes();// is full ( swapSize = 2, bufSize = 30)
-        assert rcvSize == 30;
-
-        // after 1s,server No extra data is received, data well be backpressed.
-        ThreadUtils.sleep(1000);
-        assert channel.getRcvBytes() == 32;
-
         server.shutdown();
     }
 

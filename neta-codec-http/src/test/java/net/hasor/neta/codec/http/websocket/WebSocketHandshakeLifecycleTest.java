@@ -541,8 +541,10 @@ public class WebSocketHandshakeLifecycleTest extends AbstractWebSocketTest {
             assertNotNull(webSocketContext(pipe.channel()));
 
             pipe.channel().close();
-            assertTrue(waitUntil(() -> pipe.channel().isClose(), 1000L));
-            assertNull(webSocketContext(pipe.channel()));
+            // Graceful close runs on the pipeline executor: the close flag flips immediately but
+            // registry cleanup (duplex onClose) completes asynchronously — wait for the actual state.
+            assertTrue(waitUntil(() -> webSocketContext(pipe.channel()) == null, 1000L));
+            assertTrue(pipe.channel().isClose());
         });
     }
 }

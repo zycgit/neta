@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import net.hasor.cobble.ObjectUtils;
-import net.hasor.cobble.ref.RecycleObjectPool;
+
 /**
  * Pooled memory manager based on the buddy-allocation algorithm.
  * <p>A {@code BufferPool} partitions memory into fixed-size pages and organises
@@ -48,20 +48,20 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  */
 class BufferPool {
     //
-    protected final BufferArena        qInit;// 000%~025%
-    protected final BufferArena        q000; // 001%~050%
-    protected final BufferArena        q025; // 025%~075%
-    protected final BufferArena        q050; // 050%~100%
-    protected final BufferArena        q075; // 075%~100%
-    protected final BufferArena        q100; // 100%~MAX
-    protected final BufferArena[]      arenaList;
-    private final int                  pageSize;
-    private final int                  buddyTreeHeight;
-    private final int                  maximumChunkCount;
-    private final int                  memoryChunkSize;
-    private final Map<Integer, Buffer> bufferPool;
-    private final AtomicInteger        memAddressSeq;
-    private volatile long              memoryCapacity;
+    protected final  BufferArena          qInit;// 000%~025%
+    protected final  BufferArena          q000; // 001%~050%
+    protected final  BufferArena          q025; // 025%~075%
+    protected final  BufferArena          q050; // 050%~100%
+    protected final  BufferArena          q075; // 075%~100%
+    protected final  BufferArena          q100; // 100%~MAX
+    protected final  BufferArena[]        arenaList;
+    private final    int                  pageSize;
+    private final    int                  buddyTreeHeight;
+    private final    int                  maximumChunkCount;
+    private final    int                  memoryChunkSize;
+    private final    Map<Integer, Buffer> bufferPool;
+    private final    AtomicInteger        memAddressSeq;
+    private volatile long                 memoryCapacity;
 
     public BufferPool(int pageSize) {
         this(pageSize, -1, 12);
@@ -132,7 +132,7 @@ class BufferPool {
 
     protected Buffer requestBuffer(PageChunkSplit pages) {
         Buffer memory = this.getMemory(pages.getMemAddress());
-        BufferTarget buffer = RecycleObjectPool.get(BufferTarget.RECYCLE_INDEX, BufferTarget.RECYCLE_HANDLER);
+        BufferTarget buffer = BufferTarget.RECYCLER.get();
         buffer.initBuffer(this.getMemPageSize(), pages, memory);
         return buffer;
     }
@@ -140,7 +140,7 @@ class BufferPool {
     public Buffer requestBuffer(int capacity, BufferAllocator alloc) {
         ObjectUtils.checkPositive(capacity, "capacity");
         if (capacity > this.memoryChunkSize) {
-            BufferWrap buffer = RecycleObjectPool.get(BufferWrap.RECYCLE_INDEX, BufferWrap.RECYCLE_HANDLER);
+            BufferWrap buffer = BufferWrap.RECYCLER.get();
             buffer.initBuffer(alloc.jvmBuffer(capacity));
             return buffer;
         }
@@ -175,7 +175,7 @@ class BufferPool {
 
         int memAddress = this.newMemAddress();
         PageChunkPool pool = new PageChunkPool(memAddress, this.pageSize, this.buddyTreeHeight);
-        BufferWrap buffer = RecycleObjectPool.get(BufferWrap.RECYCLE_INDEX, BufferWrap.RECYCLE_HANDLER);
+        BufferWrap buffer = BufferWrap.RECYCLER.get();
         buffer.initBuffer(alloc.jvmBuffer(pool.getCapacity()));
 
         this.bufferPool.put(memAddress, buffer);

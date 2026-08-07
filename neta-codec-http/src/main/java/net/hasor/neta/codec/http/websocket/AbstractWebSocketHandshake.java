@@ -37,8 +37,19 @@ import net.hasor.neta.codec.http.*;
  * @version : 2026-03-22
  */
 public abstract class AbstractWebSocketHandshake implements ProtoDuplex<HttpObject, HttpObject, HttpObject, HttpObject> {
-    private static final Logger      logger         = Logger.getLogger(AbstractWebSocketHandshake.class);
-    private static final String      WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"; // RFC 6455
+    private static final Logger                     logger               = Logger.getLogger(AbstractWebSocketHandshake.class);
+    private static final String                     WEBSOCKET_GUID       = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"; // RFC 6455
+    private static final byte[]                     WEBSOCKET_GUID_BYTES = WEBSOCKET_GUID.getBytes(StandardCharsets.US_ASCII);
+    private static final Base64.Encoder             BASE64_ENCODER       = Base64.getEncoder();
+    private static final ThreadLocal<MessageDigest> SHA1_DIGEST          = ThreadLocal.withInitial(() -> {
+        try {
+            return MessageDigest.getInstance("SHA-1");
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-1 algorithm not available", e);
+        }
+    });
+    private static final ThreadLocal<byte[]>        ACCEPT_KEY_BUFFER    = new ThreadLocal<byte[]>();
+
     protected final WebSocketVersion codecVersion;
 
     /**
@@ -69,12 +80,14 @@ public abstract class AbstractWebSocketHandshake implements ProtoDuplex<HttpObje
         }
         WebSocketRegistry.bind(context, endpointKey, wsContext);
 
-        context.fireEventRcv(HttpThroughEvent.class, new HttpThroughEvent(true, streamId));
-        context.fireEventSnd(HttpThroughEvent.class, new HttpThroughEvent(true, streamId));
-        context.fireEventSnd(WebSocketHandshakeEvent.class, new WebSocketHandshakeEvent(streamId, wsContext));
-        context.fireEventRcv(WebSocketHandshakeEvent.class, new WebSocketHandshakeEvent(streamId, wsContext));
-        publishRootHandshakeEvent(context, true, new WebSocketHandshakeEvent(streamId, wsContext));
-        publishRootHandshakeEvent(context, false, new WebSocketHandshakeEvent(streamId, wsContext));
+        HttpThroughEvent throughEvent = new HttpThroughEvent(true, streamId);
+        context.fireEventRcv(HttpThroughEvent.class, throughEvent);
+        context.fireEventSnd(HttpThroughEvent.class, throughEvent);
+        WebSocketHandshakeEvent handshakeEvent = new WebSocketHandshakeEvent(streamId, wsContext);
+        context.fireEventSnd(WebSocketHandshakeEvent.class, handshakeEvent);
+        context.fireEventRcv(WebSocketHandshakeEvent.class, handshakeEvent);
+        publishRootHandshakeEvent(context, true, streamId, wsContext);
+        publishRootHandshakeEvent(context, false, streamId, wsContext);
     }
 
     /**
@@ -182,6 +195,21 @@ public abstract class AbstractWebSocketHandshake implements ProtoDuplex<HttpObje
         }
     }
 
+    /** Allocation-free case-insensitive search used for HTTP token-style handshake headers. */
+    protected final boolean containsHeaderValueIgnoreCase(String value, String expected) {
+        if (value == null || expected == null) {
+            return false;
+        }
+        int expectedLength = expected.length();
+        int lastStart = value.length() - expectedLength;
+        for (int start = 0; start <= lastStart; start++) {
+            if (value.regionMatches(true, start, expected, 0, expectedLength)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * Locate one registered extension support by extension name.
      * @param supports registered supports
@@ -273,8 +301,8 @@ public abstract class AbstractWebSocketHandshake implements ProtoDuplex<HttpObje
         return WebSocketRegistryKey.connectionScope();
     }
 
-    private static void publishRootHandshakeEvent(ProtoContext context, boolean rcvDirection, WebSocketHandshakeEvent event) {
-        if (context == null || event == null) {
+    private static void publishRootHandshakeEvent(ProtoContext context, boolean rcvDirection, long streamId, WebSocketContext wsContext) {
+        if (context == null || wsContext == null) {
             return;
         }
 
@@ -291,6 +319,8 @@ public abstract class AbstractWebSocketHandshake implements ProtoDuplex<HttpObje
         if (channel == null) {
             return;
         }
+
+        WebSocketHandshakeEvent event = new WebSocketHandshakeEvent(streamId, wsContext);
 
         SoEvent rootEvent = new SoEvent() {
             @Override
@@ -370,39 +400,47 @@ public abstract class AbstractWebSocketHandshake implements ProtoDuplex<HttpObje
      * @return detected version, or {@code null} if it cannot be recognized
      */
     protected final WebSocketVersion detectVersion(HttpMessageParts request) {
+        return detectVersion(request, InternalUtils.isStandardHttp2WebSocketRequest(request));
+    }
+
+    protected final WebSocketVersion detectVersion(HttpMessageParts request, boolean standardHttp2) {
         if (request == null) {
             return null;
         }
 
-        if (InternalUtils.isStandardHttp2WebSocketRequest(request)) {
-            String wsVersion = request.header(HttpHeaderNames.SEC_WEBSOCKET_VERSION);
-            if (StringUtils.isBlank(wsVersion)) {
+        if (standardHttp2) {
+            String wsVersion = normalizeHeaderValue(request.header(HttpHeaderNames.SEC_WEBSOCKET_VERSION));
+            if (wsVersion == null) {
                 return null;
             }
-            return WebSocketVersion.of(wsVersion.trim());
+            return WebSocketVersion.of(wsVersion);
         }
 
         String upgrade = request.header(HttpHeaderNames.UPGRADE);
         String connection = request.header(HttpHeaderNames.CONNECTION);
-        if (!StringUtils.containsIgnoreCase(connection, HttpHeaderValues.UPGRADE)) {
+        if (!containsHeaderValueIgnoreCase(connection, HttpHeaderValues.UPGRADE)) {
             return null;
         }
-        if (!StringUtils.equalsIgnoreCase(HttpHeaderValues.WEBSOCKET, upgrade) && !StringUtils.equalsIgnoreCase("WebSocket", upgrade)) {
+        if (!HttpHeaderValues.WEBSOCKET.equalsIgnoreCase(upgrade)) {
             return null;
         }
 
-        String wsVersion = request.header(HttpHeaderNames.SEC_WEBSOCKET_VERSION);
-        if (StringUtils.isNotBlank(wsVersion)) {
-            return WebSocketVersion.of(wsVersion.trim());
+        String wsVersion = normalizeHeaderValue(request.header(HttpHeaderNames.SEC_WEBSOCKET_VERSION));
+        if (wsVersion != null) {
+            return WebSocketVersion.of(wsVersion);
         }
 
-        String key1 = request.header(HttpHeaderNames.SEC_WEBSOCKET_KEY1);
-        String key2 = request.header(HttpHeaderNames.SEC_WEBSOCKET_KEY2);
-        if (StringUtils.isNotBlank(key1) && StringUtils.isNotBlank(key2)) {
+        String key1 = normalizeHeaderValue(request.header(HttpHeaderNames.SEC_WEBSOCKET_KEY1));
+        String key2 = normalizeHeaderValue(request.header(HttpHeaderNames.SEC_WEBSOCKET_KEY2));
+        if (key1 != null && key2 != null) {
             return WebSocketVersion.V0;
         }
 
         return null;
+    }
+
+    protected final String normalizeHeaderValue(String value) {
+        return StringUtils.trimToNull(value);
     }
 
     /**
@@ -411,13 +449,22 @@ public abstract class AbstractWebSocketHandshake implements ProtoDuplex<HttpObje
      * @return server response key
      */
     protected final String computeAcceptKey(String key) {
-        try {
-            MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
-            byte[] digest = sha1.digest((key + WEBSOCKET_GUID).getBytes(StandardCharsets.UTF_8));
-            return Base64.getEncoder().encodeToString(digest);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-1 algorithm not available", e);
+        if (key == null) {
+            throw new IllegalArgumentException("key must not be null");
         }
+
+        int keyLength = key.length();
+        int digestInputLength = keyLength + WEBSOCKET_GUID_BYTES.length;
+        byte[] digestInput = acceptKeyBuffer(digestInputLength);
+        for (int i = 0; i < keyLength; i++) {
+            digestInput[i] = (byte) key.charAt(i);
+        }
+        System.arraycopy(WEBSOCKET_GUID_BYTES, 0, digestInput, keyLength, WEBSOCKET_GUID_BYTES.length);
+
+        MessageDigest sha1 = SHA1_DIGEST.get();
+        sha1.reset();
+        sha1.update(digestInput, 0, digestInputLength);
+        return BASE64_ENCODER.encodeToString(sha1.digest());
     }
 
     /**
@@ -466,6 +513,15 @@ public abstract class AbstractWebSocketHandshake implements ProtoDuplex<HttpObje
             }
         }
         return result;
+    }
+
+    private static byte[] acceptKeyBuffer(int requiredLength) {
+        byte[] buffer = ACCEPT_KEY_BUFFER.get();
+        if (buffer == null || buffer.length < requiredLength) {
+            buffer = new byte[Math.max(requiredLength, 64)];
+            ACCEPT_KEY_BUFFER.set(buffer);
+        }
+        return buffer;
     }
 
     private static int countSpaces(String key) {

@@ -122,6 +122,13 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
 
             if (this.state == AggregateState.IDLE) {
                 HttpObject next = src.peekMessage();
+                if (next instanceof FullHttpRequest || next instanceof FullHttpResponse) {
+                    if (!dst.hasSlot()) {
+                        return ProtoStatus.Stop;
+                    }
+                    dst.offerMessage(src.takeMessage());
+                    continue;
+                }
                 if (!this.isStartMessage(next)) {
                     this.enterDiscardMode(src);
                     HttpProtocolException e = new HttpProtocolException("unexpected HTTP object for aggregation: " + next.getClass().getName());
@@ -140,7 +147,7 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
                     src.drainToQueue(this.stagingQueueKey, 1);
 
                     if (next instanceof LastHttpHeaders && !(next instanceof LastHttpContent) && !this.headersClosedHandled) {
-                        this.onHeadersStaged(context, src);
+                        this.onHeadersStaged(context, src, (HttpHeaders) next);
                         this.headersClosedHandled = true;
                         if (this.state != AggregateState.PADDING) {
                             break;
@@ -277,7 +284,7 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
         return staged;
     }
 
-    protected void onHeadersStaged(ProtoContext context, ProtoRcvQueue<HttpObject> src) {
+    protected void onHeadersStaged(ProtoContext context, ProtoRcvQueue<HttpObject> src, HttpHeaders headers) {
     }
 
     /**

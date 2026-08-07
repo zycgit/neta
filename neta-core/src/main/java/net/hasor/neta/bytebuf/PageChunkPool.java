@@ -18,7 +18,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import net.hasor.cobble.ObjectUtils;
-import net.hasor.cobble.ref.RecycleObjectPool;
 /**
  * Buddy-tree allocator for one contiguous chunk of pages.
  * <p>A {@code PageChunkPool} owns {@code 2^treeHeight} pages and keeps two
@@ -202,7 +201,7 @@ class PageChunkPool {
                         // Re-check after lock acquisition to prevent TOCTOU race condition.
                         if (isFree(look)) {
                             this.used(look);
-                            PageChunkSplit chunk = RecycleObjectPool.get(PageChunkSplit.RECYCLE_INDEX, PageChunkSplit.RECYCLE_HANDLER);
+                            PageChunkSplit chunk = PageChunkSplit.RECYCLER.get();
                             chunk.initPageChunk(this, look.getFromPage(), look.getToPage(), new AtomicInteger(1));
                             return chunk;
                         }

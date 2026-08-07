@@ -44,22 +44,26 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * @see AutoByteBuffer
  */
 final class RingByteBuffer extends AbstractByteBuf {
-    static final int                                    RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    static RecycleObjectPool.ObjHandler<RingByteBuffer> RECYCLE_HANDLER = //
-            new RecycleObjectPool.ObjHandler<RingByteBuffer>() {
-                public RingByteBuffer create() {
-                    return new RingByteBuffer();
-                }
-
-                @Override
-                public void free(RingByteBuffer tar) {
-                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
-                }
-            };
+    static final RecycleObjectPool.Recycler<RingByteBuffer> RECYCLER = RecycleObjectPool.recycler(//
+            RingByteBuffer::new, RingByteBuffer::resetState, RingByteBuffer::onRecycle);
     ByteBuffer                                          target;
     private int                                         capacityMask;
 
     private RingByteBuffer() {
+    }
+
+    private void resetState() {
+        this.target = null;
+        this.capacityMask = 0;
+    }
+
+    private void onRecycle() {
+        ByteBuffer oldTarget = this.target;
+        this.target = null;
+        this.capacityMask = 0;
+        if (oldTarget != null && !SmallBufferCache.freeDirect(oldTarget) && ByteBufUtils.CLEANER != null) {
+            ByteBufUtils.CLEANER.freeDirectBuffer(oldTarget);
+        }
     }
 
     /** Round up to the next power of 2 (for bitwise index masking). */
@@ -353,24 +357,14 @@ final class RingByteBuffer extends AbstractByteBuf {
             newBuf = ByteBuffer.wrap(sliceData);
         }
 
-        WrapByteBuffer slicedBuf = RecycleObjectPool.get(WrapByteBuffer.RECYCLE_INDEX, WrapByteBuffer.RECYCLE_HANDLER);
+        WrapByteBuffer slicedBuf = WrapByteBuffer.RECYCLER.get();
         slicedBuf.initBuffer(newBuf, false);
         return slicedBuf;
     }
 
     @Override
     protected void _free() {
-        try {
-            ByteBuffer oldTarget = this.target;
-            if (oldTarget != null && !SmallBufferCache.freeDirect(oldTarget)) {
-                if (ByteBufUtils.CLEANER != null) {
-                    ByteBufUtils.CLEANER.freeDirectBuffer(oldTarget);
-                }
-            }
-        } finally {
-            this.target = null;
-            RECYCLE_HANDLER.free(this);
-        }
+        RECYCLER.recycle(this);
     }
 
     @Override
@@ -390,7 +384,7 @@ final class RingByteBuffer extends AbstractByteBuf {
         int capacity = this.getMaxCapacity();
         ByteBuffer copyBuffer = this.alloc.jvmBuffer(capacity);
         this._getBytes(this.markedReaderIndex, copyBuffer, copyBuffer.capacity());
-        RingByteBuffer byteBuf = RecycleObjectPool.get(RingByteBuffer.RECYCLE_INDEX, RingByteBuffer.RECYCLE_HANDLER);
+        RingByteBuffer byteBuf = RingByteBuffer.RECYCLER.get();
         byteBuf.initBuffer(this.alloc, copyBuffer);
 
         int shift = this.markedReaderIndex;

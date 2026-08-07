@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http.websocket;
 import net.hasor.cobble.ref.RecycleObjectPool;
-import net.hasor.cobble.ref.RecycleObjectPool.ObjHandler;
 import net.hasor.neta.bytebuf.ByteBuf;
 /**
  * Pooled text message chunk.
@@ -25,21 +24,18 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @version : 2026-03-15
  */
 public final class TextWebSocketMessage extends AbstractWebSocketMessage {
-    private static final int                              RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    private static final ObjHandler<TextWebSocketMessage> RECYCLE_HANDLER =//
-            new ObjHandler<TextWebSocketMessage>() {
-                @Override
-                public TextWebSocketMessage create() {
-                    return new TextWebSocketMessage();
-                }
-
-                @Override
-                public void free(TextWebSocketMessage tar) {
-                    RecycleObjectPool.free(RECYCLE_INDEX, tar);
-                }
-            };
+    private static final RecycleObjectPool.Recycler<TextWebSocketMessage> RECYCLER = RecycleObjectPool.recycler(//
+            TextWebSocketMessage::new, TextWebSocketMessage::resetState, TextWebSocketMessage::onRecycle);
 
     private TextWebSocketMessage() {
+    }
+
+    private void resetState() {
+        this.resetHttpObjectState();
+    }
+
+    private void onRecycle() {
+        this.resetHttpObjectState();
     }
 
     /**
@@ -58,7 +54,7 @@ public final class TextWebSocketMessage extends AbstractWebSocketMessage {
      * @return text message object
      */
     public static TextWebSocketMessage request(int sequence, ByteBuf content) {
-        TextWebSocketMessage msg = RecycleObjectPool.get(RECYCLE_INDEX, RECYCLE_HANDLER);
+        TextWebSocketMessage msg = RECYCLER.get();
         msg.initMessage(sequence, content);
         return msg;
     }
@@ -76,6 +72,6 @@ public final class TextWebSocketMessage extends AbstractWebSocketMessage {
      */
     @Override
     protected void recycle() {
-        RECYCLE_HANDLER.free(this);
+        RECYCLER.recycle(this);
     }
 }
