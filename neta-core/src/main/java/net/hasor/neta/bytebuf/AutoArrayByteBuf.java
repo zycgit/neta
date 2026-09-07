@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.bytebuf;
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 import net.hasor.cobble.ObjectUtils;
 import net.hasor.cobble.ref.RecycleObjectPool;
 
@@ -558,6 +559,24 @@ final class AutoArrayByteBuf extends AbstractByteBuf {
     @Override
     public int capacity() {
         return Math.min(this.target.length, this.getMaxCapacity());
+    }
+
+    @Override
+    public String getString(int offset, int len, Charset charset) {
+        if (len <= 0 || offset < 0 || offset > this.readableBytes() - len) {
+            return super.getString(offset, len, charset);
+        }
+        checkFree();
+        return ByteBufUtils.decodeString(this.target, this.readerIndex + offset, len, charset);
+    }
+
+    @Override
+    public int expect(byte expected, int maxScanBytes) {
+        checkFree();
+        int start = this.readerIndex;
+        int end = start + Math.min(this.readableBytes(), Math.max(0, maxScanBytes));
+        int index = ByteBufUtils.indexOf(this.target, start, end, expected);
+        return index < 0 ? -1 : index - start;
     }
 
     @Override

@@ -16,6 +16,9 @@
 package net.hasor.neta.bytebuf;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 import net.hasor.cobble.SystemUtils;
 import net.hasor.cobble.logging.Logger;
@@ -159,6 +162,39 @@ public class ByteBufUtils {
                 DEFAULT_ALLOCATOR = UNPOOLED_HEAP_ALLOCATOR;
             }
         }
+    }
+
+    static String decodeString(byte[] array, int offset, int length, Charset charset) {
+        // Preserve getString's existing default-charset behavior for US_ASCII.
+        Charset effective = charset == StandardCharsets.US_ASCII ? Charset.defaultCharset() : charset;
+        if (effective == StandardCharsets.UTF_8 || effective == StandardCharsets.ISO_8859_1 || effective == StandardCharsets.US_ASCII || effective == StandardCharsets.UTF_16 || effective == StandardCharsets.UTF_16BE || effective == StandardCharsets.UTF_16LE) {
+            return new String(array, offset, length, effective);
+        }
+        // A custom decoder must not receive the buffer's backing storage.
+        return new String(Arrays.copyOfRange(array, offset, offset + length), effective);
+    }
+
+    static int indexOf(byte[] array, int start, int end, byte expected) {
+        int offset = start;
+        long pattern = (expected & 0xffL) * 0x0101010101010101L;
+
+        while (offset <= end - Long.BYTES) {
+            long word = UnsafeMemory.getInt64(array, offset, false) ^ pattern;
+            // Little-endian lanes make the lowest matching byte the first in memory.
+            long matches = (word - 0x0101010101010101L) & ~word & 0x8080808080808080L;
+            if (matches != 0) {
+                return offset + (Long.numberOfTrailingZeros(matches) >>> 3);
+            }
+            offset += Long.BYTES;
+        }
+
+        while (offset < end) {
+            if (array[offset] == expected) {
+                return offset;
+            }
+            offset++;
+        }
+        return -1;
     }
 
     /** Returns a non-null default allocator, even during early static initialization. */

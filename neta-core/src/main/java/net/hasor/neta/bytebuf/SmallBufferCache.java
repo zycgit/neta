@@ -216,12 +216,12 @@ class SmallBufferCache {
     /**
      * Return a direct ByteBuffer to cache for reuse.
      * First tries L1 (thread-local), overflow goes to L2 (global shared).
-     * The buffer is only cached if its capacity matches a valid size class and is direct.
+     * The buffer is only cached if its capacity matches a valid size class and is writable and direct.
      * @param buf the ByteBuffer to return (may be null, silently ignored)
      * @return true if the buffer was cached, false otherwise (caller should clean up if needed)
      */
     static boolean freeDirect(ByteBuffer buf) {
-        if (buf == null || !buf.isDirect()) {
+        if (buf == null || !buf.isDirect() || buf.isReadOnly()) {
             return false;
         }
         int len = buf.capacity();

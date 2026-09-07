@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.bytebuf;
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 import net.hasor.cobble.ref.RecycleObjectPool;
 
 final class ArraySliceByteBuf extends AbstractByteBuf {
@@ -128,6 +129,16 @@ final class ArraySliceByteBuf extends AbstractByteBuf {
     }
 
     @Override
+    public String getString(int offset, int len, Charset charset) {
+        if (this.target == null || len <= 0 || offset < 0 || offset > this.readableBytes() - len) {
+            return super.getString(offset, len, charset);
+        }
+
+        checkFree();
+        return ByteBufUtils.decodeString(this.target, this.startOffset + this.readerIndex + offset, len, charset);
+    }
+
+    @Override
     public int expect(byte expected, int maxScanBytes) {
         checkFree();
 
@@ -140,11 +151,8 @@ final class ArraySliceByteBuf extends AbstractByteBuf {
         int end = start + scanLength;
         byte[] array = this.target;
         if (array != null) {
-            for (int i = start; i < end; i++) {
-                if (array[i] == expected) {
-                    return i - start;
-                }
-            }
+            int index = ByteBufUtils.indexOf(array, start, end, expected);
+            return index < 0 ? -1 : index - start;
         } else {
             ByteBuf source = this.source;
             for (int i = start; i < end; i++) {

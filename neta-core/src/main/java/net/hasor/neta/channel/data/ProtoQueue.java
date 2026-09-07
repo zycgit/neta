@@ -107,6 +107,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
 
     private final int                                   capacity;
     private final List<T>                               linkedList;
+    private       ProtoQueueSndSubQueue<T>              singleSubQueue;
     private       Map<String, ProtoQueueSndSubQueue<T>> subQueueMap;
     private       int                                   totalOwned;
 
@@ -328,6 +329,10 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     public void clearAndRelease() {
         this.linkedList.forEach(SoUtils::release);
         this.linkedList.clear();
+        if (this.singleSubQueue != null) {
+            this.singleSubQueue.discard();
+        }
+
         if (this.subQueueMap != null && !this.subQueueMap.isEmpty()) {
             for (ProtoQueueSndSubQueue<T> subQueue : new ArrayList<>(this.subQueueMap.values())) {
                 subQueue.discard();
@@ -403,12 +408,22 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
 
     @Override
     public List<String> queueNames() {
-        return this.subQueueMap == null ? Collections.emptyList() : new ArrayList<String>(this.subQueueMap.keySet());
+        if (this.subQueueMap != null) {
+            return new ArrayList<String>(this.subQueueMap.keySet());
+        }
+
+        if (this.singleSubQueue == null) {
+            return Collections.emptyList();
+        }
+
+        List<String> names = new ArrayList<>(1);
+        names.add(this.singleSubQueue.getKey());
+        return names;
     }
 
     @Override
     public boolean hasQueue(String key) {
-        return key != null && this.subQueueMap != null && this.subQueueMap.containsKey(key);
+        return key != null && this.findSubQueue(key) != null;
     }
 
     @Override
@@ -417,7 +432,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
             return;
         }
 
-        ProtoQueueSndSubQueue<T> subQueue = this.subQueueMap != null ? this.subQueueMap.get(key) : null;
+        ProtoQueueSndSubQueue<T> subQueue = this.findSubQueue(key);
         if (subQueue != null) {
             subQueue.discard();
         }
@@ -433,19 +448,19 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
             throw new IllegalArgumentException("queue view key is blank.");
         }
 
-        ProtoQueueSndSubQueue<T> subQueue = this.subQueueMap != null ? this.subQueueMap.get(key) : null;
+        ProtoQueueSndSubQueue<T> subQueue = this.findSubQueue(key);
         if (subQueue != null) {
             return subQueue;
         }
 
         ProtoQueueSndSubQueue<T> created = new ProtoQueueSndSubQueue<>(this, key);
-        this.subQueueMap().put(key, created);
+        this.attachSubQueue(key, created);
         return created;
     }
 
     public ProtoSndQueueView<T> subQueue(String key) {
         String fixedKey = this.requireKey(key);
-        ProtoQueueSndSubQueue<T> subQueue = this.subQueueMap != null ? this.subQueueMap.get(fixedKey) : null;
+        ProtoQueueSndSubQueue<T> subQueue = this.findSubQueue(fixedKey);
         if (subQueue != null) {
             return subQueue;
         }
@@ -464,6 +479,10 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
 
     int totalOwnedSize() {
         int total = this.linkedList.size();
+        if (this.singleSubQueue != null) {
+            total += this.singleSubQueue.localSize();
+        }
+
         if (this.subQueueMap != null) {
             for (ProtoQueueSndSubQueue<T> subQueue : this.subQueueMap.values()) {
                 total += subQueue.localSize();
@@ -523,6 +542,12 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
         if (key == null || subQueue == null) {
             return;
         }
+
+        if (this.singleSubQueue == subQueue && key.equals(subQueue.getKey())) {
+            this.singleSubQueue = null;
+            return;
+        }
+
         ProtoQueueSndSubQueue<T> current = this.subQueueMap != null ? this.subQueueMap.get(key) : null;
         if (current == subQueue) {
             this.subQueueMap.remove(key);
@@ -538,14 +563,30 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
 
     ProtoQueueSndSubQueue<T> attachedSubQueue(String key) {
         String fixedKey = this.requireKey(key);
-        return this.subQueueMap != null ? this.subQueueMap.get(fixedKey) : null;
+        return this.findSubQueue(fixedKey);
     }
 
-    private Map<String, ProtoQueueSndSubQueue<T>> subQueueMap() {
-        if (this.subQueueMap == null) {
-            this.subQueueMap = new LinkedHashMap<>();
+    private ProtoQueueSndSubQueue<T> findSubQueue(String key) {
+        ProtoQueueSndSubQueue<T> single = this.singleSubQueue;
+        if (single != null && single.getKey().equals(key)) {
+            return single;
         }
-        return this.subQueueMap;
+
+        return this.subQueueMap != null ? this.subQueueMap.get(key) : null;
+    }
+
+    private void attachSubQueue(String key, ProtoQueueSndSubQueue<T> subQueue) {
+        if (this.subQueueMap != null) {
+            this.subQueueMap.put(key, subQueue);
+        } else if (this.singleSubQueue == null) {
+            this.singleSubQueue = subQueue;
+        } else {
+            // Keep the common single-view case inline; multiple views retain insertion order.
+            this.subQueueMap = new LinkedHashMap<>();
+            this.subQueueMap.put(this.singleSubQueue.getKey(), this.singleSubQueue);
+            this.subQueueMap.put(key, subQueue);
+            this.singleSubQueue = null;
+        }
     }
 
     /**

@@ -17,6 +17,7 @@ package net.hasor.neta.bytebuf;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import net.hasor.cobble.ref.RecycleObjectPool;
+
 /**
  * Fixed-size {@link ByteBuf} view over an existing {@link ByteBuffer}.
  * <p>
@@ -30,7 +31,7 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  *   +---------------------------------------------------+
  *   | 0 | 1 | 2 | ... | capacity - 1 |
  *   +---------------------------------------------------+
- * 
+ *
  * logical layout on top of the ByteBuffer
  *   0      markedReaderIndex   readerIndex   markedWriterIndex   writerIndex   capacity
  *   |-------------|---------------|------------------|---------------|
@@ -42,7 +43,7 @@ import net.hasor.cobble.ref.RecycleObjectPool;
 class WrapByteBuffer extends AbstractByteBuf {
     static final RecycleObjectPool.Recycler<WrapByteBuffer> RECYCLER = RecycleObjectPool.recycler(//
             WrapByteBuffer::new, WrapByteBuffer::resetState, WrapByteBuffer::onRecycle);
-    protected ByteBuffer                                target;
+    protected    ByteBuffer                                 target;
 
     private WrapByteBuffer() {
     }
@@ -54,7 +55,8 @@ class WrapByteBuffer extends AbstractByteBuf {
     private void onRecycle() {
         ByteBuffer buf = this.target;
         this.target = null;
-        if (buf != null) {
+        // Read-only NIO views cannot back writable allocations or be cleaned independently.
+        if (buf != null && !buf.isReadOnly()) {
             if (buf.isDirect()) {
                 if (!SmallBufferCache.freeDirect(buf) && ByteBufUtils.CLEANER != null) {
                     ByteBufUtils.CLEANER.freeDirectBuffer(buf);

@@ -16,13 +16,95 @@
 package net.hasor.neta.channel.data;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import net.hasor.cobble.function.Release;
 import org.junit.Test;
+import static org.junit.Assert.*;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
 public class ProtoQueueTest {
+    @Test
+    public void singleViewPreservesSharedCapacityAndLazyReattachment() {
+        ProtoQueue<Integer> queue = new ProtoQueue<>(3);
+        ProtoSndQueueView<Integer> lazy = queue.subQueue("stage");
+        assertTrue(queue.queueNames().isEmpty());
+        assertTrue(queue.offerMessage(Arrays.asList(1, 2, 3)));
+        queue.drainToQueue(new String("stage"), 2);
+        ProtoRcvQueueView<Integer> first = queue.queueView("stage");
+        assertEquals(0, queue.slotSize());
+        assertEquals(0, lazy.slotSize());
+        List<String> names = queue.queueNames();
+        names.clear();
+        assertTrue(queue.hasQueue("stage"));
+        assertEquals(Integer.valueOf(1), first.takeMessage());
+        assertEquals(1, queue.slotSize());
+        assertTrue(lazy.offerMessage(4));
+        assertEquals(0, queue.slotSize());
+        first.returnToHead();
+        assertFalse(queue.hasQueue("stage"));
+        assertEquals(Arrays.asList(2, 4, 3), queue.takeMessage(-1));
+        assertEquals(3, queue.slotSize());
+        assertTrue(lazy.offerMessage(5));
+        assertNotSame(first, queue.queueView("stage"));
+        first.discard();
+        assertEquals(Integer.valueOf(5), queue.queueView("stage").takeMessage());
+        assertEquals(3, queue.slotSize());
+        assertTrue(queue.queueNames().isEmpty());
+    }
+
+    @Test
+    public void multipleViewsPreserveIdentityAndInsertionOrder() {
+        ProtoQueue<Integer> queue = new ProtoQueue<>(4);
+        assertTrue(queue.offerMessage(Arrays.asList(1, 2, 3, 4)));
+        queue.drainToQueue(" a ", 2);
+        ProtoRcvQueueView<Integer> first = queue.queueView(" a ");
+        queue.drainToQueue("b", 1);
+        assertSame(first, queue.queueView(new String(" a ")));
+        assertEquals(Arrays.asList(" a ", "b"), queue.queueNames());
+        assertFalse(queue.hasQueue("a"));
+        assertEquals(0, queue.slotSize());
+        assertEquals(Arrays.asList(1, 2), first.takeMessage(-1));
+        queue.drainToQueue(" a ", 1);
+        assertEquals(Arrays.asList("b", " a "), queue.queueNames());
+        first.discard();
+        assertEquals(Integer.valueOf(4), queue.queueView(" a ").peekMessage());
+        queue.queueView("b").returnToTail();
+        assertEquals(Integer.valueOf(3), queue.takeMessage());
+        assertEquals(Integer.valueOf(4), queue.queueView(" a ").takeMessage());
+        assertTrue(queue.queueNames().isEmpty());
+        assertEquals(4, queue.slotSize());
+    }
+
+    @Test
+    public void clearReleasesSingleAndMultipleViewsExactlyOnce() {
+        for (boolean multiple : new boolean[] { false, true }) {
+            ProtoQueue<Release> queue = new ProtoQueue<>(5);
+            AtomicInteger releases = new AtomicInteger();
+            for (int i = 0; i < 5; i++) {
+                assertTrue(queue.offerMessage((Release) releases::incrementAndGet));
+            }
+            queue.drainToQueue("first", 2);
+            ProtoRcvQueueView<Release> stale = queue.queueView("first");
+            if (multiple) {
+                queue.drainToQueue("second", 2);
+            }
+            queue.clearAndRelease();
+            assertEquals(5, releases.get());
+            assertEquals(5, queue.slotSize());
+            assertTrue(queue.queueNames().isEmpty());
+            assertTrue(queue.subQueue("first").offerMessage((Release) releases::incrementAndGet));
+            stale.discard();
+            assertEquals(5, releases.get());
+            queue.clearAndRelease();
+            queue.clearAndRelease();
+            assertEquals(6, releases.get());
+            assertEquals(5, queue.slotSize());
+        }
+    }
+
     @Test
     public void offerTest01() {
         ProtoQueue<Object> queue = new ProtoQueue<>(10);

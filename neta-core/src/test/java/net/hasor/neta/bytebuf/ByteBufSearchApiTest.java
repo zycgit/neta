@@ -15,16 +15,93 @@
  */
 package net.hasor.neta.bytebuf;
 
+import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import net.hasor.neta.channel.data.ProtoQueue;
+import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
-import java.nio.charset.StandardCharsets;
-
-import org.junit.Test;
-
-import net.hasor.neta.channel.data.ProtoQueue;
-
 public class ByteBufSearchApiTest {
+    @Test
+    public void testArrayExpectAllByteValuesAlignmentsAndLimits() {
+        for (int value = 0; value < 256; value++) {
+            byte expected = (byte) value;
+            byte other = (byte) (value ^ 1);
+            for (int prefix = 1; prefix <= 16; prefix++) {
+                byte[] data = new byte[prefix + 64];
+                Arrays.fill(data, other);
+                data[0] = expected;
+                byte[] wrappedData = data.clone();
+                byte[] sliceData = data.clone();
+                ByteBuf wrapped = ByteBuf.wrap(wrappedData);
+                ByteBuf growing = ByteBufUtils.UNPOOLED_HEAP_ALLOCATOR.heapBuffer(2, data.length);
+                growing.writeBytes(data);
+                growing.markWriter();
+                ByteBuf parent = ByteBuf.wrap(sliceData);
+                ByteBuf slice = parent.slice(1, data.length - 1);
+                parent.release();
+                wrapped.skipReadableBytes(prefix);
+                growing.skipReadableBytes(prefix);
+                slice.skipReadableBytes(prefix - 1);
+                ByteBuf[] buffers = { wrapped, growing, slice };
+                byte[][] arrays = { wrappedData, ((AutoArrayByteBuf) growing).target, sliceData };
+                for (int variant = 0; variant < buffers.length; variant++) {
+                    ByteBuf buffer = buffers[variant];
+                    byte[] array = arrays[variant];
+                    try {
+                        buffer.order((value & 1) == 0 ? ByteOrder.BIG_ENDIAN : ByteOrder.LITTLE_ENDIAN);
+                        int reader = buffer.readerIndex();
+                        int writer = buffer.writerIndex();
+                        assertEquals(-1, buffer.expect(expected, Integer.MAX_VALUE));
+                        for (int position = 0; position < 64; position++) {
+                            array[prefix + position] = expected;
+                            assertEquals(position, buffer.expect(expected, Integer.MAX_VALUE));
+                            assertEquals(-1, buffer.expect(expected, position));
+                            assertEquals(position, buffer.expect(expected, position + 1));
+                            if (position < 63) {
+                                array[prefix + position + 1] = expected;
+                                assertEquals(position, buffer.expect(expected, 64));
+                                array[prefix + position + 1] = other;
+                            }
+                            array[prefix + position] = other;
+                        }
+                        assertEquals(reader, buffer.readerIndex());
+                        assertEquals(writer, buffer.writerIndex());
+                    } finally {
+                        buffer.release();
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testArrayExpectRespectsReadableRangeAndScanLimit() {
+        byte[] data = { 0x55, 0x66, (byte) 0x80, 0x11, (byte) 0x80 };
+        ByteBuf growing = ByteBufAllocator.DEFAULT.heapBuffer(2, 32);
+        growing.writeBytes(data);
+        growing.markWriter();
+        for (ByteBuf buffer : new ByteBuf[] { ByteBuf.wrap(data), growing }) {
+            try {
+                buffer.skipReadableBytes(2);
+                assertEquals(-1, buffer.expect((byte) 0x80, 0));
+                assertEquals(-1, buffer.expect((byte) 0x80, -1));
+                assertEquals(0, buffer.expect((byte) 0x80, 1));
+                assertEquals(-1, buffer.expect((byte) 0x11, 1));
+                assertEquals(1, buffer.expect((byte) 0x11, 2));
+                assertEquals(-1, buffer.expect((byte) 0x55, Integer.MAX_VALUE));
+                assertEquals(2, buffer.readerIndex());
+                assertEquals(5, buffer.writerIndex());
+                buffer.skipReadableBytes(3);
+                assertEquals(-1, buffer.expect((byte) 0, Integer.MAX_VALUE));
+            } finally {
+                buffer.release();
+            }
+        }
+    }
+
     @Test
     public void testExpectBinaryAcrossQueueBuffer() {
         ProtoQueue<ByteBuf> queue = new ProtoQueue<>(-1);

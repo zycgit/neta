@@ -5,13 +5,30 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
-
-import org.junit.Test;
-
 import net.hasor.cobble.RandomUtils;
 import net.hasor.cobble.codec.MD5;
+import org.junit.Test;
 
 public class WrapByteBufferTest {
+    @Test
+    public void readOnlyDirectViewDoesNotEnterWritableCache() {
+        ByteBuffer original = ByteBuffer.allocateDirect(64);
+        ByteBuffer view = original.asReadOnlyBuffer();
+        assert !SmallBufferCache.freeDirect(view);
+        ByteBuf wrapped = ByteBuf.wrap(view);
+        wrapped.free();
+        ByteBuf allocated = ByteBufAllocator.DEFAULT.directBuffer(64);
+        try {
+            allocated.writeByte((byte) 42);
+            allocated.markWriter();
+            assert allocated.readByte() == 42;
+            original.put(0, (byte) 7);
+            assert original.get(0) == 7;
+        } finally {
+            allocated.free();
+        }
+    }
+
     @Test
     public void basicTest01() {
         ByteBuf byteBuf1 = ByteBuf.wrap(ByteBuffer.allocate(111));

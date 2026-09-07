@@ -17,15 +17,72 @@ package net.hasor.neta.bytebuf;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-
-import org.junit.Test;
-
 import net.hasor.neta.channel.data.ProtoQueue;
+import org.junit.Test;
 
 /**
  * Comprehensive tests for {@link QueueByteBuf}.
  */
 public class QueueByteBufTest {
+
+    @Test
+    public void test_search_respects_component_boundaries_and_reader_offsets() {
+        byte[] data = "a\nbc\nd\nef\ng".getBytes(StandardCharsets.US_ASCII);
+        for (int mode = 0; mode < 3; mode++) {
+            for (int split = 1; split < data.length; split++) {
+                ProtoQueue<ByteBuf> queue = newQueue();
+                for (int part = 0; part < 2; part++) {
+                    int from = part == 0 ? 0 : split;
+                    int length = part == 0 ? split : data.length - split;
+                    ByteBuf input;
+                    if (mode == 0) {
+                        byte[] padded = new byte[length + 2];
+                        System.arraycopy(data, from, padded, 2, length);
+                        input = ByteBuf.wrap(padded);
+                    } else {
+                        ByteBuffer buffer = mode == 1 ? ByteBuffer.allocate(length + 2) : ByteBuffer.allocateDirect(length + 2);
+                        buffer.position(2);
+                        buffer.put(data, from, length).flip();
+                        input = ByteBuf.wrap(buffer.asReadOnlyBuffer());
+                    }
+                    input.skipReadableBytes(2);
+                    queue.offerMessage(input);
+                    queue.offerMessage(ByteBuf.EMPTY);
+                }
+                QueueByteBuf buffer = new QueueByteBuf(queue);
+                try {
+                    for (int start = 0; start <= data.length; start++) {
+                        for (int limit = -1; limit <= data.length + 1; limit++) {
+                            int first = -1;
+                            int last = -1;
+                            for (int i = start; i < Math.min(data.length, start + Math.max(0, limit)); i++) {
+                                if (data[i] == '\n') {
+                                    if (first < 0) {
+                                        first = i - start;
+                                    }
+                                    last = i - start;
+                                }
+                            }
+                            org.junit.Assert.assertEquals(first, buffer.expect((byte) '\n', limit));
+                            org.junit.Assert.assertEquals(last, buffer.expectLast((byte) '\n', limit));
+                            org.junit.Assert.assertEquals(start, buffer.readerIndex());
+                        }
+                        if (start < data.length) {
+                            buffer.skipReadableBytes(1);
+                        }
+                    }
+                    buffer.markReader();
+                    offer(queue, "x\ny");
+                    buffer.refresh();
+                    org.junit.Assert.assertEquals(1, buffer.expect((byte) '\n', 3));
+                    org.junit.Assert.assertEquals(1, buffer.expectLast((byte) '\n', 3));
+                } finally {
+                    buffer.free();
+                    queue.clearAndRelease();
+                }
+            }
+        }
+    }
 
     // ---- Helper ----
 
