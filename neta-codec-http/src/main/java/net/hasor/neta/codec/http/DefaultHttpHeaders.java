@@ -29,7 +29,7 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
      * Create an empty header block.
      */
     public DefaultHttpHeaders() {
-        this(4);
+        this(8);
     }
 
     DefaultHttpHeaders(int initialCapacity) {

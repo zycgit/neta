@@ -17,6 +17,7 @@ package net.hasor.neta.codec.http.websocket;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.nio.ByteOrder;
+import java.util.function.Consumer;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
@@ -56,23 +57,26 @@ import net.hasor.neta.codec.http.HttpObject;
  * @version : 2026-02-18
  */
 public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocketFrame> {
-    private static final Logger              logger                  = Logger.getLogger(WebSocketFrameDecoder.class);
-    private static final int                 XOR_SCRATCH_SIZE        = 4096;
-    private static final int                 MAX_CUMULATION_PREALLOC = 64 * 1024;
-    private static final byte                MASK_RULE_UNKNOWN       = 0;
-    private static final byte                MASK_RULE_REQUIRE       = 1;
-    private static final byte                MASK_RULE_REJECT        = 2;
-    private static final VarHandle           MASK_INT_BE             = MethodHandles.byteArrayViewVarHandle(int[].class, ByteOrder.BIG_ENDIAN);
-    private final        byte[]              maskKeyBuf              = new byte[4];
-    private final        byte[]              headerBuf               = new byte[14]; // 2 base + 8 ext-len + 4 mask-key
-    private final        byte[]              xorScratch              = new byte[XOR_SCRATCH_SIZE];
-    private final        WebSocketVersion    defaultVersion;
-    private final        boolean             detectVersion;
-    private final        int                 maxPayloadChunkLength;
-    private              ByteBuf             accumulator;
-    private              Rfc6455PayloadState streamingState;
-    private              byte                inboundMaskRule;
-    private              long                currentStreamId;
+    private static final Logger               logger                  = Logger.getLogger(WebSocketFrameDecoder.class);
+    private static final int                  XOR_SCRATCH_SIZE        = 4096;
+    private static final int                  MAX_CUMULATION_PREALLOC = 64 * 1024;
+    private static final byte                 MASK_RULE_UNKNOWN       = 0;
+    private static final byte                 MASK_RULE_REQUIRE       = 1;
+    private static final byte                 MASK_RULE_REJECT        = 2;
+    private static final VarHandle            MASK_INT_BE             = MethodHandles.byteArrayViewVarHandle(int[].class, ByteOrder.BIG_ENDIAN);
+    private final        byte[]               maskKeyBuf              = new byte[4];
+    private final        byte[]               headerBuf               = new byte[14]; // 2 base + 8 ext-len + 4 mask-key
+    private final        byte[]               xorScratch              = new byte[XOR_SCRATCH_SIZE];
+    private final        Consumer<HttpObject> inboundBatchSizer       = this::addInboundBatchCapacity;
+    private final        WebSocketVersion     defaultVersion;
+    private final        boolean              detectVersion;
+    private final        int                  maxPayloadChunkLength;
+    private              ByteBuf              accumulator;
+    private              Rfc6455PayloadState  streamingState;
+    private              byte                 inboundMaskRule;
+    private              long                 currentStreamId;
+    private              int                  inboundBatchCapacity;
+    private              boolean              inboundBatchValid;
 
     /**
      * Streaming state used when a large RFC 6455 payload is emitted as multiple
@@ -196,39 +200,77 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<WebSocketFrame> dst) throws Throwable {
         WebSocketVersion version = resolveVersion(context);
-
-        if (this.accumulator == null && this.streamingState == null) {
-            ByteBuf directPayload;
-            while ((directPayload = this.takeCompleteSinglePayload(src, version)) != null) {
-                this.accumulator = directPayload;
-                try {
-                    this.decodeAvailable(context, dst, version);
-                } finally {
-                    this.accumulator.release();
-                    this.accumulator = null;
+        ByteBuf inboundBatch = this.newInboundBatch(context, src, version);
+        try {
+            while (this.accumulator == null && this.streamingState == null && src != null && src.hasMore()) {
+                this.accumulator = this.takeInboundPayload(src);
+                if (this.accumulator == null) {
+                    continue;
                 }
-            }
-        }
 
-        this.appendInboundPayload(context, src, version);
-        if (this.accumulator != null && this.accumulator.readableBytes() > 0) {
-            try {
-                this.decodeAvailable(context, dst, version);
-            } finally {
+                this.decodeAvailable(context, dst, version, inboundBatch);
                 if (this.accumulator.readableBytes() == 0) {
                     this.accumulator.release();
                     this.accumulator = null;
+                } else {
+                    this.preallocateIncompleteFrame(context, version);
+                    break;
                 }
+                if (this.streamingState != null) {
+                    break;
+                }
+            }
+
+            boolean appended = this.appendInboundPayload(context, src, version);
+            if (appended && this.accumulator != null && this.accumulator.readableBytes() > 0) {
+                try {
+                    this.decodeAvailable(context, dst, version, inboundBatch);
+                } finally {
+                    if (this.accumulator.readableBytes() == 0) {
+                        this.accumulator.release();
+                        this.accumulator = null;
+                    }
+                }
+            }
+        } finally {
+            if (inboundBatch != null) {
+                inboundBatch.release();
             }
         }
 
         return ProtoStatus.Next;
     }
 
-    private void decodeAvailable(ProtoContext context, ProtoSndQueue<WebSocketFrame> dst, WebSocketVersion version) {
+    private void preallocateIncompleteFrame(ProtoContext context, WebSocketVersion version) {
+        if (!version.isRfc6455Framing() || this.streamingState != null || this.accumulator == null) {
+            return;
+        }
+
+        int readable = this.accumulator.readableBytes();
+        int expectedLength = expectedRfc6455FrameLength(this.accumulator);
+        if (expectedLength <= readable || expectedLength > MAX_CUMULATION_PREALLOC) {
+            return;
+        }
+
+        ByteBuf target = context.byteBufAllocator().buffer(expectedLength, expectedLength);
+        this.accumulator.readBuffer(target, readable);
+        target.markWriter();
+        this.accumulator.release();
+        this.accumulator = target;
+    }
+
+    private void decodeAvailable(ProtoContext context, ProtoSndQueue<WebSocketFrame> dst, WebSocketVersion version, ByteBuf inboundBatch) {
         if (version.isRfc6455Framing()) {
-            while (decodeRfc6455Frame(context, dst)) {
-                /* loop */
+            ByteBuf localBatch = inboundBatch == null ? this.newBatchPayload(context) : null;
+            ByteBuf batchPayload = inboundBatch != null ? inboundBatch : localBatch;
+            try {
+                while (decodeRfc6455Frame(context, dst, batchPayload)) {
+                    /* loop */
+                }
+            } finally {
+                if (localBatch != null) {
+                    localBatch.release();
+                }
             }
         } else {
             while (decodeHixie76Frame(context, dst)) {
@@ -237,18 +279,56 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         }
     }
 
-    private ByteBuf takeCompleteSinglePayload(ProtoRcvQueue<HttpObject> src, WebSocketVersion version) {
-        if (src == null || !src.hasMore()) {
+    private ByteBuf newInboundBatch(ProtoContext context, ProtoRcvQueue<HttpObject> src, WebSocketVersion version) {
+        if (!version.isRfc6455Framing() || src == null || src.queueSize() <= 1) {
             return null;
         }
 
-        HttpObject candidate = src.peekMessage();
-        if (candidate == null) {
+        this.inboundBatchCapacity = 0;
+        this.inboundBatchValid = true;
+        src.peekEachMessage(this.inboundBatchSizer);
+        int capacity = this.inboundBatchCapacity;
+        boolean valid = this.inboundBatchValid;
+        this.inboundBatchCapacity = 0;
+        this.inboundBatchValid = false;
+        if (!valid || capacity <= 0) {
             return null;
         }
-        ByteBuf content = rawContent(candidate);
-        boolean complete = version.isRfc6455Framing() ? isExactlyOneCompleteRfc6455Frame(content) : isExactlyOneCompleteHixieFrame(content);
-        if (!complete) {
+        return context.byteBufAllocator().buffer(capacity, capacity);
+    }
+
+    private void addInboundBatchCapacity(HttpObject object) {
+        if (!this.inboundBatchValid || object == null) {
+            return;
+        }
+
+        ByteBuf content = rawContent(object);
+        if (content == null) {
+            return;
+        }
+        int readable = content.readableBytes();
+        if (readable > MAX_CUMULATION_PREALLOC - this.inboundBatchCapacity) {
+            this.inboundBatchValid = false;
+            return;
+        }
+        this.inboundBatchCapacity += readable;
+    }
+
+    private ByteBuf newBatchPayload(ProtoContext context) {
+        if (this.streamingState != null || this.accumulator == null) {
+            return null;
+        }
+
+        int readable = this.accumulator.readableBytes();
+        int firstFrameLength = expectedRfc6455FrameLength(this.accumulator);
+        if (firstFrameLength <= 0 || firstFrameLength >= readable) {
+            return null;
+        }
+        return context.byteBufAllocator().buffer(readable, readable);
+    }
+
+    private ByteBuf takeInboundPayload(ProtoRcvQueue<HttpObject> src) {
+        if (src == null || !src.hasMore()) {
             return null;
         }
 
@@ -267,78 +347,6 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         return payload;
     }
 
-    private static boolean isExactlyOneCompleteRfc6455Frame(ByteBuf content) {
-        if (content == null) {
-            return false;
-        }
-        int readable = content.readableBytes();
-        if (readable < 2) {
-            return false;
-        }
-
-        int second = content.getByte(1) & 0xFF;
-        long payloadLength = second & 0x7F;
-        int headerLength = 2;
-        if (payloadLength == 126) {
-            if (readable < 4) {
-                return false;
-            }
-            payloadLength = ((content.getByte(2) & 0xFFL) << 8) | (content.getByte(3) & 0xFFL);
-            headerLength = 4;
-        } else if (payloadLength == 127) {
-            if (readable < 10 || (content.getByte(2) & 0x80) != 0) {
-                return false;
-            }
-            payloadLength = 0;
-            for (int i = 0; i < 8; i++) {
-                payloadLength = (payloadLength << 8) | (content.getByte(2 + i) & 0xFFL);
-            }
-            headerLength = 10;
-        }
-        if ((second & 0x80) != 0) {
-            headerLength += 4;
-        }
-        return payloadLength <= Integer.MAX_VALUE && headerLength + payloadLength == readable;
-    }
-
-    private static boolean isExactlyOneCompleteHixieFrame(ByteBuf content) {
-        if (content == null) {
-            return false;
-        }
-        int readable = content.readableBytes();
-        if (readable < 2) {
-            return false;
-        }
-
-        int frameType = content.getByte(0) & 0xFF;
-        if ((frameType & 0x80) == 0) {
-            for (int i = 1; i < readable; i++) {
-                if ((content.getByte(i) & 0xFF) == 0xFF) {
-                    return i == readable - 1;
-                }
-            }
-            return false;
-        }
-        if (frameType == 0xFF) {
-            return readable == 2 && content.getByte(1) == 0;
-        }
-
-        long payloadLength = 0L;
-        int lengthBytes = 0;
-        for (int i = 1; i < readable; i++) {
-            int value = content.getByte(i) & 0xFF;
-            if (payloadLength > (Integer.MAX_VALUE >>> 7)) {
-                return false;
-            }
-            payloadLength = (payloadLength << 7) | (value & 0x7F);
-            lengthBytes++;
-            if ((value & 0x80) == 0) {
-                return payloadLength <= Integer.MAX_VALUE && 1L + lengthBytes + payloadLength == readable;
-            }
-        }
-        return false;
-    }
-
     private static ByteBuf rawContent(HttpObject obj) {
         if (obj instanceof HttpByteBuf) {
             return ((HttpByteBuf) obj).content();
@@ -349,11 +357,12 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         throw new ClassCastException(obj.getClass().getName() + " cannot be cast to HttpByteBuf or HttpContent");
     }
 
-    private void appendInboundPayload(ProtoContext context, ProtoRcvQueue<HttpObject> src, WebSocketVersion version) {
+    private boolean appendInboundPayload(ProtoContext context, ProtoRcvQueue<HttpObject> src, WebSocketVersion version) {
         if (src == null) {
-            return;
+            return false;
         }
 
+        boolean appended = false;
         while (src.hasMore()) {
             HttpObject next = src.takeMessage();
             if (next == null) {
@@ -381,12 +390,14 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
 
             if (content != null && content.readableBytes() > 0) {
                 this.appendAccumulator(context, content, version);
+                appended = true;
                 continue;
             }
             if (content != null) {
                 content.release();
             }
         }
+        return appended;
     }
 
     private void appendAccumulator(ProtoContext context, ByteBuf content, WebSocketVersion version) {
@@ -486,7 +497,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
     // RFC 6455 framing (V7, V8, V13)
     // =========================================================================
 
-    private boolean decodeRfc6455Frame(ProtoContext context, ProtoSndQueue<WebSocketFrame> dst) {
+    private boolean decodeRfc6455Frame(ProtoContext context, ProtoSndQueue<WebSocketFrame> dst, ByteBuf batchPayload) {
         if (this.streamingState != null) {
             return emitRfc6455PayloadSlice(context, dst);
         }
@@ -496,9 +507,8 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
             return false;
         }
 
-        int peekLen = Math.min(readable, 14);
         byte[] hdr = this.headerBuf;
-        this.accumulator.getBytes(0, hdr, 0, peekLen);
+        this.accumulator.getBytes(0, hdr, 0, 2);
 
         byte byte0 = hdr[0];
         byte byte1 = hdr[1];
@@ -510,6 +520,10 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         int opcodeVal = byte0 & 0x0F;
         boolean masked = (byte1 & 0x80) != 0;
         long payloadLen = byte1 & 0x7F;
+        WebSocketOpcode opcode = WebSocketOpcode.of(opcodeVal);
+        if (opcode == null) {
+            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "unsupported WebSocket opcode: " + opcodeVal);
+        }
 
         this.validateMasking(context, masked);
 
@@ -519,12 +533,14 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
             if (readable < 4) {
                 return false;
             }
+            this.accumulator.getBytes(2, hdr, 2, 2);
             payloadLen = ((hdr[2] & 0xFF) << 8) | (hdr[3] & 0xFF);
             headerSize = 4;
         } else if (payloadLen == 127) {
             if (readable < 10) {
                 return false;
             }
+            this.accumulator.getBytes(2, hdr, 2, 8);
             if ((hdr[2] & 0x80) != 0) {
                 throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "most significant bit of 64-bit websocket payload length must be 0.");
             }
@@ -539,14 +555,14 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
             headerSize += 4;
         }
 
+        boolean dataOpcode = opcode != WebSocketOpcode.PING && opcode != WebSocketOpcode.PONG && opcode != WebSocketOpcode.CLOSE;
+        boolean streamPayload = dataOpcode && (payloadLen > this.maxPayloadChunkLength || payloadLen > Integer.MAX_VALUE);
         long totalNeededLong = headerSize + payloadLen;
-        if (totalNeededLong > Integer.MAX_VALUE) {
-            if (!shouldStreamPayload(opcodeVal, payloadLen)) {
-                throw new WebSocketProtocolViolationException(WebSocketCode.MESSAGE_TOO_BIG, "websocket frame exceeds supported max length: " + totalNeededLong);
-            }
+        if (totalNeededLong > Integer.MAX_VALUE && !streamPayload) {
+            throw new WebSocketProtocolViolationException(WebSocketCode.MESSAGE_TOO_BIG, "websocket frame exceeds supported max length: " + totalNeededLong);
         }
 
-        if (!shouldStreamPayload(opcodeVal, payloadLen)) {
+        if (!streamPayload) {
             int totalNeeded = (int) totalNeededLong;
             if (readable < totalNeeded) {
                 return false;
@@ -564,12 +580,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
             maskKey = this.maskKeyBuf;
         }
 
-        WebSocketOpcode opcode = WebSocketOpcode.of(opcodeVal);
-        if (opcode == null) {
-            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "unsupported WebSocket opcode: " + opcodeVal);
-        }
-
-        if (shouldStreamPayload(opcodeVal, payloadLen)) {
+        if (streamPayload) {
             this.streamingState = new Rfc6455PayloadState(opcode, fin, rsv1, rsv2, rsv3, masked, this.maskKeyBuf[0], this.maskKeyBuf[1], this.maskKeyBuf[2], this.maskKeyBuf[3], payloadLen);
             return emitRfc6455PayloadSlice(context, dst);
         }
@@ -579,8 +590,22 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
 
         if (len == 0) {
             contentBuf = ByteBuf.EMPTY;
+        } else if (masked && batchPayload != null) {
+            int contentOffset = batchPayload.readableBytes();
+            int remaining = len;
+            int payloadOffset = 0;
+            while (remaining > 0) {
+                int chunk = Math.min(remaining, this.xorScratch.length);
+                this.accumulator.readBytes(this.xorScratch, 0, chunk);
+                unmaskPayload(this.xorScratch, chunk, maskKey, payloadOffset);
+                batchPayload.writeBytes(this.xorScratch, 0, chunk);
+                remaining -= chunk;
+                payloadOffset += chunk;
+            }
+            batchPayload.markWriter();
+            contentBuf = batchPayload.slice(contentOffset, len);
         } else if (masked) {
-            contentBuf = context.byteBufAllocator().buffer(len, Integer.MAX_VALUE);
+            contentBuf = context.byteBufAllocator().buffer(len, len);
             boolean completed = false;
             try {
                 int remaining = len;
@@ -601,7 +626,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
                 }
             }
         } else {
-            contentBuf = context.byteBufAllocator().buffer(len, Integer.MAX_VALUE);
+            contentBuf = context.byteBufAllocator().buffer(len, len);
             this.accumulator.readBuffer(contentBuf, len);
             contentBuf.markWriter();
         }
@@ -653,19 +678,6 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         }
     }
 
-    private boolean shouldStreamPayload(int opcodeValue, long payloadLen) {
-        WebSocketOpcode opcode = WebSocketOpcode.of(opcodeValue);
-        if (opcode == null) {
-            return false;
-        }
-
-        if (opcode == WebSocketOpcode.PING || opcode == WebSocketOpcode.PONG || opcode == WebSocketOpcode.CLOSE) {
-            return false;
-        }
-
-        return payloadLen > this.maxPayloadChunkLength || payloadLen > Integer.MAX_VALUE;
-    }
-
     private boolean emitRfc6455PayloadSlice(ProtoContext context, ProtoSndQueue<WebSocketFrame> dst) {
         if (this.streamingState == null) {
             return false;
@@ -683,7 +695,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         if (chunkLength == 0) {
             contentBuf = ByteBuf.EMPTY;
         } else if (this.streamingState.masked) {
-            contentBuf = context.byteBufAllocator().buffer(chunkLength, Integer.MAX_VALUE);
+            contentBuf = context.byteBufAllocator().buffer(chunkLength, chunkLength);
             this.maskKeyBuf[0] = this.streamingState.maskKey0;
             this.maskKeyBuf[1] = this.streamingState.maskKey1;
             this.maskKeyBuf[2] = this.streamingState.maskKey2;
@@ -701,7 +713,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
             }
             contentBuf.markWriter();
         } else {
-            contentBuf = context.byteBufAllocator().buffer(chunkLength, Integer.MAX_VALUE);
+            contentBuf = context.byteBufAllocator().buffer(chunkLength, chunkLength);
             this.accumulator.readBuffer(contentBuf, chunkLength);
             contentBuf.markWriter();
         }
@@ -804,7 +816,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
             if (len == 0) {
                 contentBuf = ByteBuf.EMPTY;
             } else {
-                contentBuf = context.byteBufAllocator().buffer(len, Integer.MAX_VALUE);
+                contentBuf = context.byteBufAllocator().buffer(len, len);
                 this.accumulator.readBuffer(contentBuf, len);
                 contentBuf.markWriter();
             }

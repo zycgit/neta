@@ -30,6 +30,7 @@ import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.cookie.Cookie;
 import net.hasor.neta.codec.http.cookie.CookieDecoder;
 import net.hasor.neta.codec.http.cookie.CookieEncoder;
+
 /**
  * Factory and validation helpers shared across the websocket codec pipeline.
  * <p>
@@ -431,7 +432,8 @@ public final class WebSocketUtils {
         }
 
         for (int i = 0; i < spaces; i++) {
-            builder.insert(randomInsertIndex(builder.length()), ' ');
+            // These spaces are significant and must survive header-value trimming.
+            builder.insert(RandomUtils.nextInt(1, builder.length() - 1), ' ');
         }
 
         return builder.toString();

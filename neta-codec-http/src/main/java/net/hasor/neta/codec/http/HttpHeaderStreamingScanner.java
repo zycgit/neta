@@ -1,195 +1,168 @@
 package net.hasor.neta.codec.http;
 
+import java.util.Arrays;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 
 final class HttpHeaderStreamingScanner {
-    interface HeaderLineConsumer {
-        boolean onHeaderLine(ByteBuf line, int nameStart, int nameLength, int valueStart, int valueLength);
-    }
-
-    private static final class ScanCursor {
-        private int     skipCount;
-        private boolean completed;
-        private boolean stop;
+    interface HeaderLineConsumer<S extends HttpContext.DecodeState<?>> {
+        // Returning true takes one reference; offsets may address a shared input slice.
+        boolean onHeaderLine(S state, ByteBuf line, int nameStart, int nameLength, int valueStart, int valueLength);
     }
 
     private HttpHeaderStreamingScanner() {
     }
 
-    static boolean scan(ProtoRcvQueue<ByteBuf> src, HttpContext.DecodeState<?> decodeState, int maxHeaderSize, HeaderLineConsumer consumer) {
-        if (!src.hasMore()) {
-            return false;
-        }
-
-        ScanCursor cursor = new ScanCursor();
-        src.peekEachMessage(buffer -> {
-            if (cursor.stop) {
-                return;
-            }
+    static <S extends HttpContext.DecodeState<?>> boolean scan(ProtoRcvQueue<ByteBuf> src, S decodeState, int maxHeaderSize, HeaderLineConsumer<S> consumer) {
+        while (src.hasMore()) {
+            ByteBuf buffer = src.peekMessage();
             if (buffer == null) {
-                cursor.skipCount++;
-                return;
+                src.skipMessage(1);
+                continue;
             }
 
-            int startReader = buffer.readerIndex();
-            int scanIndex = startReader;
-            int limit = startReader + buffer.readableBytes();
-            while (scanIndex < limit) {
-                if (buffer.getUInt8(scanIndex - startReader) != '\n') {
-                    scanIndex++;
-                    continue;
-                }
-
-                boolean releaseLine = true;
-                int relativeEnd = scanIndex - startReader;
-                boolean chunkEndsWithCarriageReturn = relativeEnd > 0 && buffer.getUInt8(relativeEnd - 1) == '\r';
-                boolean lineHasCarriageReturn = chunkEndsWithCarriageReturn || scratchEndsWithCarriageReturn(decodeState);
-                ByteBuf line;
-                if (decodeState.headerLineScratch != null && decodeState.headerLineScratch.writerIndex() > 0) {
-                    if (relativeEnd > 0) {
-                        int appendLength = chunkEndsWithCarriageReturn ? relativeEnd - 1 : relativeEnd;
-                        appendScratch(decodeState, buffer, 0, appendLength, maxHeaderSize);
+            ByteBuf chunkView = null;
+            int chunkReaderIndex = 0;
+            try {
+                while (buffer.readableBytes() > 0) {
+                    int relativeEnd = buffer.expect((byte) '\n', buffer.readableBytes());
+                    if (relativeEnd < 0) {
+                        int remaining = buffer.readableBytes();
+                        appendScratch(decodeState, buffer, 0, remaining, maxHeaderSize);
+                        buffer.skipReadableBytes(remaining);
+                        break;
                     }
-                    line = detachScratch(decodeState);
-                } else {
+
+                    boolean partialLine = decodeState.headerLineLength > 0;
+                    boolean chunkEndsWithCarriageReturn = relativeEnd > 0 && buffer.getByte(relativeEnd - 1) == '\r';
+                    boolean lineHasCarriageReturn = chunkEndsWithCarriageReturn || scratchEndsWithCarriageReturn(decodeState);
+                    ByteBuf line = buffer;
                     int lineLength = chunkEndsWithCarriageReturn ? relativeEnd - 1 : relativeEnd;
-                    line = buffer.slice(0, lineLength);
-                }
-
-                try {
-                    int lineLength = line.readableBytes();
-                    decodeState.headerBytes += lineLength + (lineHasCarriageReturn ? 2 : 1);
-                    if (decodeState.headerBytes > maxHeaderSize) {
-                        throw new HttpHeaderTooLargeException("HTTP headers too large: " + decodeState.headerBytes + " > " + maxHeaderSize, maxHeaderSize, decodeState.headerBytes);
-                    }
-
-                    if (lineLength == 0) {
-                        cursor.completed = true;
-                        cursor.stop = true;
-                        buffer.skipReadableBytes(relativeEnd + 1);
-                        if (buffer.readableBytes() == 0) {
-                            cursor.skipCount++;
+                    if (partialLine) {
+                        if (relativeEnd > 0) {
+                            appendScratch(decodeState, buffer, 0, lineLength, maxHeaderSize);
                         }
-                        return;
+                        line = detachScratch(decodeState);
+                        lineLength = line.readableBytes();
                     }
 
-                    int colonIdx = line.expect((byte) ':', lineLength);
-                    if (colonIdx < 0) {
-                        throw new HttpBadRequestException("invalid header line (no colon)");
-                    }
+                    boolean releaseLine = partialLine;
+                    try {
+                        decodeState.headerBytes += lineLength + (lineHasCarriageReturn ? 2 : 1);
+                        if (decodeState.headerBytes > maxHeaderSize) {
+                            throw new HttpHeaderTooLargeException("HTTP headers too large: " + decodeState.headerBytes + " > " + maxHeaderSize, maxHeaderSize, decodeState.headerBytes);
+                        }
 
-                    int nameStart = 0;
-                    int nameEnd = colonIdx;
-                    while (nameStart < nameEnd && isHorizontalWhitespace(line.getUInt8(nameStart))) {
-                        nameStart++;
-                    }
-                    while (nameEnd > nameStart && isHorizontalWhitespace(line.getUInt8(nameEnd - 1))) {
-                        nameEnd--;
-                    }
-                    if (nameStart >= nameEnd) {
-                        throw new HttpBadRequestException("empty header name");
-                    }
+                        if (lineLength == 0) {
+                            buffer.skipReadableBytes(relativeEnd + 1);
+                            if (buffer.readableBytes() == 0) {
+                                src.skipMessage(1);
+                            }
+                            return true;
+                        }
 
-                    int valueStart = colonIdx + 1;
-                    while (valueStart < lineLength && isHorizontalWhitespace(line.getUInt8(valueStart))) {
-                        valueStart++;
-                    }
-                    int valueEnd = lineLength;
-                    while (valueEnd > valueStart && isHorizontalWhitespace(line.getUInt8(valueEnd - 1))) {
-                        valueEnd--;
-                    }
+                        int colonIdx = line.expect((byte) ':', lineLength);
+                        if (colonIdx < 0) {
+                            throw new HttpBadRequestException("invalid header line (no colon)");
+                        }
 
-                    int nameLength = nameEnd - nameStart;
-                    int valueLength = valueEnd - valueStart;
-                    releaseLine = !consumer.onHeaderLine(line, nameStart, nameLength, valueStart, valueLength);
+                        int nameStart = 0;
+                        int nameEnd = colonIdx;
+                        while (nameStart < nameEnd && isHorizontalWhitespace(line.getByte(nameStart))) {
+                            nameStart++;
+                        }
+                        while (nameEnd > nameStart && isHorizontalWhitespace(line.getByte(nameEnd - 1))) {
+                            nameEnd--;
+                        }
+                        if (nameStart >= nameEnd) {
+                            throw new HttpBadRequestException("empty header name");
+                        }
 
-                    buffer.skipReadableBytes(relativeEnd + 1);
-                    startReader = buffer.readerIndex();
-                    scanIndex = startReader;
-                    limit = startReader + buffer.readableBytes();
-                    if (buffer.readableBytes() == 0) {
-                        cursor.skipCount++;
-                        return;
-                    }
-                } finally {
-                    if (releaseLine) {
-                        line.free();
+                        int valueStart = colonIdx + 1;
+                        while (valueStart < lineLength && isHorizontalWhitespace(line.getByte(valueStart))) {
+                            valueStart++;
+                        }
+                        int valueEnd = lineLength;
+                        while (valueEnd > valueStart && isHorizontalWhitespace(line.getByte(valueEnd - 1))) {
+                            valueEnd--;
+                        }
+
+                        int nameLength = nameEnd - nameStart;
+                        int valueLength = valueEnd - valueStart;
+                        if (!partialLine) {
+                            // Entries share stable indices, but each owns a separate reference.
+                            if (chunkView == null) {
+                                chunkView = buffer.slice(0, buffer.readableBytes());
+                                chunkReaderIndex = buffer.readerIndex();
+                            }
+                            int offset = buffer.readerIndex() - chunkReaderIndex;
+                            nameStart += offset;
+                            valueStart += offset;
+                            int nextLine = relativeEnd + 1;
+                            int remaining = buffer.readableBytes() - nextLine;
+                            if (remaining == 0 || buffer.getByte(nextLine) == '\n' || remaining > 1 && buffer.getByte(nextLine) == '\r' && buffer.getByte(nextLine + 1) == '\n') {
+                                // The scanner is done with this view; transfer its reference to the final entry.
+                                line = chunkView;
+                                chunkView = null;
+                            } else {
+                                line = chunkView.retain();
+                            }
+                            releaseLine = true;
+                        }
+                        releaseLine = !consumer.onHeaderLine(decodeState, line, nameStart, nameLength, valueStart, valueLength);
+                        buffer.skipReadableBytes(relativeEnd + 1);
+                    } finally {
+                        if (releaseLine) {
+                            line.free();
+                        }
                     }
                 }
+            } finally {
+                if (chunkView != null) {
+                    chunkView.free();
+                }
             }
-
-            if (buffer.readableBytes() > 0) {
-                int remaining = buffer.readableBytes();
-                appendScratch(decodeState, buffer, 0, remaining, maxHeaderSize);
-                buffer.skipReadableBytes(remaining);
-                cursor.skipCount++;
-            }
-        });
-
-        if (cursor.skipCount > 0) {
-            src.skipMessage(cursor.skipCount);
+            src.skipMessage(1);
         }
-        return cursor.completed;
+        return false;
     }
 
     private static void appendScratch(HttpContext.DecodeState<?> decodeState, ByteBuf source, int offset, int length, int maxHeaderSize) {
         if (length <= 0) {
             return;
         }
-        ByteBuf scratch = decodeState.headerLineScratch;
-        int maxCapacity = Math.max(maxHeaderSize + 2, length);
-        int nextLength = (scratch == null || scratch.isFree()) ? length : scratch.readableBytes() + length;
+        int currentLength = decodeState.headerLineLength;
+        int nextLength = currentLength + length;
+        int maxCapacity = (int) Math.min((long) maxHeaderSize + 2, Integer.MAX_VALUE);
         if (nextLength > maxCapacity) {
             throw new HttpHeaderTooLargeException("HTTP headers too large: " + nextLength + " > " + maxHeaderSize, maxHeaderSize, nextLength);
         }
-        if (scratch == null || scratch.isFree()) {
-            int initialCapacity = Math.max(64, length);
-            scratch = ByteBufAllocator.DEFAULT.heapBuffer(initialCapacity, maxCapacity);
+        byte[] scratch = decodeState.headerLineScratch;
+        if (scratch == null) {
+            scratch = new byte[Math.min(Math.max(64, length), maxCapacity)];
             decodeState.headerLineScratch = scratch;
-        } else if (scratch.writableBytes() < length) {
-            int currentLength = scratch.readableBytes();
-            int targetCapacity = Math.max(Math.max(64, currentLength + length), scratch.capacity() * 2);
-            ByteBuf expanded = ByteBufAllocator.DEFAULT.heapBuffer(Math.min(targetCapacity, maxCapacity), maxCapacity);
-            if (currentLength > 0) {
-                scratch.getBuffer(0, expanded, currentLength);
-                expanded.markWriter();
-            }
-            scratch.release();
-            scratch = expanded;
+        } else if (scratch.length < nextLength) {
+            scratch = Arrays.copyOf(scratch, Math.min(Math.max(nextLength, scratch.length * 2), maxCapacity));
             decodeState.headerLineScratch = scratch;
         }
-        source.getBuffer(offset, scratch, length);
-        scratch.markWriter();
+        source.getBytes(offset, scratch, currentLength, length);
+        decodeState.headerLineLength = nextLength;
     }
 
     private static ByteBuf detachScratch(HttpContext.DecodeState<?> decodeState) {
-        ByteBuf scratch = decodeState.headerLineScratch;
-        decodeState.headerLineScratch = null;
-        if (scratch == null || scratch.isFree()) {
-            return ByteBuf.EMPTY;
+        byte[] scratch = decodeState.headerLineScratch;
+        int length = decodeState.headerLineLength;
+        decodeState.headerLineLength = 0;
+        if (length > 0 && scratch[length - 1] == '\r') {
+            length--;
         }
-
-        try {
-            int length = scratch.readableBytes();
-            if (length > 0 && scratch.getUInt8(length - 1) == '\r') {
-                length--;
-            }
-            if (length <= 0) {
-                return ByteBuf.EMPTY;
-            }
-            byte[] copy = new byte[length];
-            scratch.getBytes(0, copy, 0, length);
-            return ByteBuf.wrap(copy);
-        } finally {
-            scratch.release();
-        }
+        // Keep scratch private to this message; emitted headers own their exact-sized copy.
+        return length == 0 ? ByteBuf.EMPTY : ByteBuf.wrap(Arrays.copyOf(scratch, length));
     }
 
     private static boolean scratchEndsWithCarriageReturn(HttpContext.DecodeState<?> decodeState) {
-        ByteBuf scratch = decodeState.headerLineScratch;
-        return scratch != null && !scratch.isFree() && scratch.writerIndex() > 0 && scratch.getUInt8(scratch.writerIndex() - 1) == '\r';
+        int length = decodeState.headerLineLength;
+        return length > 0 && decodeState.headerLineScratch[length - 1] == '\r';
     }
 
     private static boolean isHorizontalWhitespace(int value) {

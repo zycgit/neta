@@ -21,6 +21,7 @@ import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.bytebuf.QueueByteBuf;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
+
 /**
  * Mutable per-connection state shared by all HTTP/1.x handlers.
  * <p>
@@ -36,9 +37,9 @@ class HttpContext {
     final ResponseDecodeState resp    = new ResponseDecodeState();
     final EncodeState         reqEnc  = new EncodeState();
     final EncodeState         respEnc = new EncodeState();
-    boolean                   transparentMode;
-    long                      transparentStreamId;
-    InboundMessageType        inboundErrorType;
+    boolean            transparentMode;
+    long               transparentStreamId;
+    InboundMessageType inboundErrorType;
 
     /** Returns the HttpContext for the current connection, creating one if necessary. */
     public static HttpContext getOrCreate(ProtoContext context) {
@@ -111,21 +112,23 @@ class HttpContext {
     }
 
     public static class DecodeState<T extends HttpObject> {
-        DecodePhase                    decoderPhase          = DecodePhase.READ_INITIAL;
-        T                              currentMessage;
-        DefaultHttpHeaders             currentHeaders;
-        boolean                        currentHeadersTrailer = false;
-        int                            headerBytes           = 0;
-        boolean                        chunked               = false;
-        long                           contentLength         = -1;
-        long                           bytesRead             = 0;
-        int                            currentChunkSize      = 0;
-        boolean                        chunkSizeReady        = false;
-        boolean                        chunkDelimiterReady   = false;
-        boolean                        trailerComplete       = false;
-        boolean                        emitEmptyEndContent   = false;
-        long                           packetSequence        = 0;
-        ByteBuf                        headerLineScratch;
+        DecodePhase        decoderPhase          = DecodePhase.READ_INITIAL;
+        T                  currentMessage;
+        DefaultHttpHeaders currentHeaders;
+        boolean            currentHeadersTrailer = false;
+        int                headerBytes           = 0;
+        boolean            chunked               = false;
+        long               contentLength         = -1;
+        long               bytesRead             = 0;
+        int                currentChunkSize      = 0;
+        boolean            chunkSizeReady        = false;
+        boolean            chunkDelimiterReady   = false;
+        boolean            trailerComplete       = false;
+        boolean            emitEmptyEndContent   = false;
+        long               packetSequence        = 0;
+        byte[]             headerLineScratch;
+        int                headerLineLength;
+        HeaderEntryStore   headerEntries;
         private QueueByteBuf           accumulator;
         private ProtoRcvQueue<ByteBuf> accumulatorSource;
 
@@ -145,6 +148,7 @@ class HttpContext {
             this.emitEmptyEndContent = false;
             this.packetSequence = 0;
             this.releaseHeaderLineScratch();
+            this.releaseHeaderEntries();
         }
 
         /**
@@ -159,12 +163,19 @@ class HttpContext {
             }
             this.releaseAccumulator();
             this.releaseHeaderLineScratch();
+            this.releaseHeaderEntries();
             this.reset();
         }
 
-        QueueByteBuf prepareAccumulator(ProtoRcvQueue<ByteBuf> src) {
+        ByteBuf prepareInput(ProtoRcvQueue<ByteBuf> src) {
             if (src == null) {
                 throw new NullPointerException("src queue is null.");
+            }
+            this.finishInput(src);
+            if (src.queueSize() <= 1) {
+                this.releaseAccumulator();
+                ByteBuf first = src.peekMessage();
+                return first != null ? first : ByteBuf.EMPTY;
             }
             if (this.accumulator == null || this.accumulatorSource != src || this.accumulator.isFree()) {
                 this.releaseAccumulator();
@@ -176,10 +187,25 @@ class HttpContext {
             return this.accumulator;
         }
 
-        void markAccumulatorReader() {
+        void finishInput(ProtoRcvQueue<ByteBuf> src) {
             if (this.accumulator != null && !this.accumulator.isFree()) {
                 this.accumulator.markReader();
+            } else {
+                while (src.hasMore()) {
+                    ByteBuf first = src.peekMessage();
+                    if (first != null && first.readableBytes() > 0) {
+                        break;
+                    }
+                    src.skipMessage(1);
+                }
             }
+        }
+
+        static void markReaderDeferred(ByteBuf input) {
+            if (input instanceof QueueByteBuf) {
+                ((QueueByteBuf) input).markReaderDeferred();
+            }
+            // Borrowed input must not compact storage still referenced by emitted slices.
         }
 
         void releaseAccumulator() {
@@ -209,34 +235,31 @@ class HttpContext {
             this.packetSequence = 0;
             this.decoderPhase = DecodePhase.READ_HEADER;
             this.releaseHeaderLineScratch();
+            this.releaseHeaderEntries();
+        }
+
+        void releaseHeaderEntries() {
+            if (this.headerEntries != null) {
+                for (DefaultHttpHeaderEntry entry : this.headerEntries) {
+                    entry.release();
+                }
+                this.headerEntries = null;
+            }
         }
 
         void releaseHeaderLineScratch() {
-            if (this.headerLineScratch != null && !this.headerLineScratch.isFree()) {
-                this.headerLineScratch.release();
-            }
             this.headerLineScratch = null;
+            this.headerLineLength = 0;
         }
     }
 
     public static class RequestDecodeState extends DecodeState<HttpRequest> {
         boolean reqRequestEmitted;
-        String  expectHeader;
-        String  connectionHeader;
 
         @Override
         void reset() {
             super.reset();
             this.reqRequestEmitted = false;
-            this.expectHeader = null;
-            this.connectionHeader = null;
-        }
-
-        @Override
-        void initForHeaders() {
-            super.initForHeaders();
-            this.expectHeader = null;
-            this.connectionHeader = null;
         }
     }
 
@@ -257,9 +280,9 @@ class HttpContext {
     }
 
     public static class EncodeState {
-        boolean             chunkedEncoding = false;
-        boolean             trailerStarted  = false;
-        final List<ByteBuf> outputs         = new ArrayList<>(4);
+        boolean chunkedEncoding = false;
+        boolean trailerStarted  = false;
+        final List<ByteBuf> outputs = new ArrayList<>(4);
 
         List<ByteBuf> prepareOutputs() {
             this.outputs.clear();
