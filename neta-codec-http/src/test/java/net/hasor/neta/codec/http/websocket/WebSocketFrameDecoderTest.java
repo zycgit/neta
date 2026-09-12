@@ -1,33 +1,22 @@
 /*
  * Copyright 2008-2009 the original author or authors.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the Apache License, Version 2.0.
+ * See the LICENSE.txt file for the full license.
+ * https://www.apache.org/licenses/LICENSE-2.0
  */
 package net.hasor.neta.codec.http.websocket;
 
-import static org.junit.Assert.*;
-
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-
-import org.junit.Test;
-
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.codec.http.DefaultHttpByteBuf;
 import net.hasor.neta.codec.http.HttpByteBuf;
 import net.hasor.neta.codec.http.HttpObject;
+import org.junit.Test;
+import static org.junit.Assert.*;
 
 public class WebSocketFrameDecoderTest extends AbstractWebSocketTest {
     @Test
@@ -294,6 +283,27 @@ public class WebSocketFrameDecoderTest extends AbstractWebSocketTest {
 
             byte[] first = buildRfc6455Frame(0x01, true, false, null, "First".getBytes(StandardCharsets.UTF_8));
             byte[] second = buildRfc6455Frame(0x01, true, false, null, "Second".getBytes(StandardCharsets.UTF_8));
+            byte[] combined = new byte[first.length + second.length];
+            System.arraycopy(first, 0, combined, 0, first.length);
+            System.arraycopy(second, 0, combined, first.length, second.length);
+
+            List<HttpObject> result = receiveAndIntBound(pipe, httpByteBuf(combined));
+            assertEquals(2, result.size());
+            assertEquals("First", text((WebSocketFrame) result.get(0)));
+            assertEquals("Second", text((WebSocketFrame) result.get(1)));
+        });
+    }
+
+    @Test
+    public void testFrameDecoderParsesMultipleMaskedFramesFromSingleBuffer() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder(WebSocketVersion.V13));
+            }, VrtSoConfig.asServer());
+
+            byte[] maskKey = new byte[] { 0x11, 0x22, 0x33, 0x44 };
+            byte[] first = buildRfc6455Frame(0x01, true, true, maskKey, "First".getBytes(StandardCharsets.UTF_8));
+            byte[] second = buildRfc6455Frame(0x01, true, true, maskKey, "Second".getBytes(StandardCharsets.UTF_8));
             byte[] combined = new byte[first.length + second.length];
             System.arraycopy(first, 0, combined, 0, first.length);
             System.arraycopy(second, 0, combined, first.length, second.length);

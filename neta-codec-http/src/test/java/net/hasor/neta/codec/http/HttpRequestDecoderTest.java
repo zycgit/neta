@@ -1,29 +1,75 @@
 /*
  * Copyright 2008-2009 the original author or authors.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the Apache License, Version 2.0.
+ * See the LICENSE.txt file for the full license.
+ * https://www.apache.org/licenses/LICENSE-2.0
  */
 package net.hasor.neta.codec.http;
 
+import java.util.List;
+import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
+import org.junit.Test;
 import static org.junit.Assert.*;
 
-import java.util.List;
-
-import org.junit.Test;
-
-import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
-
 public class HttpRequestDecoderTest extends AbstractHttpTest {
+    @Test
+    public void testConnectionAndExpectRemainAvailableAcrossInputBoundaries() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLastDecoder("req-decoder", new HttpRequestDecoder()), VrtSoConfig.asServer());
+            String wire = "GET / HTTP/1.1\r\ncOnNeCtIoN: keep-alive\r\nExPeCt: 100-continue\r\n\r\n";
+            for (int split = 1; split < wire.length(); split++) {
+                List<HttpObject> first = receiveAndIntBound(pipe, ascii(wire.substring(0, split)));
+                List<HttpObject> second = receiveAndIntBound(pipe, ascii(wire.substring(split)));
+                try {
+                    int connections = 0;
+                    int expectations = 0;
+                    for (List<HttpObject> batch : java.util.Arrays.asList(first, second)) {
+                        for (HttpObject message : batch) {
+                            if (message instanceof HttpHeaders) {
+                                HttpHeaders headers = (HttpHeaders) message;
+                                if (headers.getString(HttpHeaderNames.CONNECTION) != null) {
+                                    assertEquals("keep-alive", headers.getString(HttpHeaderNames.CONNECTION));
+                                    assertTrue(headers.headerNames().contains("cOnNeCtIoN"));
+                                    connections++;
+                                }
+                                if (headers.getString(HttpHeaderNames.EXPECT) != null) {
+                                    assertEquals("100-continue", headers.getString(HttpHeaderNames.EXPECT));
+                                    assertTrue(headers.headerNames().contains("ExPeCt"));
+                                    expectations++;
+                                }
+                            }
+                        }
+                    }
+                    assertEquals(1, connections);
+                    assertEquals(1, expectations);
+                } finally {
+                    free(first);
+                    free(second);
+                }
+            }
+        });
+    }
+
+    @Test
+    public void testEmptyHeaderAndTrailerRetainTheirNames() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLastDecoder("req-decoder", new HttpRequestDecoder()), VrtSoConfig.asServer());
+            List<HttpObject> messages = receiveAndIntBound(pipe, ascii("POST / HTTP/1.1\r\nX-Empty:\r\nTransfer-Encoding: chunked\r\n\r\n0\r\nX-Trailer:\r\n\r\n"));
+            try {
+                assertEquals(4, messages.size());
+                HttpHeaders headers = (HttpHeaders) messages.get(1);
+                HttpHeaders trailers = (HttpHeaders) messages.get(2);
+                assertTrue(headers.headerNames().contains("X-Empty"));
+                assertEquals("", headers.getString("X-Empty"));
+                assertTrue(trailers.headerNames().contains("X-Trailer"));
+                assertEquals("", trailers.getString("X-Trailer"));
+            } finally {
+                free(messages);
+            }
+        });
+    }
+
     @Test
     public void testRequestDecoderSkipsLeadingEmptyLines() throws Throwable {
         autoCloseNeta(neta -> {

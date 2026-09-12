@@ -1,37 +1,53 @@
 /*
  * Copyright 2008-2009 the original author or authors.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the Apache License, Version 2.0.
+ * See the LICENSE.txt file for the full license.
+ * https://www.apache.org/licenses/LICENSE-2.0
  */
 package net.hasor.neta.codec.http.websocket;
 
-import static org.junit.Assert.*;
-
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
-
-import org.junit.Test;
-
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.bytebuf.CompositeByteBuf;
 import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.cookie.DefaultCookie;
+import org.junit.Test;
+import static org.junit.Assert.*;
 
 public class WebSocketUtilsTest extends AbstractWebSocketTest {
     private static final String WS_URI     = "ws://example.com/chat";
     private static final String LEGACY_URI = "ws://example.com/legacy";
+
+    @Test
+    public void testLegacyGeneratedKeysSurviveHeaderTrimming() {
+        for (int i = 0; i < 1024; i++) {
+            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V0, LEGACY_URI);
+            try {
+                for (String name : new String[] { HttpHeaderNames.SEC_WEBSOCKET_KEY1, HttpHeaderNames.SEC_WEBSOCKET_KEY2 }) {
+                    String key = request.getString(name);
+                    assertEquals(key, key.trim());
+                    long digits = 0;
+                    int spaces = 0;
+                    for (int j = 0; j < key.length(); j++) {
+                        char ch = key.charAt(j);
+                        if (ch == ' ') {
+                            spaces++;
+                        } else if (ch >= '0' && ch <= '9') {
+                            digits = digits * 10 + ch - '0';
+                        }
+                    }
+                    assertTrue(spaces > 0);
+                    assertEquals(0, digits % spaces);
+                }
+            } finally {
+                request.release();
+            }
+        }
+    }
 
     private static String readContent(WebSocketFrame frame) {
         ByteBuf content = frame.content();

@@ -1,17 +1,9 @@
 /*
  * Copyright 2008-2009 the original author or authors.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the Apache License, Version 2.0.
+ * See the LICENSE.txt file for the full license.
+ * https://www.apache.org/licenses/LICENSE-2.0
  */
 package net.hasor.neta.codec.http;
 import java.nio.charset.StandardCharsets;
@@ -26,7 +18,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
  */
 public class DefaultHttpHeaderEntry extends AbstractReferenceHolder {
     static final RecycleObjectPool.Recycler<DefaultHttpHeaderEntry> RECYCLER = RecycleObjectPool.recycler(//
-            DefaultHttpHeaderEntry::new, DefaultHttpHeaderEntry::resetState, DefaultHttpHeaderEntry::onRecycle);
+            DefaultHttpHeaderEntry::new, DefaultHttpHeaderEntry::resetRefCnt, DefaultHttpHeaderEntry::onRecycle);
     private      CharSequence                                         name;
     private      CharSequence                                         value;
     private      ByteBuf                                              source;
@@ -110,7 +102,6 @@ public class DefaultHttpHeaderEntry extends AbstractReferenceHolder {
             throw new IllegalArgumentException("value must not be null");
         }
 
-        this.resetRefCnt();
         this.name = name;
         this.value = value;
         this.source = null;
@@ -131,7 +122,6 @@ public class DefaultHttpHeaderEntry extends AbstractReferenceHolder {
             throw new IllegalArgumentException("value range must not be negative");
         }
 
-        this.resetRefCnt();
         this.name = name;
         this.value = valueLength == 0 ? "" : null;
         this.source = valueLength == 0 ? null : (retainSource ? source.retain() : source);
@@ -149,7 +139,6 @@ public class DefaultHttpHeaderEntry extends AbstractReferenceHolder {
             throw new IllegalArgumentException("name/value range must not be negative or empty");
         }
 
-        this.resetRefCnt();
         this.name = null;
         this.value = valueLength == 0 ? "" : null;
         this.source = retainSource ? source.retain() : source;
@@ -164,9 +153,15 @@ public class DefaultHttpHeaderEntry extends AbstractReferenceHolder {
      * @return header name
      */
     public String getName() {
-        String resolved = this.resolveName();
+        CharSequence current = this.name;
+        if (current instanceof String) {
+            return (String) current;
+        }
+        String resolved = current != null ? HttpCharSequences.materialize(current) : this.readSourceSlice(this.nameOffset, this.nameLength);
         this.name = resolved;
-        this.releaseSourceIfResolved();
+        if (this.value instanceof String) {
+            this.releaseSourceIfResolved();
+        }
         return resolved;
     }
 
@@ -175,9 +170,15 @@ public class DefaultHttpHeaderEntry extends AbstractReferenceHolder {
      * @return header value
      */
     public String getValue() {
-        String resolved = this.resolveValue();
+        CharSequence current = this.value;
+        if (current instanceof String) {
+            return (String) current;
+        }
+        String resolved = current != null ? HttpCharSequences.materialize(current) : this.readSourceSlice(this.valueOffset, this.valueLength);
         this.value = resolved;
-        this.releaseSourceIfResolved();
+        if (this.name instanceof String) {
+            this.releaseSourceIfResolved();
+        }
         return resolved;
     }
 
@@ -223,20 +224,6 @@ public class DefaultHttpHeaderEntry extends AbstractReferenceHolder {
     @Override
     protected void deallocate() {
         RECYCLER.recycle(this);
-    }
-
-    private String resolveName() {
-        if (this.name != null) {
-            return HttpCharSequences.materialize(this.name);
-        }
-        return this.readSourceSlice(this.nameOffset, this.nameLength);
-    }
-
-    private String resolveValue() {
-        if (this.value != null) {
-            return HttpCharSequences.materialize(this.value);
-        }
-        return this.readSourceSlice(this.valueOffset, this.valueLength);
     }
 
     private String readSourceSlice(int offset, int length) {

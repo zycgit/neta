@@ -1,29 +1,40 @@
 /*
  * Copyright 2008-2009 the original author or authors.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the Apache License, Version 2.0.
+ * See the LICENSE.txt file for the full license.
+ * https://www.apache.org/licenses/LICENSE-2.0
  */
 package net.hasor.neta.codec.http;
 
-import static org.junit.Assert.*;
-
 import java.util.List;
-
-import org.junit.Test;
-
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
+import org.junit.Test;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 public class HttpResponseDecoderTest extends AbstractHttpTest {
+    @Test
+    public void testEmptyHeaderAndTrailerRetainTheirNames() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLastDecoder("resp-decoder", new HttpResponseDecoder()), VrtSoConfig.asClient());
+            List<HttpObject> messages = receiveAndIntBound(pipe, ascii("HTTP/1.1 200 OK\r\nX-Empty:\r\nTransfer-Encoding: chunked\r\n\r\n0\r\nX-Trailer:\r\n\r\n"));
+            try {
+                assertEquals(4, messages.size());
+                HttpHeaders headers = (HttpHeaders) messages.get(1);
+                HttpHeaders trailers = (HttpHeaders) messages.get(2);
+                assertTrue(headers.headerNames().contains("X-Empty"));
+                assertEquals("", headers.getString("X-Empty"));
+                assertTrue(trailers.headerNames().contains("X-Trailer"));
+                assertEquals("", trailers.getString("X-Trailer"));
+            } finally {
+                free(messages);
+            }
+        });
+    }
+
     @Test
     public void testResponseDecoderEmitsFixedLengthBody() throws Throwable {
         autoCloseNeta(neta -> {

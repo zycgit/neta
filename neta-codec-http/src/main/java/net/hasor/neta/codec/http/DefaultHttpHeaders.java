@@ -1,17 +1,9 @@
 /*
  * Copyright 2008-2009 the original author or authors.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the Apache License, Version 2.0.
+ * See the LICENSE.txt file for the full license.
+ * https://www.apache.org/licenses/LICENSE-2.0
  */
 package net.hasor.neta.codec.http;
 import java.util.*;
@@ -113,9 +105,8 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
             return this.appendHeaders(source);
         }
 
-        this.ensureEntryCapacity(source.entries.size());
         this.entries.addAll(source.entries);
-        this.releasableEntries = this.releasableEntries || !source.entries.isEmpty();
+        this.releasableEntries = true;
         if (source.isBad()) {
             this.setBadState(source.badReason());
         }
@@ -255,7 +246,8 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
 
     @Override
     public String getString(String name) {
-        return this.findFirst(name);
+        DefaultHttpHeaderEntry entry = this.findFirstEntry(name);
+        return entry != null ? entry.getValue() : null;
     }
 
     @Override
@@ -299,21 +291,6 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
         return false;
     }
 
-    boolean hasNonBlankValue(String name) {
-        DefaultHttpHeaderEntry entry = this.findFirstEntry(name);
-        return entry != null && entry.hasNonBlankValue();
-    }
-
-    boolean valueEqualsIgnoreCase(String name, CharSequence expected) {
-        DefaultHttpHeaderEntry entry = this.findFirstEntry(name);
-        return entry != null && entry.valueEqualsIgnoreCase(expected);
-    }
-
-    boolean valueContainsIgnoreCase(String name, CharSequence expected) {
-        DefaultHttpHeaderEntry entry = this.findFirstEntry(name);
-        return entry != null && entry.valueContainsIgnoreCase(expected);
-    }
-
     @Override
     public Set<String> headerNames() {
         if (this.entries.isEmpty()) {
@@ -333,14 +310,10 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
         return this.entries.size();
     }
 
-    private String findFirst(String name) {
-        DefaultHttpHeaderEntry entry = this.findFirstEntry(name);
-        return entry != null ? entry.getValue() : null;
-    }
-
-    private DefaultHttpHeaderEntry findFirstEntry(String name) {
+    DefaultHttpHeaderEntry findFirstEntry(String name) {
         if (name != null) {
-            for (DefaultHttpHeaderEntry entry : this.entries) {
+            for (int i = 0; i < this.entries.size(); i++) {
+                DefaultHttpHeaderEntry entry = this.entries.get(i);
                 if (entry.matchesName(name)) {
                     return entry;
                 }

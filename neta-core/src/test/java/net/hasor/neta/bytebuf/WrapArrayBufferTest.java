@@ -1,3 +1,10 @@
+/*
+ * Copyright 2015-2022 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0.
+ * See the LICENSE.txt file for the full license.
+ * https://www.apache.org/licenses/LICENSE-2.0
+ */
 package net.hasor.neta.bytebuf;
 
 import java.nio.BufferOverflowException;
@@ -5,11 +12,9 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
-
-import org.junit.Test;
-
 import net.hasor.cobble.RandomUtils;
 import net.hasor.cobble.codec.MD5;
+import org.junit.Test;
 
 public class WrapArrayBufferTest {
     @Test
@@ -400,15 +405,24 @@ public class WrapArrayBufferTest {
 
     @Test
     public void copyTest01() throws NoSuchAlgorithmException {
-        WrapArrayBuffer byteBuf1 = (WrapArrayBuffer) ByteBuf.wrap(new byte[] { 1, 2, 3, 4 });
-        WrapArrayBuffer byteBuf2 = byteBuf1.copy();
+        byte[] source = { 1, 2, 3, 4 };
+        ByteBuf byteBuf1 = ByteBuf.wrap(source);
+        ByteBuf byteBuf2 = byteBuf1.copy();
+        try {
+            assert byteBuf1 != byteBuf2;
+            assert byteBuf1.capacity() == byteBuf2.capacity();
 
-        assert byteBuf1.target != byteBuf2.target;
-        assert byteBuf1.target.length == byteBuf2.target.length;
+            String hash1 = MD5.encodeMD5(byteBuf1.asByteArray());
+            String hash2 = MD5.encodeMD5(byteBuf2.asByteArray());
+            assert hash1.equals(hash2);
 
-        String hash1 = MD5.encodeMD5(byteBuf1.asByteArray());
-        String hash2 = MD5.encodeMD5(byteBuf2.asByteArray());
-        assert hash1.equals(hash2);
+            source[0] = 5;
+            assert byteBuf1.getByte(0) == 5;
+            assert byteBuf2.getByte(0) == 1;
+        } finally {
+            byteBuf2.release();
+            byteBuf1.release();
+        }
     }
 
     @Test
