@@ -1,5 +1,11 @@
+/*
+ * Copyright 2015-2022 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0.
+ * See the LICENSE.txt file for the full license.
+ * https://www.apache.org/licenses/LICENSE-2.0
+ */
 package net.hasor.neta.codec.http.websocket;
-
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -9,72 +15,33 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.embedded.EmbeddedChannel;
-import io.netty.handler.codec.http.DefaultHttpHeaders;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
+import io.netty.handler.codec.http.DefaultHttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpVersion;
-import io.netty.handler.codec.http.websocketx.BinaryWebSocketFrame;
-import io.netty.handler.codec.http.websocketx.ContinuationWebSocketFrame;
-import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
-import io.netty.handler.codec.http.websocketx.WebSocket13FrameDecoder;
-import io.netty.handler.codec.http.websocketx.WebSocket13FrameEncoder;
-import io.netty.handler.codec.http.websocketx.WebSocketClientHandshaker;
-import io.netty.handler.codec.http.websocketx.WebSocketClientHandshakerFactory;
-import io.netty.handler.codec.http.websocketx.WebSocketFrameAggregator;
-import io.netty.handler.codec.http.websocketx.WebSocketServerHandshaker;
-import io.netty.handler.codec.http.websocketx.WebSocketServerHandshakerFactory;
+import io.netty.handler.codec.http.websocketx.*;
 import io.netty.util.ReferenceCounted;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.channel.NetManager;
-import net.hasor.neta.channel.PlayLoad;
-import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.ProtoDuplex;
-import net.hasor.neta.channel.ProtoExceptionHolder;
-import net.hasor.neta.channel.ProtoHandler;
-import net.hasor.neta.channel.ProtoInitializer;
-import net.hasor.neta.channel.ProtoStatus;
-import net.hasor.neta.channel.SubscribeMode;
+import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.data.ProtoRcvQueue;
 import net.hasor.neta.channel.data.ProtoSndQueue;
 import net.hasor.neta.channel.transport.virtual.VrtChannel;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.channel.transport.virtual.VrtSocketAddress;
-import net.hasor.neta.codec.http.DefaultHttpByteBuf;
-import net.hasor.neta.codec.http.DefaultHttpContent;
-import net.hasor.neta.codec.http.DefaultHttpRequest;
-import net.hasor.neta.codec.http.DefaultHttpResponse;
+import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.FullHttpRequest;
-import net.hasor.neta.codec.http.FullHttpResponse;
-import net.hasor.neta.codec.http.HttpByteBuf;
 import net.hasor.neta.codec.http.HttpContent;
 import net.hasor.neta.codec.http.HttpHeaderNames;
 import net.hasor.neta.codec.http.HttpHeaderValues;
-import net.hasor.neta.codec.http.HttpHeaders;
 import net.hasor.neta.codec.http.HttpObject;
-import net.hasor.neta.codec.http.HttpRequest;
-import net.hasor.neta.codec.http.HttpResponse;
-import net.hasor.neta.codec.http.HttpStatus;
 import net.hasor.neta.leak.LeakMetricSnapshot;
-import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.BenchmarkMode;
-import org.openjdk.jmh.annotations.Fork;
-import org.openjdk.jmh.annotations.Level;
-import org.openjdk.jmh.annotations.Measurement;
-import org.openjdk.jmh.annotations.Mode;
-import org.openjdk.jmh.annotations.OutputTimeUnit;
-import org.openjdk.jmh.annotations.Scope;
-import org.openjdk.jmh.annotations.Setup;
-import org.openjdk.jmh.annotations.State;
-import org.openjdk.jmh.annotations.TearDown;
-import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
@@ -97,22 +64,742 @@ public class WebSocketBenchmark {
         }
     }
 
-    private static final AtomicInteger ADDRESS = new AtomicInteger(300);
-    private static final String        WS_URI = "ws://example.com/chat";
-    private static final byte[]        MASK_KEY = new byte[] { 0x11, 0x22, 0x33, 0x44 };
-    private static final int           MAX_MESSAGE_PAYLOAD = 1024 * 1024;
-    private static final int           MESSAGE_FRAGMENT_SIZE = 512;
-    private static final String        TEXT_FRAME = "hello websocket benchmark";
-    private static final String        LARGE_TEXT_MESSAGE;
-    private static final byte[]        TEXT_FRAME_BYTES = TEXT_FRAME.getBytes(StandardCharsets.UTF_8);
-    private static final byte[]        BINARY_FRAME_BYTES = new byte[4096];
-    private static final byte[]        MASKED_TEXT_FRAME;
-    private static final byte[]        MASKED_BINARY_FRAME;
-    private static final byte[][]      MASKED_FRAGMENTED_TEXT_MESSAGE;
-    private NetManager                 neta;
-    private VirtualPipe                framePipe;
-    private VirtualPipe                messagePipe;
-    private LeakMetricSnapshot         before;
+    private static abstract class AbstractNetaPipeState {
+        private NetManager  neta;
+        private VirtualPipe pipe;
+
+        @Setup(Level.Trial)
+        public void setupTrial() {
+            this.neta = new NetManager();
+        }
+
+        @Setup(Level.Invocation)
+        public void setupInvocation() throws IOException {
+            this.pipe = openVirtualPipe(this.neta, this.initializer(), this.config(), ADDRESS.incrementAndGet());
+            this.prepareInvocation();
+        }
+
+        @TearDown(Level.Invocation)
+        public void tearDownInvocation() {
+            try {
+                this.cleanupInvocation();
+            } finally {
+                closePipe(this.pipe);
+                this.pipe = null;
+            }
+        }
+
+        @TearDown(Level.Trial)
+        public void tearDownTrial() throws IOException {
+            if (this.neta != null) {
+                this.neta.shutdown();
+                this.neta = null;
+            }
+        }
+
+        protected VirtualPipe pipe() {
+            return this.pipe;
+        }
+
+        protected VrtSoConfig config() {
+            return VrtSoConfig.asServer();
+        }
+
+        protected void prepareInvocation() throws IOException {
+        }
+
+        protected void cleanupInvocation() {
+        }
+
+        protected abstract ProtoInitializer initializer();
+    }
+
+    private static abstract class AbstractNettyChannelState {
+        private EmbeddedChannel channel;
+
+        @Setup(Level.Invocation)
+        public void setupInvocation() {
+            this.channel = this.newChannel();
+            this.prepareInvocation();
+        }
+
+        @TearDown(Level.Invocation)
+        public void tearDownInvocation() {
+            try {
+                this.cleanupInvocation();
+            } finally {
+                if (this.channel != null) {
+                    this.channel.finishAndReleaseAll();
+                    this.channel = null;
+                }
+            }
+        }
+
+        protected EmbeddedChannel channel() {
+            return this.channel;
+        }
+
+        protected void prepareInvocation() {
+        }
+
+        protected void cleanupInvocation() {
+        }
+
+        protected abstract EmbeddedChannel newChannel();
+    }
+
+    private static abstract class AbstractReusableNetaPipeState {
+        private NetManager  neta;
+        private VirtualPipe pipe;
+
+        @Setup(Level.Trial)
+        public void setupTrial() throws IOException {
+            this.neta = new NetManager();
+            this.pipe = openVirtualPipe(this.neta, this.initializer(), this.config(), ADDRESS.incrementAndGet());
+        }
+
+        @Setup(Level.Invocation)
+        public void setupInvocation() throws IOException {
+            this.prepareInvocation();
+        }
+
+        @TearDown(Level.Invocation)
+        public void tearDownInvocation() {
+            this.cleanupInvocation();
+        }
+
+        @TearDown(Level.Trial)
+        public void tearDownTrial() throws IOException {
+            closePipe(this.pipe);
+            this.pipe = null;
+            if (this.neta != null) {
+                this.neta.shutdown();
+                this.neta = null;
+            }
+        }
+
+        protected VirtualPipe pipe() {
+            return this.pipe;
+        }
+
+        protected VrtSoConfig config() {
+            return VrtSoConfig.asServer();
+        }
+
+        protected void prepareInvocation() throws IOException {
+        }
+
+        protected void cleanupInvocation() {
+        }
+
+        protected abstract ProtoInitializer initializer();
+    }
+
+    private static abstract class AbstractReusableNettyChannelState {
+        private EmbeddedChannel channel;
+
+        @Setup(Level.Trial)
+        public void setupTrial() {
+            this.channel = this.newChannel();
+        }
+
+        @Setup(Level.Invocation)
+        public void setupInvocation() {
+            clearNettyChannel(this.channel);
+            this.prepareInvocation();
+        }
+
+        @TearDown(Level.Invocation)
+        public void tearDownInvocation() {
+            try {
+                this.cleanupInvocation();
+            } finally {
+                clearNettyChannel(this.channel);
+            }
+        }
+
+        @TearDown(Level.Trial)
+        public void tearDownTrial() {
+            if (this.channel != null) {
+                this.channel.finishAndReleaseAll();
+                this.channel = null;
+            }
+        }
+
+        protected EmbeddedChannel channel() {
+            return this.channel;
+        }
+
+        protected void prepareInvocation() {
+        }
+
+        protected void cleanupInvocation() {
+        }
+
+        protected abstract EmbeddedChannel newChannel();
+    }
+
+    //
+
+    @State(Scope.Thread)
+    public static class NetaServerHandshakeState extends AbstractNetaPipeState {
+        private FullHttpRequest request;
+
+        @Override
+        protected ProtoInitializer initializer() {
+            return ctx -> ctx.addLast("ws-server", new WebSocketServerHandshakeDuplex(WebSocketVersion.V13));
+        }
+
+        @Override
+        protected void prepareInvocation() {
+            this.request = newNetaServerHandshakeRequest();
+        }
+
+        @Override
+        protected void cleanupInvocation() {
+            releaseNetaObject(this.request);
+            this.request = null;
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class NetaClientHandshakeState extends AbstractNetaPipeState {
+        @Override
+        protected ProtoInitializer initializer() {
+            return ctx -> ctx.addLast("ws-client", new WebSocketClientHandshakeDuplex(WebSocketVersion.V13));
+        }
+
+        @Override
+        protected VrtSoConfig config() {
+            return VrtSoConfig.asClient();
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class NettyServerHandshakeState extends AbstractNettyChannelState {
+        private DefaultFullHttpRequest    request;
+        private WebSocketServerHandshaker handshaker;
+
+        @Override
+        protected EmbeddedChannel newChannel() {
+            return new EmbeddedChannel(new io.netty.handler.codec.http.HttpRequestDecoder(), new io.netty.handler.codec.http.HttpResponseEncoder());
+        }
+
+        @Override
+        protected void prepareInvocation() {
+            this.request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/chat");
+            this.request.headers().set(HttpHeaderNames.HOST, "example.com");
+            this.request.headers().set(HttpHeaderNames.UPGRADE, HttpHeaderValues.WEBSOCKET);
+            this.request.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.UPGRADE);
+            this.request.headers().set(HttpHeaderNames.SEC_WEBSOCKET_VERSION, String.valueOf(WebSocketVersion.V13.code()));
+            this.request.headers().set(HttpHeaderNames.SEC_WEBSOCKET_KEY, SERVER_HANDSHAKE_KEY);
+            WebSocketServerHandshakerFactory factory = new WebSocketServerHandshakerFactory(WS_URI, null, true, MAX_MESSAGE_PAYLOAD);
+            this.handshaker = factory.newHandshaker(this.request);
+        }
+
+        @Override
+        protected void cleanupInvocation() {
+            releaseNettyObject(this.request);
+            this.request = null;
+            this.handshaker = null;
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class NettyClientHandshakeState extends AbstractNettyChannelState {
+        private WebSocketClientHandshaker handshaker;
+
+        @Override
+        protected EmbeddedChannel newChannel() {
+            return new EmbeddedChannel(new io.netty.handler.codec.http.HttpRequestEncoder(), new io.netty.handler.codec.http.HttpResponseDecoder());
+        }
+
+        @Override
+        protected void prepareInvocation() {
+            this.handshaker = WebSocketClientHandshakerFactory.newHandshaker(URI.create(WS_URI), io.netty.handler.codec.http.websocketx.WebSocketVersion.V13, null, true, new DefaultHttpHeaders(), MAX_MESSAGE_PAYLOAD);
+        }
+
+        @Override
+        protected void cleanupInvocation() {
+            this.handshaker = null;
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class NetaFrameEncodeState extends AbstractReusableNetaPipeState {
+        private WebSocketFrame textFrame;
+        private WebSocketFrame binaryFrame;
+
+        @Override
+        protected ProtoInitializer initializer() {
+            return ctx -> {
+                ctx.addLast("ws-ready", new ReadyWebSocketBinder(true));
+                ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
+            };
+        }
+
+        @Override
+        public void prepareInvocation() {
+            this.textFrame = WebSocketUtils.textFrame(true, false, null, utf8(TEXT_FRAME));
+            this.binaryFrame = WebSocketUtils.binaryFrame(true, false, null, binary(BINARY_FRAME_BYTES));
+        }
+
+        @Override
+        public void cleanupInvocation() {
+            releaseNetaObject(this.textFrame);
+            releaseNetaObject(this.binaryFrame);
+            this.textFrame = null;
+            this.binaryFrame = null;
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class NettyFrameEncodeState extends AbstractReusableNettyChannelState {
+        private TextWebSocketFrame   textFrame;
+        private BinaryWebSocketFrame binaryFrame;
+
+        @Override
+        protected EmbeddedChannel newChannel() {
+            return new EmbeddedChannel(new WebSocket13FrameEncoder(false));
+        }
+
+        @Override
+        protected void prepareInvocation() {
+            this.textFrame = new TextWebSocketFrame(TEXT_FRAME);
+            this.binaryFrame = new BinaryWebSocketFrame(io.netty.buffer.Unpooled.wrappedBuffer(BINARY_FRAME_BYTES));
+        }
+
+        @Override
+        protected void cleanupInvocation() {
+            releaseNettyObject(this.textFrame);
+            releaseNettyObject(this.binaryFrame);
+            this.textFrame = null;
+            this.binaryFrame = null;
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class NetaFrameDecodeState extends AbstractReusableNetaPipeState {
+        private HttpByteBuf maskedTextFrame;
+        private HttpByteBuf maskedBinaryFrame;
+        private byte[]      maskedTextBytes;
+        private byte[]      maskedBinaryBytes;
+
+        @Override
+        protected ProtoInitializer initializer() {
+            return ctx -> {
+                ctx.addLast("ws-ready", new ReadyWebSocketBinder(true));
+                ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
+            };
+        }
+
+        @Override
+        public void prepareInvocation() {
+            this.maskedTextBytes = reusableBytes(this.maskedTextBytes, MASKED_TEXT_FRAME);
+            this.maskedBinaryBytes = reusableBytes(this.maskedBinaryBytes, MASKED_BINARY_FRAME);
+            this.maskedTextFrame = httpByteBuf(this.maskedTextBytes);
+            this.maskedBinaryFrame = httpByteBuf(this.maskedBinaryBytes);
+        }
+
+        @Override
+        public void cleanupInvocation() {
+            releaseNetaObject(this.maskedTextFrame);
+            releaseNetaObject(this.maskedBinaryFrame);
+            this.maskedTextFrame = null;
+            this.maskedBinaryFrame = null;
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class NettyFrameDecodeState extends AbstractReusableNettyChannelState {
+        private io.netty.buffer.ByteBuf maskedTextFrame;
+        private io.netty.buffer.ByteBuf maskedBinaryFrame;
+        private byte[]                  maskedTextBytes;
+        private byte[]                  maskedBinaryBytes;
+
+        @Override
+        protected EmbeddedChannel newChannel() {
+            return new EmbeddedChannel(new WebSocket13FrameDecoder(true, false, MAX_MESSAGE_PAYLOAD));
+        }
+
+        @Override
+        protected void prepareInvocation() {
+            this.maskedTextBytes = reusableBytes(this.maskedTextBytes, MASKED_TEXT_FRAME);
+            this.maskedBinaryBytes = reusableBytes(this.maskedBinaryBytes, MASKED_BINARY_FRAME);
+            this.maskedTextFrame = io.netty.buffer.Unpooled.wrappedBuffer(this.maskedTextBytes);
+            this.maskedBinaryFrame = io.netty.buffer.Unpooled.wrappedBuffer(this.maskedBinaryBytes);
+        }
+
+        @Override
+        protected void cleanupInvocation() {
+            releaseNettyObject(this.maskedTextFrame);
+            releaseNettyObject(this.maskedBinaryFrame);
+            this.maskedTextFrame = null;
+            this.maskedBinaryFrame = null;
+        }
+    }
+
+    private static abstract class NetaRfc6455DecodeState extends AbstractReusableNetaPipeState {
+        @Override
+        protected ProtoInitializer initializer() {
+            return ctx -> {
+                ctx.addLast("ws-ready", new ReadyWebSocketBinder(true));
+                ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
+            };
+        }
+    }
+
+    private static abstract class NettyRfc6455DecodeState extends AbstractReusableNettyChannelState {
+        @Override
+        protected EmbeddedChannel newChannel() {
+            return new EmbeddedChannel(new WebSocket13FrameDecoder(true, false, MAX_MESSAGE_PAYLOAD));
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class NetaPartialFrameDecodeState extends NetaRfc6455DecodeState {
+        private HttpByteBuf[] chunks;
+        private byte[][]      chunkBytes;
+
+        @Override
+        protected void prepareInvocation() {
+            if (this.chunkBytes == null) {
+                this.chunkBytes = new byte[PARTIAL_MASKED_TEXT_FRAME.length][];
+            }
+            this.chunks = new HttpByteBuf[PARTIAL_MASKED_TEXT_FRAME.length];
+            for (int i = 0; i < PARTIAL_MASKED_TEXT_FRAME.length; i++) {
+                this.chunkBytes[i] = reusableBytes(this.chunkBytes[i], PARTIAL_MASKED_TEXT_FRAME[i]);
+                this.chunks[i] = httpByteBuf(this.chunkBytes[i]);
+            }
+        }
+
+        @Override
+        protected void cleanupInvocation() {
+            releaseNetaObjects(this.chunks);
+            this.chunks = null;
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class NettyPartialFrameDecodeState extends NettyRfc6455DecodeState {
+        private io.netty.buffer.ByteBuf[] chunks;
+        private byte[][]                  chunkBytes;
+
+        @Override
+        protected void prepareInvocation() {
+            if (this.chunkBytes == null) {
+                this.chunkBytes = new byte[PARTIAL_MASKED_TEXT_FRAME.length][];
+            }
+            this.chunks = new io.netty.buffer.ByteBuf[PARTIAL_MASKED_TEXT_FRAME.length];
+            for (int i = 0; i < PARTIAL_MASKED_TEXT_FRAME.length; i++) {
+                this.chunkBytes[i] = reusableBytes(this.chunkBytes[i], PARTIAL_MASKED_TEXT_FRAME[i]);
+                this.chunks[i] = io.netty.buffer.Unpooled.wrappedBuffer(this.chunkBytes[i]);
+            }
+        }
+
+        @Override
+        protected void cleanupInvocation() {
+            releaseNettyObjects(this.chunks);
+            this.chunks = null;
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class NetaStickyFrameDecodeState extends NetaRfc6455DecodeState {
+        private HttpByteBuf stickyFrames;
+        private byte[]      stickyFrameBytes;
+
+        @Override
+        protected void prepareInvocation() {
+            this.stickyFrameBytes = reusableBytes(this.stickyFrameBytes, STICKY_MASKED_TEXT_FRAMES);
+            this.stickyFrames = httpByteBuf(this.stickyFrameBytes);
+        }
+
+        @Override
+        protected void cleanupInvocation() {
+            releaseNetaObject(this.stickyFrames);
+            this.stickyFrames = null;
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class NettyStickyFrameDecodeState extends NettyRfc6455DecodeState {
+        private io.netty.buffer.ByteBuf stickyFrames;
+        private byte[]                  stickyFrameBytes;
+
+        @Override
+        protected void prepareInvocation() {
+            this.stickyFrameBytes = reusableBytes(this.stickyFrameBytes, STICKY_MASKED_TEXT_FRAMES);
+            this.stickyFrames = io.netty.buffer.Unpooled.wrappedBuffer(this.stickyFrameBytes);
+        }
+
+        @Override
+        protected void cleanupInvocation() {
+            releaseNettyObject(this.stickyFrames);
+            this.stickyFrames = null;
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class NetaMultiObjectDecodeState extends NetaRfc6455DecodeState {
+        private HttpByteBuf[] frames;
+        private byte[][]      frameBytes;
+
+        @Override
+        protected void prepareInvocation() {
+            if (this.frameBytes == null) {
+                this.frameBytes = new byte[MULTI_OBJECT_COUNT][];
+            }
+            this.frames = new HttpByteBuf[MULTI_OBJECT_COUNT];
+            for (int i = 0; i < MULTI_OBJECT_COUNT; i++) {
+                this.frameBytes[i] = reusableBytes(this.frameBytes[i], MASKED_TEXT_FRAME);
+                this.frames[i] = httpByteBuf(this.frameBytes[i]);
+            }
+        }
+
+        @Override
+        protected void cleanupInvocation() {
+            releaseNetaObjects(this.frames);
+            this.frames = null;
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class NettyMultiObjectDecodeState extends NettyRfc6455DecodeState {
+        private io.netty.buffer.ByteBuf[] frames;
+        private byte[][]                  frameBytes;
+
+        @Override
+        protected void prepareInvocation() {
+            if (this.frameBytes == null) {
+                this.frameBytes = new byte[MULTI_OBJECT_COUNT][];
+            }
+            this.frames = new io.netty.buffer.ByteBuf[MULTI_OBJECT_COUNT];
+            for (int i = 0; i < MULTI_OBJECT_COUNT; i++) {
+                this.frameBytes[i] = reusableBytes(this.frameBytes[i], MASKED_TEXT_FRAME);
+                this.frames[i] = io.netty.buffer.Unpooled.wrappedBuffer(this.frameBytes[i]);
+            }
+        }
+
+        @Override
+        protected void cleanupInvocation() {
+            releaseNettyObjects(this.frames);
+            this.frames = null;
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class NetaHixieDecodeState extends AbstractReusableNetaPipeState {
+        private HttpByteBuf frame;
+        private byte[]      frameBytes;
+
+        @Override
+        protected ProtoInitializer initializer() {
+            return ctx -> {
+                ctx.addLast("ws-ready", new ReadyWebSocketBinder(true, WebSocketVersion.V0));
+                ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V0));
+            };
+        }
+
+        @Override
+        protected void prepareInvocation() {
+            this.frameBytes = reusableBytes(this.frameBytes, HIXIE_TEXT_FRAME);
+            this.frame = httpByteBuf(this.frameBytes);
+        }
+
+        @Override
+        protected void cleanupInvocation() {
+            releaseNetaObject(this.frame);
+            this.frame = null;
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class NettyHixieDecodeState extends AbstractReusableNettyChannelState {
+        private io.netty.buffer.ByteBuf frame;
+        private byte[]                  frameBytes;
+
+        @Override
+        protected EmbeddedChannel newChannel() {
+            return new EmbeddedChannel(new WebSocket00FrameDecoder(MAX_MESSAGE_PAYLOAD));
+        }
+
+        @Override
+        protected void prepareInvocation() {
+            this.frameBytes = reusableBytes(this.frameBytes, HIXIE_TEXT_FRAME);
+            this.frame = io.netty.buffer.Unpooled.wrappedBuffer(this.frameBytes);
+        }
+
+        @Override
+        protected void cleanupInvocation() {
+            releaseNettyObject(this.frame);
+            this.frame = null;
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class NetaHixieEncodeState extends AbstractReusableNetaPipeState {
+        private WebSocketFrame frame;
+
+        @Override
+        protected ProtoInitializer initializer() {
+            return ctx -> {
+                ctx.addLast("ws-ready", new ReadyWebSocketBinder(false, WebSocketVersion.V0));
+                ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V0));
+            };
+        }
+
+        @Override
+        protected void prepareInvocation() {
+            this.frame = WebSocketUtils.textFrame(true, false, null, utf8(TEXT_FRAME));
+        }
+
+        @Override
+        protected void cleanupInvocation() {
+            releaseNetaObject(this.frame);
+            this.frame = null;
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class NettyHixieEncodeState extends AbstractReusableNettyChannelState {
+        private TextWebSocketFrame frame;
+
+        @Override
+        protected EmbeddedChannel newChannel() {
+            return new EmbeddedChannel(new WebSocket00FrameEncoder());
+        }
+
+        @Override
+        protected void prepareInvocation() {
+            this.frame = new TextWebSocketFrame(TEXT_FRAME);
+        }
+
+        @Override
+        protected void cleanupInvocation() {
+            releaseNettyObject(this.frame);
+            this.frame = null;
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class NetaMessageEncodeState extends AbstractReusableNetaPipeState {
+        private TextWebSocketMessage textMessage;
+
+        @Override
+        protected ProtoInitializer initializer() {
+            return ctx -> {
+                ctx.addLast("ws-ready", new ReadyWebSocketBinder(true));
+                ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
+                ctx.addLast("ws-message", new WebSocketMessageDuplex(true, MAX_MESSAGE_PAYLOAD, MESSAGE_FRAGMENT_SIZE));
+            };
+        }
+
+        @Override
+        public void prepareInvocation() {
+            this.textMessage = WebSocketUtils.textMessage(ByteBuf.wrap(LARGE_TEXT_MESSAGE_BYTES));
+        }
+
+        @Override
+        public void cleanupInvocation() {
+            releaseNetaObject(this.textMessage);
+            this.textMessage = null;
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class NettyMessageEncodeState extends AbstractReusableNettyChannelState {
+        @Override
+        protected EmbeddedChannel newChannel() {
+            return new EmbeddedChannel(new WebSocket13FrameEncoder(false));
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class NetaMessageDecodeState extends AbstractReusableNetaPipeState {
+        private HttpByteBuf[] fragmentedFrames;
+        private byte[][]      fragmentedFrameBytes;
+
+        @Override
+        protected ProtoInitializer initializer() {
+            return ctx -> {
+                ctx.addLast("ws-ready", new ReadyWebSocketBinder(true));
+                ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
+                ctx.addLast("ws-message", new WebSocketMessageDuplex(true, MAX_MESSAGE_PAYLOAD, MESSAGE_FRAGMENT_SIZE));
+            };
+        }
+
+        @Override
+        public void prepareInvocation() {
+            if (this.fragmentedFrameBytes == null) {
+                this.fragmentedFrameBytes = new byte[MASKED_FRAGMENTED_TEXT_MESSAGE.length][];
+            }
+            this.fragmentedFrames = new HttpByteBuf[MASKED_FRAGMENTED_TEXT_MESSAGE.length];
+            for (int i = 0; i < MASKED_FRAGMENTED_TEXT_MESSAGE.length; i++) {
+                this.fragmentedFrameBytes[i] = reusableBytes(this.fragmentedFrameBytes[i], MASKED_FRAGMENTED_TEXT_MESSAGE[i]);
+                this.fragmentedFrames[i] = httpByteBuf(this.fragmentedFrameBytes[i]);
+            }
+        }
+
+        @Override
+        public void cleanupInvocation() {
+            releaseNetaObjects(this.fragmentedFrames);
+            this.fragmentedFrames = null;
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class NettyMessageDecodeState extends AbstractReusableNettyChannelState {
+        private io.netty.buffer.ByteBuf[] fragmentedFrames;
+        private byte[][]                  fragmentedFrameBytes;
+
+        @Override
+        protected EmbeddedChannel newChannel() {
+            return new EmbeddedChannel(//
+                    new WebSocket13FrameDecoder(true, false, MAX_MESSAGE_PAYLOAD), //
+                    new Utf8FrameValidator(), //
+                    new WebSocketFrameAggregator(MAX_MESSAGE_PAYLOAD));
+        }
+
+        @Override
+        protected void prepareInvocation() {
+            if (this.fragmentedFrameBytes == null) {
+                this.fragmentedFrameBytes = new byte[MASKED_FRAGMENTED_TEXT_MESSAGE.length][];
+            }
+
+            this.fragmentedFrames = new io.netty.buffer.ByteBuf[MASKED_FRAGMENTED_TEXT_MESSAGE.length];
+            for (int i = 0; i < MASKED_FRAGMENTED_TEXT_MESSAGE.length; i++) {
+                this.fragmentedFrameBytes[i] = reusableBytes(this.fragmentedFrameBytes[i], MASKED_FRAGMENTED_TEXT_MESSAGE[i]);
+                this.fragmentedFrames[i] = io.netty.buffer.Unpooled.wrappedBuffer(this.fragmentedFrameBytes[i]);
+            }
+        }
+
+        @Override
+        protected void cleanupInvocation() {
+            releaseNettyObjects(this.fragmentedFrames);
+            this.fragmentedFrames = null;
+        }
+    }
+
+    private static final AtomicInteger      ADDRESS               = new AtomicInteger(300);
+    private static final String             WS_URI                = "ws://example.com/chat";
+    private static final String             SERVER_HANDSHAKE_KEY  = "dGhlIHNhbXBsZSBub25jZQ==";
+    private static final byte[]             MASK_KEY              = new byte[] { 0x11, 0x22, 0x33, 0x44 };
+    private static final int                MAX_MESSAGE_PAYLOAD   = 1024 * 1024;
+    private static final int                MESSAGE_FRAGMENT_SIZE = 512;
+    private static final int                MULTI_OBJECT_COUNT    = 4;
+    private static final String             TEXT_FRAME            = "hello websocket benchmark";
+    private static final String             LARGE_TEXT_MESSAGE;
+    private static final byte[]             LARGE_TEXT_MESSAGE_BYTES;
+    private static final byte[]             TEXT_FRAME_BYTES      = TEXT_FRAME.getBytes(StandardCharsets.UTF_8);
+    private static final byte[]             BINARY_FRAME_BYTES    = new byte[4096];
+    private static final byte[]             MASKED_TEXT_FRAME;
+    private static final byte[]             MASKED_BINARY_FRAME;
+    private static final byte[][]           PARTIAL_MASKED_TEXT_FRAME;
+    private static final byte[]             STICKY_MASKED_TEXT_FRAMES;
+    private static final byte[]             HIXIE_TEXT_FRAME;
+    private static final byte[][]           MASKED_FRAGMENTED_TEXT_MESSAGE;
+    private              LeakMetricSnapshot before;
 
     static {
         StringBuilder textBuilder = new StringBuilder();
@@ -120,6 +807,7 @@ public class WebSocketBenchmark {
             textBuilder.append("websocket-message-").append(i).append('-');
         }
         LARGE_TEXT_MESSAGE = textBuilder.toString();
+        LARGE_TEXT_MESSAGE_BYTES = LARGE_TEXT_MESSAGE.getBytes(StandardCharsets.UTF_8);
 
         for (int i = 0; i < BINARY_FRAME_BYTES.length; i++) {
             BINARY_FRAME_BYTES[i] = (byte) (i & 0xFF);
@@ -127,271 +815,239 @@ public class WebSocketBenchmark {
 
         MASKED_TEXT_FRAME = buildRfc6455Frame(WebSocketOpcode.TEXT.code(), true, true, MASK_KEY, TEXT_FRAME_BYTES);
         MASKED_BINARY_FRAME = buildRfc6455Frame(WebSocketOpcode.BINARY.code(), true, true, MASK_KEY, BINARY_FRAME_BYTES);
+        PARTIAL_MASKED_TEXT_FRAME = splitBytes(MASKED_TEXT_FRAME, 3);
+        STICKY_MASKED_TEXT_FRAMES = repeatBytes(MASKED_TEXT_FRAME, MULTI_OBJECT_COUNT);
+        HIXIE_TEXT_FRAME = buildHixieTextFrame(TEXT_FRAME_BYTES);
 
-        byte[] fragmentedPayload = LARGE_TEXT_MESSAGE.getBytes(StandardCharsets.UTF_8);
-        MASKED_FRAGMENTED_TEXT_MESSAGE = splitToMaskedFrames(fragmentedPayload, MESSAGE_FRAGMENT_SIZE);
-    }
-
-    @Setup(Level.Trial)
-    public void setupTrial() throws IOException {
-        this.neta = new NetManager();
-        this.framePipe = this.openVirtualPipe(ctx -> {
-            ctx.addLast("ws-ready", new ReadyWebSocketBinder(true));
-            ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
-        }, VrtSoConfig.asServer(), ADDRESS.incrementAndGet());
-        this.messagePipe = this.openVirtualPipe(ctx -> {
-            ctx.addLast("ws-ready", new ReadyWebSocketBinder(true));
-            ctx.addLast("ws-frame", new WebSocketFrameDuplex(WebSocketVersion.V13));
-            ctx.addLast("ws-message", new WebSocketMessageDuplex(true, MAX_MESSAGE_PAYLOAD, MESSAGE_FRAGMENT_SIZE));
-        }, VrtSoConfig.asServer(), ADDRESS.incrementAndGet());
-    }
-
-    @TearDown(Level.Trial)
-    public void tearDownTrial() throws IOException {
-        closePipe(this.framePipe);
-        closePipe(this.messagePipe);
-        if (this.neta != null) {
-            this.neta.shutdown();
-        }
+        MASKED_FRAGMENTED_TEXT_MESSAGE = splitToMaskedFrames(LARGE_TEXT_MESSAGE_BYTES, MESSAGE_FRAGMENT_SIZE);
     }
 
     @Setup(Level.Iteration)
     public void captureBaseline() {
         this.before = LeakMetricSnapshot.capture(ByteBufAllocator.DEFAULT.metric());
-        if (this.framePipe != null) {
-            this.framePipe.reset();
-        }
-        if (this.messagePipe != null) {
-            this.messagePipe.reset();
-        }
     }
 
     @TearDown(Level.Iteration)
     public void assertNoLeak() {
-        if (this.framePipe != null) {
-            this.framePipe.reset();
-        }
-        if (this.messagePipe != null) {
-            this.messagePipe.reset();
-        }
         this.before.assertRestored(ByteBufAllocator.DEFAULT.metric(), getClass().getSimpleName());
     }
 
     @Benchmark
-    public int neta_handshakeServerRfc6455() throws Throwable {
-        VirtualPipe pipe = this.openVirtualPipe(ctx -> ctx.addLast("ws-server", new WebSocketServerHandshakeDuplex(WebSocketVersion.V13)), VrtSoConfig.asServer(), ADDRESS.incrementAndGet());
-        try {
-            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI);
-            pipe.channel().receiveData(request);
-            assertNoErrors(pipe);
-            int observed = releaseVirtualOutbound(pipe.outbound());
-            releaseVirtualInbound(pipe.inbound());
-            if (!WebSocketUtils.isReady(pipe.channel())) {
-                throw new IllegalStateException("neta websocket server handshake was not marked ready");
-            }
-            return observed;
-        } finally {
-            closePipe(pipe);
+    public int neta_handshakeServerRfc6455(NetaServerHandshakeState state) throws Throwable {
+        Object[] out = state.pipe().channel().receiveDataAndReturning(state.request);
+        state.request = null;
+        int observed = releaseReturned(out);
+        if (!WebSocketUtils.isReady(state.pipe().channel())) {
+            throw new IllegalStateException("neta websocket server handshake was not marked ready");
         }
+        return observed;
     }
 
     @Benchmark
-    public int netty_handshakeServerRfc6455() {
-        DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/chat");
-        request.headers().set(HttpHeaderNames.HOST, "example.com");
-        request.headers().set(HttpHeaderNames.UPGRADE, HttpHeaderValues.WEBSOCKET);
-        request.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.UPGRADE);
-        request.headers().set(HttpHeaderNames.SEC_WEBSOCKET_VERSION, String.valueOf(WebSocketVersion.V13.code()));
-        request.headers().set(HttpHeaderNames.SEC_WEBSOCKET_KEY, "dGhlIHNhbXBsZSBub25jZQ==");
-
-        EmbeddedChannel channel = new EmbeddedChannel(
-                new io.netty.handler.codec.http.HttpRequestDecoder(),
-                new io.netty.handler.codec.http.HttpResponseEncoder());
-        try {
-            WebSocketServerHandshakerFactory factory = new WebSocketServerHandshakerFactory(WS_URI, null, true, MAX_MESSAGE_PAYLOAD);
-            WebSocketServerHandshaker handshaker = factory.newHandshaker(request);
-            ChannelFuture future = handshaker.handshake(channel, request.retain());
-            future.syncUninterruptibly();
-            return releaseNettyOutbound(channel);
-        } finally {
-            releaseNettyObject(request);
-            channel.finishAndReleaseAll();
-        }
+    public int netty_handshakeServerRfc6455(NettyServerHandshakeState state) {
+        ChannelFuture future = state.handshaker.handshake(state.channel(), state.request.retain());
+        future.syncUninterruptibly();
+        return releaseNettyOutbound(state.channel());
     }
 
     @Benchmark
-    public int neta_handshakeClientRfc6455() throws Throwable {
-        VirtualPipe pipe = this.openVirtualPipe(ctx -> ctx.addLast("ws-client", new WebSocketClientHandshakeDuplex(WebSocketVersion.V13)), VrtSoConfig.asClient(), ADDRESS.incrementAndGet());
-        try {
-            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI);
-            String key = request.getString(HttpHeaderNames.SEC_WEBSOCKET_KEY);
-            pipe.channel().sendData(request).get();
-            int observed = releaseVirtualOutbound(pipe.outbound());
-            pipe.channel().receiveData(newUpgradeResponse(key));
-            assertNoErrors(pipe);
-            observed += releaseVirtualInbound(pipe.inbound());
-            if (!WebSocketUtils.isReady(pipe.channel())) {
-                throw new IllegalStateException("neta websocket client handshake was not marked ready");
-            }
-            return observed;
-        } finally {
-            closePipe(pipe);
+    public int neta_handshakeClientRfc6455(NetaClientHandshakeState state) throws Throwable {
+        FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, WS_URI);
+        String key = request.getString(HttpHeaderNames.SEC_WEBSOCKET_KEY);
+        int observed = releaseReturned(state.pipe().channel().sendDataAndReturning(request));
+        observed += releaseReturned(state.pipe().channel().receiveDataAndReturning(newUpgradeResponse(key)));
+        if (!WebSocketUtils.isReady(state.pipe().channel())) {
+            throw new IllegalStateException("neta websocket client handshake was not marked ready");
         }
+        return observed;
     }
 
     @Benchmark
-    public int netty_handshakeClientRfc6455() {
-        EmbeddedChannel channel = new EmbeddedChannel(
-            new io.netty.handler.codec.http.HttpRequestEncoder(),
-            new io.netty.handler.codec.http.HttpResponseDecoder());
+    public int netty_handshakeClientRfc6455(NettyClientHandshakeState state) {
+        state.handshaker.handshake(state.channel()).syncUninterruptibly();
+        HandshakeRequestSnapshot request = captureNettyHandshakeRequest(state.channel());
         try {
-            WebSocketClientHandshaker handshaker = WebSocketClientHandshakerFactory.newHandshaker(
-                    URI.create(WS_URI),
-                    io.netty.handler.codec.http.websocketx.WebSocketVersion.V13,
-                    null,
-                    true,
-                    new DefaultHttpHeaders(),
-                    MAX_MESSAGE_PAYLOAD);
-            handshaker.handshake(channel).syncUninterruptibly();
-
-            HandshakeRequestSnapshot request = captureNettyHandshakeRequest(channel);
             String key = extractSecWebSocketKey(request.requestText);
-            int observed = request.outboundBytes;
-
-            io.netty.handler.codec.http.FullHttpResponse response = new DefaultFullHttpResponse(
-                    HttpVersion.HTTP_1_1,
-                    io.netty.handler.codec.http.HttpResponseStatus.SWITCHING_PROTOCOLS);
+            DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, io.netty.handler.codec.http.HttpResponseStatus.SWITCHING_PROTOCOLS);
             response.headers().set(io.netty.handler.codec.http.HttpHeaderNames.UPGRADE, io.netty.handler.codec.http.HttpHeaderValues.WEBSOCKET);
             response.headers().set(io.netty.handler.codec.http.HttpHeaderNames.CONNECTION, io.netty.handler.codec.http.HttpHeaderValues.UPGRADE);
             response.headers().set(io.netty.handler.codec.http.HttpHeaderNames.SEC_WEBSOCKET_ACCEPT, computeAcceptKey(key));
-            handshaker.finishHandshake(channel, response.retain());
-
-            releaseNettyObject(request);
-            releaseNettyObject(response);
-            return observed;
-        } finally {
-            channel.finishAndReleaseAll();
-        }
-    }
-
-    @Benchmark
-    public int neta_frameEncodeText() throws Throwable {
-        this.framePipe.reset();
-        this.framePipe.channel().sendData(WebSocketUtils.textFrame(true, false, null, utf8(TEXT_FRAME))).get();
-        assertNoErrors(this.framePipe);
-        return releaseVirtualOutbound(this.framePipe.outbound());
-    }
-
-    @Benchmark
-    public int netty_frameEncodeText() {
-        EmbeddedChannel channel = new EmbeddedChannel(new WebSocket13FrameEncoder(false));
-        try {
-            channel.writeOutbound(new TextWebSocketFrame(TEXT_FRAME));
-            return releaseNettyOutbound(channel);
-        } finally {
-            channel.finishAndReleaseAll();
-        }
-    }
-
-    @Benchmark
-    public int neta_frameDecodeMaskedText() {
-        this.framePipe.reset();
-        this.framePipe.channel().receiveData(httpByteBuf(MASKED_TEXT_FRAME));
-        assertNoErrors(this.framePipe);
-        return releaseVirtualInbound(this.framePipe.inbound());
-    }
-
-    @Benchmark
-    public int netty_frameDecodeMaskedText() {
-        EmbeddedChannel channel = new EmbeddedChannel(new WebSocket13FrameDecoder(true, false, MAX_MESSAGE_PAYLOAD));
-        try {
-            channel.writeInbound(io.netty.buffer.Unpooled.wrappedBuffer(MASKED_TEXT_FRAME));
-            return releaseNettyInbound(channel);
-        } finally {
-            channel.finishAndReleaseAll();
-        }
-    }
-
-    @Benchmark
-    public int neta_frameEncodeBinary4k() throws Throwable {
-        this.framePipe.reset();
-        this.framePipe.channel().sendData(WebSocketUtils.binaryFrame(true, false, null, binary(BINARY_FRAME_BYTES))).get();
-        assertNoErrors(this.framePipe);
-        return releaseVirtualOutbound(this.framePipe.outbound());
-    }
-
-    @Benchmark
-    public int netty_frameEncodeBinary4k() {
-        EmbeddedChannel channel = new EmbeddedChannel(new WebSocket13FrameEncoder(false));
-        try {
-            channel.writeOutbound(new BinaryWebSocketFrame(io.netty.buffer.Unpooled.wrappedBuffer(BINARY_FRAME_BYTES)));
-            return releaseNettyOutbound(channel);
-        } finally {
-            channel.finishAndReleaseAll();
-        }
-    }
-
-    @Benchmark
-    public int neta_frameDecodeMaskedBinary4k() {
-        this.framePipe.reset();
-        this.framePipe.channel().receiveData(httpByteBuf(MASKED_BINARY_FRAME));
-        assertNoErrors(this.framePipe);
-        return releaseVirtualInbound(this.framePipe.inbound());
-    }
-
-    @Benchmark
-    public int netty_frameDecodeMaskedBinary4k() {
-        EmbeddedChannel channel = new EmbeddedChannel(new WebSocket13FrameDecoder(true, false, MAX_MESSAGE_PAYLOAD));
-        try {
-            channel.writeInbound(io.netty.buffer.Unpooled.wrappedBuffer(MASKED_BINARY_FRAME));
-            return releaseNettyInbound(channel);
-        } finally {
-            channel.finishAndReleaseAll();
-        }
-    }
-
-    @Benchmark
-    public int neta_messageEncodeTextAutoFragment() throws Throwable {
-        this.messagePipe.reset();
-        this.messagePipe.channel().sendData(WebSocketUtils.textMessage(utf8(LARGE_TEXT_MESSAGE))).get();
-        assertNoErrors(this.messagePipe);
-        return releaseVirtualOutbound(this.messagePipe.outbound());
-    }
-
-    @Benchmark
-    public int netty_messageEncodeTextAutoFragment() {
-        EmbeddedChannel channel = new EmbeddedChannel(new WebSocket13FrameEncoder(false));
-        try {
-            writeFragmentedNettyText(channel, LARGE_TEXT_MESSAGE.getBytes(StandardCharsets.UTF_8), MESSAGE_FRAGMENT_SIZE);
-            return releaseNettyOutbound(channel);
-        } finally {
-            channel.finishAndReleaseAll();
-        }
-    }
-
-    @Benchmark
-    public int neta_messageDecodeFragmentedText() {
-        this.messagePipe.reset();
-        for (byte[] frame : MASKED_FRAGMENTED_TEXT_MESSAGE) {
-            this.messagePipe.channel().receiveData(httpByteBuf(frame));
-        }
-        assertNoErrors(this.messagePipe);
-        return releaseVirtualInbound(this.messagePipe.inbound());
-    }
-
-    @Benchmark
-    public int netty_messageDecodeFragmentedText() {
-        EmbeddedChannel channel = new EmbeddedChannel(
-                new WebSocket13FrameDecoder(true, false, MAX_MESSAGE_PAYLOAD),
-                new WebSocketFrameAggregator(MAX_MESSAGE_PAYLOAD));
-        try {
-            for (byte[] frame : MASKED_FRAGMENTED_TEXT_MESSAGE) {
-                channel.writeInbound(io.netty.buffer.Unpooled.wrappedBuffer(frame));
+            try {
+                state.handshaker.finishHandshake(state.channel(), response.retain());
+            } finally {
+                releaseNettyObject(response);
             }
-            return releaseNettyInbound(channel);
+            return request.outboundBytes;
         } finally {
-            channel.finishAndReleaseAll();
+            releaseNettyObject(request);
         }
+    }
+
+    @Benchmark
+    public int neta_frameEncodeText(NetaFrameEncodeState state) throws Throwable {
+        Object[] out = state.pipe().channel().sendDataAndReturning(state.textFrame);
+        state.textFrame = null;
+        return releaseReturned(out);
+    }
+
+    @Benchmark
+    public int netty_frameEncodeText(NettyFrameEncodeState state) {
+        state.channel().writeOutbound(state.textFrame);
+        state.textFrame = null;
+        return releaseNettyOutbound(state.channel());
+    }
+
+    @Benchmark
+    public int neta_frameDecodeMaskedText(NetaFrameDecodeState state) throws Throwable {
+        Object[] out = state.pipe().channel().receiveDataAndReturning(state.maskedTextFrame);
+        state.maskedTextFrame = null;
+        return releaseReturned(out);
+    }
+
+    @Benchmark
+    public int netty_frameDecodeMaskedText(NettyFrameDecodeState state) {
+        state.channel().writeInbound(state.maskedTextFrame);
+        state.maskedTextFrame = null;
+        return releaseNettyInbound(state.channel());
+    }
+
+    @Benchmark
+    public int neta_frameEncodeBinary4k(NetaFrameEncodeState state) throws Throwable {
+        Object[] out = state.pipe().channel().sendDataAndReturning(state.binaryFrame);
+        state.binaryFrame = null;
+        return releaseReturned(out);
+    }
+
+    @Benchmark
+    public int netty_frameEncodeBinary4k(NettyFrameEncodeState state) {
+        state.channel().writeOutbound(state.binaryFrame);
+        state.binaryFrame = null;
+        return releaseNettyOutbound(state.channel());
+    }
+
+    @Benchmark
+    public int neta_frameDecodeMaskedBinary4k(NetaFrameDecodeState state) throws Throwable {
+        Object[] out = state.pipe().channel().receiveDataAndReturning(state.maskedBinaryFrame);
+        state.maskedBinaryFrame = null;
+        return releaseReturned(out);
+    }
+
+    @Benchmark
+    public int netty_frameDecodeMaskedBinary4k(NettyFrameDecodeState state) {
+        state.channel().writeInbound(state.maskedBinaryFrame);
+        state.maskedBinaryFrame = null;
+        return releaseNettyInbound(state.channel());
+    }
+
+    @Benchmark
+    public int neta_frameDecodePartialMaskedText(NetaPartialFrameDecodeState state) throws Throwable {
+        Object[] out = null;
+        for (int i = 0; i < state.chunks.length; i++) {
+            out = state.pipe().channel().receiveDataAndReturning(state.chunks[i]);
+            state.chunks[i] = null;
+        }
+        return requireObserved(releaseReturned(out), decodedTextObservation(), "neta partial masked text");
+    }
+
+    @Benchmark
+    public int netty_frameDecodePartialMaskedText(NettyPartialFrameDecodeState state) {
+        for (int i = 0; i < state.chunks.length; i++) {
+            state.channel().writeInbound(state.chunks[i]);
+            state.chunks[i] = null;
+        }
+        return requireObserved(releaseNettyInbound(state.channel()), decodedTextObservation(), "netty partial masked text");
+    }
+
+    @Benchmark
+    public int neta_frameDecodeSticky4MaskedText(NetaStickyFrameDecodeState state) throws Throwable {
+        Object[] out = state.pipe().channel().receiveDataAndReturning(state.stickyFrames);
+        state.stickyFrames = null;
+        return requireObserved(releaseReturned(out), decodedTextObservation() * MULTI_OBJECT_COUNT, "neta sticky masked text");
+    }
+
+    @Benchmark
+    public int netty_frameDecodeSticky4MaskedText(NettyStickyFrameDecodeState state) {
+        state.channel().writeInbound(state.stickyFrames);
+        state.stickyFrames = null;
+        return requireObserved(releaseNettyInbound(state.channel()), decodedTextObservation() * MULTI_OBJECT_COUNT, "netty sticky masked text");
+    }
+
+    @Benchmark
+    public int neta_frameDecodeMultiObject4MaskedText(NetaMultiObjectDecodeState state) throws Throwable {
+        Object[] out = state.pipe().channel().receiveDataAndReturning((Object[]) state.frames);
+        state.frames = null;
+        return requireObserved(releaseReturned(out), decodedTextObservation() * MULTI_OBJECT_COUNT, "neta multi-object masked text");
+    }
+
+    @Benchmark
+    public int netty_frameDecodeMultiObject4MaskedText(NettyMultiObjectDecodeState state) {
+        state.channel().writeInbound((Object[]) state.frames);
+        state.frames = null;
+        return requireObserved(releaseNettyInbound(state.channel()), decodedTextObservation() * MULTI_OBJECT_COUNT, "netty multi-object masked text");
+    }
+
+    @Benchmark
+    public int neta_frameDecodeHixieText(NetaHixieDecodeState state) throws Throwable {
+        Object[] out = state.pipe().channel().receiveDataAndReturning(state.frame);
+        state.frame = null;
+        return requireObserved(releaseReturned(out), decodedTextObservation(), "neta Hixie text decode");
+    }
+
+    @Benchmark
+    public int netty_frameDecodeHixieText(NettyHixieDecodeState state) {
+        state.channel().writeInbound(state.frame);
+        state.frame = null;
+        return requireObserved(releaseNettyInbound(state.channel()), decodedTextObservation(), "netty Hixie text decode");
+    }
+
+    @Benchmark
+    public int neta_frameEncodeHixieText(NetaHixieEncodeState state) throws Throwable {
+        Object[] out = state.pipe().channel().sendDataAndReturning(state.frame);
+        state.frame = null;
+        return requirePositive(releaseReturned(out), "neta Hixie text encode");
+    }
+
+    @Benchmark
+    public int netty_frameEncodeHixieText(NettyHixieEncodeState state) {
+        state.channel().writeOutbound(state.frame);
+        state.frame = null;
+        return requirePositive(releaseNettyOutbound(state.channel()), "netty Hixie text encode");
+    }
+
+    @Benchmark
+    public int neta_messageEncodeTextAutoFragment(NetaMessageEncodeState state) throws Throwable {
+        Object[] out = state.pipe().channel().sendDataAndReturning(state.textMessage);
+        state.textMessage = null;
+        return releaseReturned(out);
+    }
+
+    @Benchmark
+    public int netty_messageEncodeTextAutoFragment(NettyMessageEncodeState state) {
+        io.netty.handler.codec.http.websocketx.WebSocketFrame[] fragmentedFrames = buildNettyFragmentedTextFrames(LARGE_TEXT_MESSAGE_BYTES, MESSAGE_FRAGMENT_SIZE);
+        for (int i = 0; i < fragmentedFrames.length; i++) {
+            state.channel().writeOutbound(fragmentedFrames[i]);
+            fragmentedFrames[i] = null;
+        }
+        return releaseNettyOutbound(state.channel());
+    }
+
+    @Benchmark
+    public int neta_messageDecodeFragmentedText(NetaMessageDecodeState state) throws Throwable {
+        Object[] out = null;
+        for (int i = 0; i < state.fragmentedFrames.length; i++) {
+            out = state.pipe().channel().receiveDataAndReturning(state.fragmentedFrames[i]);
+            state.fragmentedFrames[i] = null;
+        }
+        return releaseReturned(out);
+    }
+
+    @Benchmark
+    public int netty_messageDecodeFragmentedText(NettyMessageDecodeState state) {
+        for (int i = 0; i < state.fragmentedFrames.length; i++) {
+            state.channel().writeInbound(state.fragmentedFrames[i]);
+            state.fragmentedFrames[i] = null;
+        }
+        return releaseNettyInbound(state.channel());
     }
 
     public static void main(String[] args) throws RunnerException {
@@ -399,32 +1055,19 @@ public class WebSocketBenchmark {
         new Runner(options).run();
     }
 
-    private VirtualPipe openVirtualPipe(ProtoInitializer initializer, VrtSoConfig config, int addressId) throws IOException {
-        Queue<Object> inbound = new ConcurrentLinkedQueue<>();
-        Queue<Object> outbound = new ConcurrentLinkedQueue<>();
-        Queue<Throwable> inboundErrors = new ConcurrentLinkedQueue<>();
-        Queue<Throwable> outboundErrors = new ConcurrentLinkedQueue<>();
-        VrtChannel channel = (VrtChannel) this.neta.connectSync(new VrtSocketAddress(addressId), initializer, config);
-        channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, payload -> {
-            Object data = payload.getData();
-            if (data != null) {
-                inbound.offer(data);
-            }
-        });
-        channel.subscribe(PlayLoad::isOutbound, SubscribeMode.SYNC, payload -> {
-            Object data = payload.getData();
-            if (data == null) {
-                return;
-            }
-            if (data instanceof ByteBuf) {
-                outbound.offer(((ByteBuf) data).retain());
-            } else {
-                outbound.offer(snapshotOutbound(data));
-            }
-        });
-        channel.subscribe(p -> p.isInbound() && !p.isSuccess(), SubscribeMode.SYNC, payload -> inboundErrors.offer(payload.getError()));
-        channel.subscribe(p -> p.isOutbound() && !p.isSuccess(), SubscribeMode.SYNC, payload -> outboundErrors.offer(payload.getError()));
-        return new VirtualPipe(channel, inbound, outbound, inboundErrors, outboundErrors);
+    private static VirtualPipe openVirtualPipe(NetManager neta, ProtoInitializer initializer, VrtSoConfig config, int addressId) throws IOException {
+        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(addressId), initializer, config);
+        return new VirtualPipe(channel);
+    }
+
+    private static FullHttpRequest newNetaServerHandshakeRequest() {
+        net.hasor.neta.codec.http.DefaultFullHttpRequest request = new net.hasor.neta.codec.http.DefaultFullHttpRequest(net.hasor.neta.codec.http.HttpVersion.HTTP_1_1, net.hasor.neta.codec.http.HttpMethod.GET, "/chat");
+        request.setHeader(HttpHeaderNames.HOST, "example.com");
+        request.setHeader(HttpHeaderNames.UPGRADE, HttpHeaderValues.WEBSOCKET);
+        request.setHeader(HttpHeaderNames.CONNECTION, HttpHeaderValues.UPGRADE);
+        request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_VERSION, String.valueOf(WebSocketVersion.V13.code()));
+        request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_KEY, SERVER_HANDSHAKE_KEY);
+        return request;
     }
 
     private static void closePipe(VirtualPipe pipe) {
@@ -432,13 +1075,9 @@ public class WebSocketBenchmark {
             return;
         }
 
-        pipe.reset();
-        if (pipe.channel() != null && !pipe.channel().isClose()) {
-            try {
-                pipe.channel().close().get();
-            } catch (Exception e) {
-                throw new IllegalStateException("failed to close virtual websocket benchmark channel", e);
-            }
+        VrtChannel channel = pipe.channel();
+        if (channel != null && !channel.isClose()) {
+            channel.closeNow();
         }
     }
 
@@ -458,7 +1097,66 @@ public class WebSocketBenchmark {
     }
 
     private static HttpByteBuf httpByteBuf(byte[] value) {
-        return new DefaultHttpByteBuf(ByteBuf.wrap(value));
+        return DefaultHttpByteBuf.newInstance(ByteBuf.wrap(value), 0);
+    }
+
+    private static byte[] reusableBytes(byte[] target, byte[] template) {
+        if (template == null) {
+            return null;
+        }
+        byte[] result = target;
+        if (result == null || result.length != template.length) {
+            result = new byte[template.length];
+        }
+        System.arraycopy(template, 0, result, 0, template.length);
+        return result;
+    }
+
+    private static byte[][] splitBytes(byte[] value, int parts) {
+        byte[][] result = new byte[parts][];
+        int offset = 0;
+        for (int i = 0; i < parts; i++) {
+            int remaining = value.length - offset;
+            int length = (remaining + parts - i - 1) / (parts - i);
+            result[i] = new byte[length];
+            System.arraycopy(value, offset, result[i], 0, length);
+            offset += length;
+        }
+        return result;
+    }
+
+    private static byte[] repeatBytes(byte[] value, int count) {
+        byte[] result = new byte[value.length * count];
+        for (int i = 0; i < count; i++) {
+            System.arraycopy(value, 0, result, i * value.length, value.length);
+        }
+        return result;
+    }
+
+    private static byte[] buildHixieTextFrame(byte[] payload) {
+        byte[] result = new byte[payload.length + 2];
+        result[0] = 0x00;
+        System.arraycopy(payload, 0, result, 1, payload.length);
+        result[result.length - 1] = (byte) 0xFF;
+        return result;
+    }
+
+    private static int decodedTextObservation() {
+        return 1 + TEXT_FRAME_BYTES.length;
+    }
+
+    private static int requireObserved(int actual, int expected, String scenario) {
+        if (actual != expected) {
+            throw new IllegalStateException(scenario + " observed " + actual + ", expected " + expected);
+        }
+        return actual;
+    }
+
+    private static int requirePositive(int actual, String scenario) {
+        if (actual <= 0) {
+            throw new IllegalStateException(scenario + " produced no output");
+        }
+        return actual;
     }
 
     private static byte[][] splitToMaskedFrames(byte[] payload, int chunkSize) {
@@ -571,7 +1269,8 @@ public class WebSocketBenchmark {
         return request.substring(start, end).trim();
     }
 
-    private static void writeFragmentedNettyText(EmbeddedChannel channel, byte[] payload, int chunkSize) {
+    private static io.netty.handler.codec.http.websocketx.WebSocketFrame[] buildNettyFragmentedTextFrames(byte[] payload, int chunkSize) {
+        List<io.netty.handler.codec.http.websocketx.WebSocketFrame> frames = new ArrayList<>();
         int offset = 0;
         boolean first = true;
         while (offset < payload.length) {
@@ -579,40 +1278,61 @@ public class WebSocketBenchmark {
             boolean fin = offset + len >= payload.length;
             io.netty.buffer.ByteBuf buf = io.netty.buffer.Unpooled.wrappedBuffer(payload, offset, len);
             if (first) {
-                channel.writeOutbound(new TextWebSocketFrame(fin, 0, buf));
+                frames.add(new TextWebSocketFrame(fin, 0, buf));
                 first = false;
             } else {
-                channel.writeOutbound(new ContinuationWebSocketFrame(fin, 0, buf));
+                frames.add(new ContinuationWebSocketFrame(fin, 0, buf));
             }
             offset += len;
         }
+        return frames.toArray(new io.netty.handler.codec.http.websocketx.WebSocketFrame[0]);
     }
 
-    private static void assertNoErrors(VirtualPipe pipe) {
-        Throwable inboundError = pipe.inboundErrors().poll();
-        if (inboundError != null) {
-            throw new IllegalStateException("virtual inbound failed", inboundError);
+    private static void clearNettyChannel(EmbeddedChannel channel) {
+        if (channel == null) {
+            return;
         }
-        Throwable outboundError = pipe.outboundErrors().poll();
-        if (outboundError != null) {
-            throw new IllegalStateException("virtual outbound failed", outboundError);
+        Object inbound;
+        while ((inbound = channel.readInbound()) != null) {
+            releaseNettyObject(inbound);
+        }
+        Object outbound;
+        while ((outbound = channel.readOutbound()) != null) {
+            releaseNettyObject(outbound);
+        }
+        channel.checkException();
+    }
+
+    private static void releaseNetaObject(Object obj) {
+        if (obj != null) {
+            measureAndRelease(obj);
         }
     }
 
-    private static int releaseVirtualOutbound(Queue<Object> outbound) {
+    private static void releaseNetaObjects(Object[] objects) {
+        if (objects == null) {
+            return;
+        }
+        for (Object object : objects) {
+            releaseNetaObject(object);
+        }
+    }
+
+    private static void releaseNettyObjects(Object[] objects) {
+        if (objects == null) {
+            return;
+        }
+        for (Object object : objects) {
+            releaseNettyObject(object);
+        }
+    }
+
+    private static int releaseReturned(Object[] out) {
         int observed = 0;
-        Object item;
-        while ((item = outbound.poll()) != null) {
-            observed += measureAndRelease(item);
-        }
-        return observed;
-    }
-
-    private static int releaseVirtualInbound(Queue<Object> inbound) {
-        int observed = 0;
-        Object item;
-        while ((item = inbound.poll()) != null) {
-            observed += measureAndRelease(item);
+        if (out != null) {
+            for (Object item : out) {
+                observed += measureAndRelease(item);
+            }
         }
         return observed;
     }
@@ -642,6 +1362,9 @@ public class WebSocketBenchmark {
     }
 
     private static int measureAndRelease(Object item) {
+        if (item instanceof Integer) {
+            return (Integer) item;
+        }
         if (item instanceof ByteBuf) {
             ByteBuf buffer = (ByteBuf) item;
             int readable = buffer.readableBytes();
@@ -699,57 +1422,22 @@ public class WebSocketBenchmark {
         }
     }
 
-    private static Object snapshotOutbound(Object outbound) {
-        if (outbound instanceof FullHttpResponse) {
-            FullHttpResponse response = (FullHttpResponse) outbound;
-            net.hasor.neta.codec.http.DefaultFullHttpResponse copy = new net.hasor.neta.codec.http.DefaultFullHttpResponse(response.protocolVersion(), response.status(), retainContent(response.content()));
-            copy.appendHeaders(response);
-            return copy;
-        }
-        if (outbound instanceof FullHttpRequest) {
-            FullHttpRequest request = (FullHttpRequest) outbound;
-            net.hasor.neta.codec.http.DefaultFullHttpRequest copy = new net.hasor.neta.codec.http.DefaultFullHttpRequest(request.protocolVersion(), request.method(), request.uri(), retainContent(request.content()));
-            copy.appendHeaders(request);
-            return copy;
-        }
-        if (outbound instanceof HttpResponse) {
-            HttpResponse response = (HttpResponse) outbound;
-            return new DefaultHttpResponse(response.protocolVersion(), response.status());
-        }
-        if (outbound instanceof HttpRequest) {
-            HttpRequest request = (HttpRequest) outbound;
-            return new DefaultHttpRequest(request.protocolVersion(), request.method(), request.uri());
-        }
-        if (outbound instanceof HttpByteBuf) {
-            HttpByteBuf body = (HttpByteBuf) outbound;
-            return new DefaultHttpByteBuf(retainContent(body.content()), body.streamId());
-        }
-        if (outbound instanceof HttpContent) {
-            HttpContent content = (HttpContent) outbound;
-            return new DefaultHttpContent(retainContent(content.content())).streamId(content.streamId());
-        }
-        if (outbound instanceof HttpHeaders) {
-            net.hasor.neta.codec.http.DefaultHttpHeaders copy = new net.hasor.neta.codec.http.DefaultHttpHeaders();
-            copy.appendHeaders((HttpHeaders) outbound);
-            return copy;
-        }
-        return outbound;
-    }
-
-    private static ByteBuf retainContent(ByteBuf content) {
-        return content == null ? ByteBuf.EMPTY : content.retain();
-    }
-
     private static final class ReadyWebSocketBinder implements ProtoDuplex<Object, Object, Object, Object> {
-        private final boolean server;
+        private final boolean          server;
+        private final WebSocketVersion version;
 
         private ReadyWebSocketBinder(boolean server) {
+            this(server, WebSocketVersion.V13);
+        }
+
+        private ReadyWebSocketBinder(boolean server, WebSocketVersion version) {
             this.server = server;
+            this.version = version;
         }
 
         @Override
         public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) {
-            WebSocketContext wsContext = new WebSocketContextImpl(this.server, null, WebSocketVersion.V13.code(), "/chat", "example.com", "http://example.com", Collections.<String>emptyList());
+            WebSocketContext wsContext = new WebSocketContextImpl(this.server, null, this.version.code(), "/chat", "example.com", "http://example.com", Collections.<String>emptyList());
             context.context(WebSocketContext.class, wsContext);
             context.rootContext(WebSocketContext.class, wsContext);
             WebSocketRegistry.bind(context, WebSocketRegistryKey.connectionScope(), wsContext);
@@ -779,52 +1467,14 @@ public class WebSocketBenchmark {
     }
 
     private static final class VirtualPipe {
-        private final VrtChannel       channel;
-        private final Queue<Object>    inbound;
-        private final Queue<Object>    outbound;
-        private final Queue<Throwable> inboundErrors;
-        private final Queue<Throwable> outboundErrors;
+        private final VrtChannel channel;
 
-        private VirtualPipe(VrtChannel channel, Queue<Object> inbound, Queue<Object> outbound, Queue<Throwable> inboundErrors, Queue<Throwable> outboundErrors) {
+        private VirtualPipe(VrtChannel channel) {
             this.channel = channel;
-            this.inbound = inbound;
-            this.outbound = outbound;
-            this.inboundErrors = inboundErrors;
-            this.outboundErrors = outboundErrors;
         }
 
         private VrtChannel channel() {
             return this.channel;
-        }
-
-        private Queue<Object> inbound() {
-            return this.inbound;
-        }
-
-        private Queue<Object> outbound() {
-            return this.outbound;
-        }
-
-        private Queue<Throwable> inboundErrors() {
-            return this.inboundErrors;
-        }
-
-        private Queue<Throwable> outboundErrors() {
-            return this.outboundErrors;
-        }
-
-        private void reset() {
-            clearQueue(this.inbound);
-            clearQueue(this.outbound);
-            this.inboundErrors.clear();
-            this.outboundErrors.clear();
-        }
-
-        private static void clearQueue(Queue<Object> queue) {
-            Object item;
-            while ((item = queue.poll()) != null) {
-                measureAndRelease(item);
-            }
         }
     }
 }

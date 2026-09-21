@@ -1,51 +1,30 @@
+/*
+ * Copyright 2015-2022 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0.
+ * See the LICENSE.txt file for the full license.
+ * https://www.apache.org/licenses/LICENSE-2.0
+ */
 package net.hasor.neta.http;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.util.ReferenceCounted;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.NetManager;
-import net.hasor.neta.channel.PlayLoad;
 import net.hasor.neta.channel.ProtoInitializer;
-import net.hasor.neta.channel.SubscribeMode;
 import net.hasor.neta.channel.transport.virtual.VrtChannel;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.channel.transport.virtual.VrtSocketAddress;
-import net.hasor.neta.codec.http.DefaultFullHttpRequest;
-import net.hasor.neta.codec.http.DefaultFullHttpResponse;
-import net.hasor.neta.codec.http.HttpContent;
-import net.hasor.neta.codec.http.HttpHeaderNames;
-import net.hasor.neta.codec.http.HttpHeaderValues;
-import net.hasor.neta.codec.http.HttpMethod;
-import net.hasor.neta.codec.http.HttpObject;
-import net.hasor.neta.codec.http.HttpRequestDecoder;
-import net.hasor.neta.codec.http.HttpRequestEncoder;
-import net.hasor.neta.codec.http.HttpResponseDecoder;
-import net.hasor.neta.codec.http.HttpResponseEncoder;
-import net.hasor.neta.codec.http.HttpStatus;
-import net.hasor.neta.codec.http.HttpVersion;
-import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.BenchmarkMode;
-import org.openjdk.jmh.annotations.Fork;
-import org.openjdk.jmh.annotations.Level;
-import org.openjdk.jmh.annotations.Measurement;
-import org.openjdk.jmh.annotations.Mode;
-import org.openjdk.jmh.annotations.OutputTimeUnit;
-import org.openjdk.jmh.annotations.Scope;
-import org.openjdk.jmh.annotations.Setup;
-import org.openjdk.jmh.annotations.State;
-import org.openjdk.jmh.annotations.TearDown;
-import org.openjdk.jmh.annotations.Warmup;
+import net.hasor.neta.codec.http.*;
+import net.hasor.neta.leak.LeakMetricSnapshot;
+import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
-import net.hasor.neta.leak.LeakMetricSnapshot;
 
 @Fork(1)
 @State(Scope.Thread)
@@ -54,43 +33,30 @@ import net.hasor.neta.leak.LeakMetricSnapshot;
 @Warmup(iterations = 5, time = 1)
 @Measurement(iterations = 5, time = 2)
 public class HttpCodecBenchmark {
-    private static final byte[] POST_BODY_BYTES = "{\"name\":\"John Doe\",\"email\":\"john@example.com\",\"age\":30}".getBytes(StandardCharsets.UTF_8);
-    private static final byte[] RESPONSE_BODY_BYTES = "Hello, World!".getBytes(StandardCharsets.UTF_8);
-    private static final byte[] SIMPLE_REQUEST_BYTES;
-    private static final byte[] POST_REQUEST_BYTES;
-    private static final byte[] SIMPLE_RESPONSE_BYTES;
-    private static final byte[] LARGE_RESPONSE_BYTES;
-    private NetManager           neta;
-    private VirtualPipe          requestEncoderPipe;
-    private VirtualPipe          responseEncoderPipe;
-    private VirtualPipe          requestDecoderPipe;
-    private VirtualPipe          responseDecoderPipe;
-    private LeakMetricSnapshot   before;
+    private static final byte[]             POST_BODY_BYTES             = "{\"name\":\"John Doe\",\"email\":\"john@example.com\",\"age\":30}".getBytes(StandardCharsets.UTF_8);
+    private static final byte[]             RESPONSE_BODY_BYTES         = "Hello, World!".getBytes(StandardCharsets.UTF_8);
+    private static final byte[]             SIMPLE_REQUEST_BYTES;
+    private static final String[]           SIMPLE_REQUEST_HEADER_NAMES = { "Host", "Accept", "Accept-Language", "Connection" };
+    private static final byte[]             POST_REQUEST_BYTES;
+    private static final byte[]             SIMPLE_RESPONSE_BYTES;
+    private static final byte[]             LARGE_RESPONSE_BYTES;
+    private              NetManager         neta;
+    private              VirtualPipe        requestEncoderPipe;
+    private              VirtualPipe        responseEncoderPipe;
+    private              VirtualPipe        requestDecoderPipe;
+    private              VirtualPipe        responseDecoderPipe;
+    private              EmbeddedChannel    nettyRequestEncoder;
+    private              EmbeddedChannel    nettyResponseEncoder;
+    private              EmbeddedChannel    nettyRequestDecoder;
+    private              EmbeddedChannel    nettyResponseDecoder;
+    private              LeakMetricSnapshot before;
 
     static {
-        SIMPLE_REQUEST_BYTES = ("GET /index.html HTTP/1.1\r\n"
-                + "Host: www.example.com\r\n"
-                + "Accept: text/html,application/xhtml+xml\r\n"
-                + "Accept-Language: en-US,en;q=0.9\r\n"
-                + "Connection: keep-alive\r\n"
-                + "\r\n").getBytes(StandardCharsets.US_ASCII);
+        SIMPLE_REQUEST_BYTES = ("GET /index.html HTTP/1.1\r\n" + "Host: www.example.com\r\n" + "Accept: text/html,application/xhtml+xml\r\n" + "Accept-Language: en-US,en;q=0.9\r\n" + "Connection: keep-alive\r\n" + "\r\n").getBytes(StandardCharsets.US_ASCII);
 
-        POST_REQUEST_BYTES = ("POST /api/users HTTP/1.1\r\n"
-                + "Host: api.example.com\r\n"
-                + "Content-Type: application/json\r\n"
-                + "Content-Length: " + POST_BODY_BYTES.length + "\r\n"
-                + "Accept: application/json\r\n"
-                + "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9\r\n"
-                + "\r\n"
-                + new String(POST_BODY_BYTES, StandardCharsets.UTF_8)).getBytes(StandardCharsets.US_ASCII);
+        POST_REQUEST_BYTES = ("POST /api/users HTTP/1.1\r\n" + "Host: api.example.com\r\n" + "Content-Type: application/json\r\n" + "Content-Length: " + POST_BODY_BYTES.length + "\r\n" + "Accept: application/json\r\n" + "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9\r\n" + "\r\n" + new String(POST_BODY_BYTES, StandardCharsets.UTF_8)).getBytes(StandardCharsets.US_ASCII);
 
-        SIMPLE_RESPONSE_BYTES = ("HTTP/1.1 200 OK\r\n"
-                + "Content-Type: text/html; charset=UTF-8\r\n"
-                + "Content-Length: " + RESPONSE_BODY_BYTES.length + "\r\n"
-                + "Server: Neta/1.0\r\n"
-                + "Connection: keep-alive\r\n"
-                + "\r\n"
-                + new String(RESPONSE_BODY_BYTES, StandardCharsets.UTF_8)).getBytes(StandardCharsets.US_ASCII);
+        SIMPLE_RESPONSE_BYTES = ("HTTP/1.1 200 OK\r\n" + "Content-Type: text/html; charset=UTF-8\r\n" + "Content-Length: " + RESPONSE_BODY_BYTES.length + "\r\n" + "Server: Neta/1.0\r\n" + "Connection: keep-alive\r\n" + "\r\n" + new String(RESPONSE_BODY_BYTES, StandardCharsets.UTF_8)).getBytes(StandardCharsets.US_ASCII);
 
         StringBuilder largeResponse = new StringBuilder();
         largeResponse.append("HTTP/1.1 200 OK\r\n");
@@ -112,10 +78,7 @@ public class HttpCodecBenchmark {
             if (i > 0) {
                 body.append(',');
             }
-            body.append("{\"id\":").append(i)
-                    .append(",\"name\":\"user").append(i)
-                    .append("\",\"email\":\"user").append(i)
-                    .append("@example.com\"}");
+            body.append("{\"id\":").append(i).append(",\"name\":\"user").append(i).append("\",\"email\":\"user").append(i).append("@example.com\"}");
         }
         body.append("]}");
         largeResponse.append("Content-Length: ").append(body.length()).append("\r\n\r\n");
@@ -125,6 +88,10 @@ public class HttpCodecBenchmark {
 
     @Setup(Level.Trial)
     public void setupTrial() throws IOException {
+        this.nettyRequestEncoder = new EmbeddedChannel(new io.netty.handler.codec.http.HttpRequestEncoder());
+        this.nettyResponseEncoder = new EmbeddedChannel(new io.netty.handler.codec.http.HttpResponseEncoder());
+        this.nettyRequestDecoder = new EmbeddedChannel(new io.netty.handler.codec.http.HttpRequestDecoder());
+        this.nettyResponseDecoder = new EmbeddedChannel(new io.netty.handler.codec.http.HttpResponseDecoder());
         this.neta = new NetManager();
         this.requestEncoderPipe = this.openVirtualPipe(ctx -> ctx.addLastEncoder("req-encoder", new HttpRequestEncoder()), VrtSoConfig.asClient(), 101);
         this.responseEncoderPipe = this.openVirtualPipe(ctx -> ctx.addLastEncoder("resp-encoder", new HttpResponseEncoder()), VrtSoConfig.asServer(), 102);
@@ -134,6 +101,10 @@ public class HttpCodecBenchmark {
 
     @TearDown(Level.Trial)
     public void tearDownTrial() throws IOException {
+        this.nettyRequestEncoder.finishAndReleaseAll();
+        this.nettyResponseEncoder.finishAndReleaseAll();
+        this.nettyRequestDecoder.finishAndReleaseAll();
+        this.nettyResponseDecoder.finishAndReleaseAll();
         if (this.neta != null) {
             this.neta.shutdown();
         }
@@ -142,18 +113,10 @@ public class HttpCodecBenchmark {
     @Setup(Level.Iteration)
     public void captureBaseline() {
         this.before = LeakMetricSnapshot.capture(ByteBufAllocator.DEFAULT.metric());
-        this.requestEncoderPipe.reset();
-        this.responseEncoderPipe.reset();
-        this.requestDecoderPipe.reset();
-        this.responseDecoderPipe.reset();
     }
 
     @TearDown(Level.Iteration)
     public void assertNoLeak() {
-        this.requestEncoderPipe.reset();
-        this.responseEncoderPipe.reset();
-        this.requestDecoderPipe.reset();
-        this.responseDecoderPipe.reset();
         this.before.assertRestored(ByteBufAllocator.DEFAULT.metric(), getClass().getSimpleName());
     }
 
@@ -169,10 +132,7 @@ public class HttpCodecBenchmark {
 
     @Benchmark
     public int netty_encodeSimpleRequest() {
-        io.netty.handler.codec.http.DefaultFullHttpRequest request = new io.netty.handler.codec.http.DefaultFullHttpRequest(
-                io.netty.handler.codec.http.HttpVersion.HTTP_1_1,
-                io.netty.handler.codec.http.HttpMethod.GET,
-                "/index.html");
+        io.netty.handler.codec.http.DefaultFullHttpRequest request = new io.netty.handler.codec.http.DefaultFullHttpRequest(io.netty.handler.codec.http.HttpVersion.HTTP_1_1, io.netty.handler.codec.http.HttpMethod.GET, "/index.html");
         request.headers().add("Host", "www.example.com");
         request.headers().add("Accept", "text/html,application/xhtml+xml");
         request.headers().add("Accept-Language", "en-US,en;q=0.9");
@@ -194,11 +154,7 @@ public class HttpCodecBenchmark {
 
     @Benchmark
     public int netty_encodePostRequest() {
-        io.netty.handler.codec.http.DefaultFullHttpRequest request = new io.netty.handler.codec.http.DefaultFullHttpRequest(
-                io.netty.handler.codec.http.HttpVersion.HTTP_1_1,
-                io.netty.handler.codec.http.HttpMethod.POST,
-                "/api/users",
-                io.netty.buffer.Unpooled.wrappedBuffer(POST_BODY_BYTES));
+        io.netty.handler.codec.http.DefaultFullHttpRequest request = new io.netty.handler.codec.http.DefaultFullHttpRequest(io.netty.handler.codec.http.HttpVersion.HTTP_1_1, io.netty.handler.codec.http.HttpMethod.POST, "/api/users", io.netty.buffer.Unpooled.wrappedBuffer(POST_BODY_BYTES));
         request.headers().add("Host", "api.example.com");
         request.headers().add("Content-Type", "application/json");
         request.headers().add("Content-Length", String.valueOf(POST_BODY_BYTES.length));
@@ -220,10 +176,7 @@ public class HttpCodecBenchmark {
 
     @Benchmark
     public int netty_encodeSimpleResponse() {
-        io.netty.handler.codec.http.DefaultFullHttpResponse response = new io.netty.handler.codec.http.DefaultFullHttpResponse(
-                io.netty.handler.codec.http.HttpVersion.HTTP_1_1,
-                io.netty.handler.codec.http.HttpResponseStatus.OK,
-                io.netty.buffer.Unpooled.wrappedBuffer(RESPONSE_BODY_BYTES));
+        io.netty.handler.codec.http.DefaultFullHttpResponse response = new io.netty.handler.codec.http.DefaultFullHttpResponse(io.netty.handler.codec.http.HttpVersion.HTTP_1_1, io.netty.handler.codec.http.HttpResponseStatus.OK, io.netty.buffer.Unpooled.wrappedBuffer(RESPONSE_BODY_BYTES));
         response.headers().add("Content-Type", "text/html; charset=UTF-8");
         response.headers().add("Content-Length", String.valueOf(RESPONSE_BODY_BYTES.length));
         response.headers().add("Server", "Neta/1.0");
@@ -239,6 +192,51 @@ public class HttpCodecBenchmark {
     @Benchmark
     public int netty_decodeSimpleRequest() {
         return decodeNettyRequest(SIMPLE_REQUEST_BYTES);
+    }
+
+    @Benchmark
+    public int neta_decodeSimpleRequestReadHeaders() throws Throwable {
+        Object[] out = this.requestDecoderPipe.channel().receiveDataAndReturning(ByteBuf.wrap(SIMPLE_REQUEST_BYTES));
+        int observed = 0;
+        try {
+            for (Object item : out) {
+                if (item instanceof HttpHeaders) {
+                    HttpHeaders headers = (HttpHeaders) item;
+                    for (String name : SIMPLE_REQUEST_HEADER_NAMES) {
+                        observed += headers.getString(name).hashCode();
+                    }
+                }
+            }
+            return observed;
+        } finally {
+            for (Object item : out) {
+                if (item instanceof HttpObject) {
+                    ((HttpObject) item).release();
+                } else if (item instanceof ByteBuf) {
+                    ((ByteBuf) item).release();
+                }
+            }
+        }
+    }
+
+    @Benchmark
+    public int netty_decodeSimpleRequestReadHeaders() {
+        this.nettyRequestDecoder.writeInbound(io.netty.buffer.Unpooled.wrappedBuffer(SIMPLE_REQUEST_BYTES));
+        int observed = 0;
+        Object item;
+        while ((item = this.nettyRequestDecoder.readInbound()) != null) {
+            try {
+                if (item instanceof io.netty.handler.codec.http.HttpMessage) {
+                    io.netty.handler.codec.http.HttpHeaders headers = ((io.netty.handler.codec.http.HttpMessage) item).headers();
+                    for (String name : SIMPLE_REQUEST_HEADER_NAMES) {
+                        observed += headers.get(name).hashCode();
+                    }
+                }
+            } finally {
+                releaseNettyObject(item);
+            }
+        }
+        return observed;
     }
 
     @Benchmark
@@ -271,72 +269,81 @@ public class HttpCodecBenchmark {
         return decodeNettyResponse(LARGE_RESPONSE_BYTES);
     }
 
+    @Benchmark
+    public int neta_decodeHeaderCorpus(HeaderInputs inputs) throws Throwable {
+        int observed = 0;
+        VirtualPipe pipe = inputs.corpus.response ? this.responseDecoderPipe : this.requestDecoderPipe;
+        for (byte[] packet : inputs.next().packets) {
+            observed += decodeRequest(pipe, packet);
+        }
+        return observed;
+    }
+
+    @Benchmark
+    public int netty_decodeHeaderCorpus(HeaderInputs inputs) {
+        int observed = 0;
+        EmbeddedChannel channel = inputs.corpus.response ? this.nettyResponseDecoder : this.nettyRequestDecoder;
+        for (byte[] packet : inputs.next().packets) {
+            channel.writeInbound(io.netty.buffer.Unpooled.wrappedBuffer(packet));
+            observed += releaseNettyInbound(channel);
+        }
+        return observed;
+    }
+
+    @State(Scope.Thread)
+    public static class HeaderInputs {
+        @Param({ "ordinary", "sameLength", "mixedCasePost", "fragmentedChunked", "response" })
+        public  String           profile;
+        private HttpHeaderCorpus corpus;
+        private int              index;
+
+        @Setup(Level.Trial)
+        public void setup() {
+            this.corpus = new HttpHeaderCorpus(this.profile);
+            this.index = 0;
+        }
+
+        private HttpHeaderCorpus.Message next() {
+            HttpHeaderCorpus.Message message = this.corpus.messages[this.index];
+            this.index = (this.index + 1) % this.corpus.messages.length;
+            return message;
+        }
+    }
+
     private static int encodeRequest(VirtualPipe pipe, DefaultFullHttpRequest request) throws Throwable {
-        pipe.reset();
-        pipe.channel().sendData(request).get();
-        assertNoErrors(pipe);
-        return releaseVirtualOutbound(pipe.outbound());
+        return releaseReturned(pipe.channel().sendDataAndReturning(request));
     }
 
     private static int encodeResponse(VirtualPipe pipe, DefaultFullHttpResponse response) throws Throwable {
-        pipe.reset();
-        pipe.channel().sendData(response).get();
-        assertNoErrors(pipe);
-        return releaseVirtualOutbound(pipe.outbound());
+        return releaseReturned(pipe.channel().sendDataAndReturning(response));
     }
 
-    private static int decodeRequest(VirtualPipe pipe, byte[] data) {
-        pipe.reset();
-        pipe.channel().receiveData(ByteBuf.wrap(data));
-        assertNoErrors(pipe);
-        return releaseVirtualInbound(pipe.inbound());
+    private static int decodeRequest(VirtualPipe pipe, byte[] data) throws Throwable {
+        return releaseReturned(pipe.channel().receiveDataAndReturning(ByteBuf.wrap(data)));
     }
 
-    private static int decodeResponse(VirtualPipe pipe, byte[] data) {
-        pipe.reset();
-        pipe.channel().receiveData(ByteBuf.wrap(data));
-        assertNoErrors(pipe);
-        return releaseVirtualInbound(pipe.inbound());
+    private static int decodeResponse(VirtualPipe pipe, byte[] data) throws Throwable {
+        return releaseReturned(pipe.channel().receiveDataAndReturning(ByteBuf.wrap(data)));
     }
 
-    private static int encodeNettyRequest(io.netty.handler.codec.http.DefaultFullHttpRequest request) {
-        EmbeddedChannel channel = new EmbeddedChannel(new io.netty.handler.codec.http.HttpRequestEncoder());
-        try {
-            channel.writeOutbound(request);
-            return releaseNettyOutbound(channel);
-        } finally {
-            channel.finishAndReleaseAll();
-        }
+    private int encodeNettyRequest(io.netty.handler.codec.http.DefaultFullHttpRequest request) {
+        this.nettyRequestEncoder.writeOutbound(request);
+        return releaseNettyOutbound(this.nettyRequestEncoder);
     }
 
-    private static int encodeNettyResponse(io.netty.handler.codec.http.DefaultFullHttpResponse response) {
-        EmbeddedChannel channel = new EmbeddedChannel(new io.netty.handler.codec.http.HttpResponseEncoder());
-        try {
-            channel.writeOutbound(response);
-            return releaseNettyOutbound(channel);
-        } finally {
-            channel.finishAndReleaseAll();
-        }
+    private int encodeNettyResponse(io.netty.handler.codec.http.DefaultFullHttpResponse response) {
+        this.nettyResponseEncoder.writeOutbound(response);
+        return releaseNettyOutbound(this.nettyResponseEncoder);
     }
 
-    private static int decodeNettyRequest(byte[] data) {
-        EmbeddedChannel channel = new EmbeddedChannel(new io.netty.handler.codec.http.HttpRequestDecoder());
-        try {
-            channel.writeInbound(io.netty.buffer.Unpooled.wrappedBuffer(data));
-            return releaseNettyInbound(channel);
-        } finally {
-            channel.finishAndReleaseAll();
-        }
+    private int decodeNettyRequest(byte[] data) {
+        this.nettyRequestDecoder.writeInbound(io.netty.buffer.Unpooled.wrappedBuffer(data));
+        return releaseNettyInbound(this.nettyRequestDecoder);
     }
 
-    private static int decodeNettyResponse(byte[] data) {
-        EmbeddedChannel channel = new EmbeddedChannel(new io.netty.handler.codec.http.HttpResponseDecoder());
-        try {
-            channel.writeInbound(io.netty.buffer.Unpooled.wrappedBuffer(data));
-            return releaseNettyInbound(channel);
-        } finally {
-            channel.finishAndReleaseAll();
-        }
+    private int decodeNettyResponse(byte[] data) {
+        this.nettyResponseDecoder.writeInbound(io.netty.buffer.Unpooled.wrappedBuffer(data));
+        return releaseNettyInbound(this.nettyResponseDecoder);
     }
 
     private static ByteBuf trackedBody(byte[] data) {
@@ -346,20 +353,12 @@ public class HttpCodecBenchmark {
         return body;
     }
 
-    private static int releaseVirtualOutbound(Queue<Object> outbound) {
-        int totalBytes = 0;
-        Object item;
-        while ((item = outbound.poll()) != null) {
-            totalBytes += measureAndRelease(item);
-        }
-        return totalBytes;
-    }
-
-    private static int releaseVirtualInbound(Queue<Object> inbound) {
+    private static int releaseReturned(Object[] out) {
         int observed = 0;
-        Object item;
-        while ((item = inbound.poll()) != null) {
-            observed += measureAndRelease(item);
+        if (out != null) {
+            for (Object item : out) {
+                observed += measureAndRelease(item);
+            }
         }
         return observed;
     }
@@ -385,17 +384,6 @@ public class HttpCodecBenchmark {
             return observed;
         }
         return 1;
-    }
-
-    private static void assertNoErrors(VirtualPipe pipe) {
-        Throwable inboundError = pipe.inboundErrors().poll();
-        if (inboundError != null) {
-            throw new IllegalStateException("virtual inbound failed", inboundError);
-        }
-        Throwable outboundError = pipe.outboundErrors().poll();
-        if (outboundError != null) {
-            throw new IllegalStateException("virtual outbound failed", outboundError);
-        }
     }
 
     private static int releaseNettyOutbound(EmbeddedChannel channel) {
@@ -435,80 +423,19 @@ public class HttpCodecBenchmark {
     }
 
     private VirtualPipe openVirtualPipe(ProtoInitializer initializer, VrtSoConfig config, int addressId) throws IOException {
-        Queue<Object> inbound = new ConcurrentLinkedQueue<>();
-        Queue<Object> outbound = new ConcurrentLinkedQueue<>();
-        Queue<Throwable> inboundErrors = new ConcurrentLinkedQueue<>();
-        Queue<Throwable> outboundErrors = new ConcurrentLinkedQueue<>();
         VrtChannel channel = (VrtChannel) this.neta.connectSync(new VrtSocketAddress(addressId), initializer, config);
-        channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, payload -> {
-            Object data = payload.getData();
-            if (data != null) {
-                inbound.offer(data);
-            }
-        });
-        channel.subscribe(PlayLoad::isOutbound, SubscribeMode.SYNC, payload -> {
-            Object data = payload.getData();
-            if (data == null) {
-                return;
-            }
-            if (data instanceof ByteBuf) {
-                outbound.offer(((ByteBuf) data).retain());
-            } else {
-                outbound.offer(data);
-            }
-        });
-        channel.subscribe(p -> p.isInbound() && !p.isSuccess(), SubscribeMode.SYNC, payload -> inboundErrors.offer(payload.getError()));
-        channel.subscribe(p -> p.isOutbound() && !p.isSuccess(), SubscribeMode.SYNC, payload -> outboundErrors.offer(payload.getError()));
-        return new VirtualPipe(channel, inbound, outbound, inboundErrors, outboundErrors);
+        return new VirtualPipe(channel);
     }
 
     private static final class VirtualPipe {
-        private final VrtChannel       channel;
-        private final Queue<Object>    inbound;
-        private final Queue<Object>    outbound;
-        private final Queue<Throwable> inboundErrors;
-        private final Queue<Throwable> outboundErrors;
+        private final VrtChannel channel;
 
-        private VirtualPipe(VrtChannel channel, Queue<Object> inbound, Queue<Object> outbound, Queue<Throwable> inboundErrors, Queue<Throwable> outboundErrors) {
+        private VirtualPipe(VrtChannel channel) {
             this.channel = channel;
-            this.inbound = inbound;
-            this.outbound = outbound;
-            this.inboundErrors = inboundErrors;
-            this.outboundErrors = outboundErrors;
         }
 
         private VrtChannel channel() {
             return this.channel;
-        }
-
-        private Queue<Object> inbound() {
-            return this.inbound;
-        }
-
-        private Queue<Object> outbound() {
-            return this.outbound;
-        }
-
-        private Queue<Throwable> inboundErrors() {
-            return this.inboundErrors;
-        }
-
-        private Queue<Throwable> outboundErrors() {
-            return this.outboundErrors;
-        }
-
-        private void reset() {
-            clearQueue(this.inbound);
-            clearQueue(this.outbound);
-            this.inboundErrors.clear();
-            this.outboundErrors.clear();
-        }
-
-        private static void clearQueue(Queue<Object> queue) {
-            Object item;
-            while ((item = queue.poll()) != null) {
-                measureAndRelease(item);
-            }
         }
     }
 }

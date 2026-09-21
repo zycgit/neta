@@ -1,41 +1,26 @@
+/*
+ * Copyright 2015-2022 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0.
+ * See the LICENSE.txt file for the full license.
+ * https://www.apache.org/licenses/LICENSE-2.0
+ */
 package net.hasor.neta.http;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.util.ReferenceCounted;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.NetManager;
-import net.hasor.neta.channel.PlayLoad;
 import net.hasor.neta.channel.ProtoInitializer;
-import net.hasor.neta.channel.SubscribeMode;
 import net.hasor.neta.channel.transport.virtual.VrtChannel;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.channel.transport.virtual.VrtSocketAddress;
-import net.hasor.neta.codec.http.FullHttpRequest;
-import net.hasor.neta.codec.http.FullHttpResponse;
-import net.hasor.neta.codec.http.HttpObject;
-import net.hasor.neta.codec.http.HttpRequestAggregator;
-import net.hasor.neta.codec.http.HttpRequestDecoder;
-import net.hasor.neta.codec.http.HttpResponseAggregator;
-import net.hasor.neta.codec.http.HttpResponseDecoder;
+import net.hasor.neta.codec.http.*;
 import net.hasor.neta.leak.LeakMetricSnapshot;
-import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.BenchmarkMode;
-import org.openjdk.jmh.annotations.Fork;
-import org.openjdk.jmh.annotations.Level;
-import org.openjdk.jmh.annotations.Measurement;
-import org.openjdk.jmh.annotations.Mode;
-import org.openjdk.jmh.annotations.OutputTimeUnit;
-import org.openjdk.jmh.annotations.Scope;
-import org.openjdk.jmh.annotations.Setup;
-import org.openjdk.jmh.annotations.State;
-import org.openjdk.jmh.annotations.TearDown;
-import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
@@ -48,23 +33,25 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 @Warmup(iterations = 5, time = 1)
 @Measurement(iterations = 5, time = 2)
 public class HttpAggregatorBenchmark {
-    private static final int      MAX_CONTENT_LENGTH = 1024 * 1024;
-    private static final byte[]   POST_BODY_BYTES    = "{\"name\":\"John Doe\",\"email\":\"john@example.com\",\"age\":30,\"city\":\"Shanghai\",\"bio\":\"aggregator benchmark payload\"}".getBytes(StandardCharsets.UTF_8);
-    private static final byte[]   SIMPLE_RESPONSE_BODY_BYTES = "Hello, Aggregator!".getBytes(StandardCharsets.UTF_8);
-    private static final byte[]   LARGE_REQUEST_BODY_BYTES;
-    private static final byte[]   LARGE_RESPONSE_BODY_BYTES;
-    private static final byte[]   POST_REQUEST_BYTES;
-    private static final byte[]   LARGE_REQUEST_BYTES;
-    private static final byte[]   SIMPLE_RESPONSE_BYTES;
-    private static final byte[]   LARGE_RESPONSE_BYTES;
-    private static final byte[][] POST_REQUEST_STREAMS;
-    private static final byte[][] LARGE_REQUEST_STREAMS;
-    private static final byte[][] SIMPLE_RESPONSE_STREAMS;
-    private static final byte[][] LARGE_RESPONSE_STREAMS;
-    private NetManager            neta;
-    private VirtualPipe           requestAggregatorPipe;
-    private VirtualPipe           responseAggregatorPipe;
-    private LeakMetricSnapshot    before;
+    private static final int                MAX_CONTENT_LENGTH         = 1024 * 1024;
+    private static final byte[]             POST_BODY_BYTES            = "{\"name\":\"John Doe\",\"email\":\"john@example.com\",\"age\":30,\"city\":\"Shanghai\",\"bio\":\"aggregator benchmark payload\"}".getBytes(StandardCharsets.UTF_8);
+    private static final byte[]             SIMPLE_RESPONSE_BODY_BYTES = "Hello, Aggregator!".getBytes(StandardCharsets.UTF_8);
+    private static final byte[]             LARGE_REQUEST_BODY_BYTES;
+    private static final byte[]             LARGE_RESPONSE_BODY_BYTES;
+    private static final byte[]             POST_REQUEST_BYTES;
+    private static final byte[]             LARGE_REQUEST_BYTES;
+    private static final byte[]             SIMPLE_RESPONSE_BYTES;
+    private static final byte[]             LARGE_RESPONSE_BYTES;
+    private static final byte[][]           POST_REQUEST_STREAMS;
+    private static final byte[][]           LARGE_REQUEST_STREAMS;
+    private static final byte[][]           SIMPLE_RESPONSE_STREAMS;
+    private static final byte[][]           LARGE_RESPONSE_STREAMS;
+    private              NetManager         neta;
+    private              VirtualPipe        requestAggregatorPipe;
+    private              VirtualPipe        responseAggregatorPipe;
+    private              EmbeddedChannel    nettyRequestChannel;
+    private              EmbeddedChannel    nettyResponseChannel;
+    private              LeakMetricSnapshot before;
 
     static {
         LARGE_REQUEST_BODY_BYTES = buildLargeRequestBody();
@@ -83,6 +70,8 @@ public class HttpAggregatorBenchmark {
 
     @Setup(Level.Trial)
     public void setupTrial() throws IOException {
+        this.nettyRequestChannel = new EmbeddedChannel(new io.netty.handler.codec.http.HttpRequestDecoder(), new io.netty.handler.codec.http.HttpObjectAggregator(MAX_CONTENT_LENGTH));
+        this.nettyResponseChannel = new EmbeddedChannel(new io.netty.handler.codec.http.HttpResponseDecoder(), new io.netty.handler.codec.http.HttpObjectAggregator(MAX_CONTENT_LENGTH));
         this.neta = new NetManager();
         this.requestAggregatorPipe = this.openVirtualPipe(ctx -> {
             ctx.addLastDecoder("req-decoder", new HttpRequestDecoder());
@@ -96,6 +85,8 @@ public class HttpAggregatorBenchmark {
 
     @TearDown(Level.Trial)
     public void tearDownTrial() throws IOException {
+        this.nettyRequestChannel.finishAndReleaseAll();
+        this.nettyResponseChannel.finishAndReleaseAll();
         if (this.neta != null) {
             this.neta.shutdown();
         }
@@ -104,19 +95,15 @@ public class HttpAggregatorBenchmark {
     @Setup(Level.Iteration)
     public void captureBaseline() {
         this.before = LeakMetricSnapshot.capture(ByteBufAllocator.DEFAULT.metric());
-        this.requestAggregatorPipe.reset();
-        this.responseAggregatorPipe.reset();
     }
 
     @TearDown(Level.Iteration)
     public void assertNoLeak() {
-        this.requestAggregatorPipe.reset();
-        this.responseAggregatorPipe.reset();
         this.before.assertRestored(ByteBufAllocator.DEFAULT.metric(), getClass().getSimpleName());
     }
 
     @Benchmark
-    public int neta_aggregatePostRequest() {
+    public int neta_aggregatePostRequest() throws Throwable {
         return aggregateNetaRequest(this.requestAggregatorPipe, POST_REQUEST_STREAMS);
     }
 
@@ -126,7 +113,7 @@ public class HttpAggregatorBenchmark {
     }
 
     @Benchmark
-    public int neta_aggregateLargeRequest() {
+    public int neta_aggregateLargeRequest() throws Throwable {
         return aggregateNetaRequest(this.requestAggregatorPipe, LARGE_REQUEST_STREAMS);
     }
 
@@ -136,7 +123,7 @@ public class HttpAggregatorBenchmark {
     }
 
     @Benchmark
-    public int neta_aggregateSimpleResponse() {
+    public int neta_aggregateSimpleResponse() throws Throwable {
         return aggregateNetaResponse(this.responseAggregatorPipe, SIMPLE_RESPONSE_STREAMS);
     }
 
@@ -146,7 +133,7 @@ public class HttpAggregatorBenchmark {
     }
 
     @Benchmark
-    public int neta_aggregateLargeResponse() {
+    public int neta_aggregateLargeResponse() throws Throwable {
         return aggregateNetaResponse(this.responseAggregatorPipe, LARGE_RESPONSE_STREAMS);
     }
 
@@ -155,48 +142,30 @@ public class HttpAggregatorBenchmark {
         return aggregateNettyResponse(LARGE_RESPONSE_STREAMS);
     }
 
-    private static int aggregateNetaRequest(VirtualPipe pipe, byte[][] chunks) {
-        pipe.reset();
-        feedVirtualInbound(pipe, chunks);
-        assertNoErrors(pipe);
-        return releaseAggregatedVirtualInbound(pipe.inbound(), true);
-    }
-
-    private static int aggregateNetaResponse(VirtualPipe pipe, byte[][] chunks) {
-        pipe.reset();
-        feedVirtualInbound(pipe, chunks);
-        assertNoErrors(pipe);
-        return releaseAggregatedVirtualInbound(pipe.inbound(), false);
-    }
-
-    private static int aggregateNettyRequest(byte[][] chunks) {
-        EmbeddedChannel channel = new EmbeddedChannel(
-                new io.netty.handler.codec.http.HttpRequestDecoder(),
-                new io.netty.handler.codec.http.HttpObjectAggregator(MAX_CONTENT_LENGTH));
-        try {
-            feedNettyInbound(channel, chunks);
-            return releaseAggregatedNettyInbound(channel, true);
-        } finally {
-            channel.finishAndReleaseAll();
-        }
-    }
-
-    private static int aggregateNettyResponse(byte[][] chunks) {
-        EmbeddedChannel channel = new EmbeddedChannel(
-                new io.netty.handler.codec.http.HttpResponseDecoder(),
-                new io.netty.handler.codec.http.HttpObjectAggregator(MAX_CONTENT_LENGTH));
-        try {
-            feedNettyInbound(channel, chunks);
-            return releaseAggregatedNettyInbound(channel, false);
-        } finally {
-            channel.finishAndReleaseAll();
-        }
-    }
-
-    private static void feedVirtualInbound(VirtualPipe pipe, byte[][] chunks) {
+    private static int aggregateNetaRequest(VirtualPipe pipe, byte[][] chunks) throws Throwable {
+        Object[] out = null;
         for (int i = 0; i < chunks.length; i++) {
-            pipe.channel().receiveData(ByteBuf.wrap(chunks[i]));
+            out = pipe.channel().receiveDataAndReturning(ByteBuf.wrap(chunks[i]));
         }
+        return releaseAggregatedReturned(out, true);
+    }
+
+    private static int aggregateNetaResponse(VirtualPipe pipe, byte[][] chunks) throws Throwable {
+        Object[] out = null;
+        for (int i = 0; i < chunks.length; i++) {
+            out = pipe.channel().receiveDataAndReturning(ByteBuf.wrap(chunks[i]));
+        }
+        return releaseAggregatedReturned(out, false);
+    }
+
+    private int aggregateNettyRequest(byte[][] chunks) {
+        feedNettyInbound(this.nettyRequestChannel, chunks);
+        return releaseAggregatedNettyInbound(this.nettyRequestChannel, true);
+    }
+
+    private int aggregateNettyResponse(byte[][] chunks) {
+        feedNettyInbound(this.nettyResponseChannel, chunks);
+        return releaseAggregatedNettyInbound(this.nettyResponseChannel, false);
     }
 
     private static void feedNettyInbound(EmbeddedChannel channel, byte[][] chunks) {
@@ -205,13 +174,14 @@ public class HttpAggregatorBenchmark {
         }
     }
 
-    private static int releaseAggregatedVirtualInbound(Queue<Object> inbound, boolean request) {
+    private static int releaseAggregatedReturned(Object[] out, boolean request) {
         int observed = 0;
         int count = 0;
-        Object item;
-        while ((item = inbound.poll()) != null) {
-            observed += measureAggregatedVirtual(item, request);
-            count++;
+        if (out != null) {
+            for (Object item : out) {
+                observed += measureAggregatedVirtual(item, request);
+                count++;
+            }
         }
         if (count != 1) {
             throw new IllegalStateException("expected exactly one aggregated inbound object but got " + count);
@@ -277,92 +247,28 @@ public class HttpAggregatorBenchmark {
         }
     }
 
-    private static void assertNoErrors(VirtualPipe pipe) {
-        Throwable inboundError = pipe.inboundErrors().poll();
-        if (inboundError != null) {
-            throw new IllegalStateException("virtual inbound failed", inboundError);
-        }
-        Throwable outboundError = pipe.outboundErrors().poll();
-        if (outboundError != null) {
-            throw new IllegalStateException("virtual outbound failed", outboundError);
-        }
-    }
-
     private VirtualPipe openVirtualPipe(ProtoInitializer initializer, VrtSoConfig config, int addressId) throws IOException {
-        Queue<Object> inbound = new ConcurrentLinkedQueue<>();
-        Queue<Object> outbound = new ConcurrentLinkedQueue<>();
-        Queue<Throwable> inboundErrors = new ConcurrentLinkedQueue<>();
-        Queue<Throwable> outboundErrors = new ConcurrentLinkedQueue<>();
         VrtChannel channel = (VrtChannel) this.neta.connectSync(new VrtSocketAddress(addressId), initializer, config);
-        channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, payload -> {
-            Object data = payload.getData();
-            if (data != null) {
-                inbound.offer(data);
-            }
-        });
-        channel.subscribe(PlayLoad::isOutbound, SubscribeMode.SYNC, payload -> {
-            Object data = payload.getData();
-            if (data == null) {
-                return;
-            }
-            if (data instanceof ByteBuf) {
-                outbound.offer(((ByteBuf) data).retain());
-            } else {
-                outbound.offer(data);
-            }
-        });
-        channel.subscribe(p -> p.isInbound() && !p.isSuccess(), SubscribeMode.SYNC, payload -> inboundErrors.offer(payload.getError()));
-        channel.subscribe(p -> p.isOutbound() && !p.isSuccess(), SubscribeMode.SYNC, payload -> outboundErrors.offer(payload.getError()));
-        return new VirtualPipe(channel, inbound, outbound, inboundErrors, outboundErrors);
+        return new VirtualPipe(channel);
     }
 
     private static byte[] buildPostRequest(byte[] bodyBytes) {
-        String request = "POST /api/users HTTP/1.1\r\n"
-                + "Host: api.example.com\r\n"
-                + "Content-Type: application/json\r\n"
-                + "Content-Length: " + bodyBytes.length + "\r\n"
-                + "Accept: application/json\r\n"
-                + "Connection: keep-alive\r\n"
-                + "\r\n"
-                + new String(bodyBytes, StandardCharsets.UTF_8);
+        String request = "POST /api/users HTTP/1.1\r\n" + "Host: api.example.com\r\n" + "Content-Type: application/json\r\n" + "Content-Length: " + bodyBytes.length + "\r\n" + "Accept: application/json\r\n" + "Connection: keep-alive\r\n" + "\r\n" + new String(bodyBytes, StandardCharsets.UTF_8);
         return request.getBytes(StandardCharsets.US_ASCII);
     }
 
     private static byte[] buildLargeRequest(byte[] bodyBytes) {
-        String request = "POST /api/bulk/users HTTP/1.1\r\n"
-                + "Host: api.example.com\r\n"
-                + "Content-Type: application/json\r\n"
-                + "Content-Length: " + bodyBytes.length + "\r\n"
-                + "Accept: application/json\r\n"
-                + "X-Trace-Id: agg-benchmark-round0\r\n"
-                + "X-Client: neta-performance\r\n"
-                + "Connection: keep-alive\r\n"
-                + "\r\n"
-                + new String(bodyBytes, StandardCharsets.UTF_8);
+        String request = "POST /api/bulk/users HTTP/1.1\r\n" + "Host: api.example.com\r\n" + "Content-Type: application/json\r\n" + "Content-Length: " + bodyBytes.length + "\r\n" + "Accept: application/json\r\n" + "X-Trace-Id: agg-benchmark-round0\r\n" + "X-Client: neta-performance\r\n" + "Connection: keep-alive\r\n" + "\r\n" + new String(bodyBytes, StandardCharsets.UTF_8);
         return request.getBytes(StandardCharsets.US_ASCII);
     }
 
     private static byte[] buildSimpleResponse(byte[] bodyBytes) {
-        String response = "HTTP/1.1 200 OK\r\n"
-                + "Content-Type: text/plain; charset=UTF-8\r\n"
-                + "Content-Length: " + bodyBytes.length + "\r\n"
-                + "Server: Neta/1.0\r\n"
-                + "Connection: keep-alive\r\n"
-                + "\r\n"
-                + new String(bodyBytes, StandardCharsets.UTF_8);
+        String response = "HTTP/1.1 200 OK\r\n" + "Content-Type: text/plain; charset=UTF-8\r\n" + "Content-Length: " + bodyBytes.length + "\r\n" + "Server: Neta/1.0\r\n" + "Connection: keep-alive\r\n" + "\r\n" + new String(bodyBytes, StandardCharsets.UTF_8);
         return response.getBytes(StandardCharsets.US_ASCII);
     }
 
     private static byte[] buildLargeResponse(byte[] bodyBytes) {
-        String response = "HTTP/1.1 200 OK\r\n"
-                + "Content-Type: application/json; charset=UTF-8\r\n"
-                + "Content-Length: " + bodyBytes.length + "\r\n"
-                + "Server: Neta/1.0\r\n"
-                + "Cache-Control: no-cache, no-store, must-revalidate\r\n"
-                + "X-Trace-Id: resp-agg-benchmark\r\n"
-                + "Connection: keep-alive\r\n"
-                + "\r\n"
-                + new String(bodyBytes, StandardCharsets.UTF_8);
+        String response = "HTTP/1.1 200 OK\r\n" + "Content-Type: application/json; charset=UTF-8\r\n" + "Content-Length: " + bodyBytes.length + "\r\n" + "Server: Neta/1.0\r\n" + "Cache-Control: no-cache, no-store, must-revalidate\r\n" + "X-Trace-Id: resp-agg-benchmark\r\n" + "Connection: keep-alive\r\n" + "\r\n" + new String(bodyBytes, StandardCharsets.UTF_8);
         return response.getBytes(StandardCharsets.US_ASCII);
     }
 
@@ -373,10 +279,7 @@ public class HttpAggregatorBenchmark {
             if (i > 0) {
                 body.append(',');
             }
-            body.append("{\"id\":").append(i)
-                    .append(",\"name\":\"user").append(i)
-                    .append("\",\"email\":\"user").append(i)
-                    .append("@example.com\",\"enabled\":true}");
+            body.append("{\"id\":").append(i).append(",\"name\":\"user").append(i).append("\",\"email\":\"user").append(i).append("@example.com\",\"enabled\":true}");
         }
         body.append("]}");
         return body.toString().getBytes(StandardCharsets.UTF_8);
@@ -389,11 +292,7 @@ public class HttpAggregatorBenchmark {
             if (i > 0) {
                 body.append(',');
             }
-            body.append("{\"id\":").append(i)
-                    .append(",\"title\":\"item-").append(i)
-                    .append("\",\"price\":").append(100 + i)
-                    .append(",\"stock\":").append(1000 - i)
-                    .append('}');
+            body.append("{\"id\":").append(i).append(",\"title\":\"item-").append(i).append("\",\"price\":").append(100 + i).append(",\"stock\":").append(1000 - i).append('}');
         }
         body.append("]}");
         return body.toString().getBytes(StandardCharsets.UTF_8);
@@ -434,65 +333,14 @@ public class HttpAggregatorBenchmark {
     }
 
     private static final class VirtualPipe {
-        private final VrtChannel       channel;
-        private final Queue<Object>    inbound;
-        private final Queue<Object>    outbound;
-        private final Queue<Throwable> inboundErrors;
-        private final Queue<Throwable> outboundErrors;
+        private final VrtChannel channel;
 
-        private VirtualPipe(VrtChannel channel, Queue<Object> inbound, Queue<Object> outbound, Queue<Throwable> inboundErrors, Queue<Throwable> outboundErrors) {
+        private VirtualPipe(VrtChannel channel) {
             this.channel = channel;
-            this.inbound = inbound;
-            this.outbound = outbound;
-            this.inboundErrors = inboundErrors;
-            this.outboundErrors = outboundErrors;
         }
 
         private VrtChannel channel() {
             return this.channel;
-        }
-
-        private Queue<Object> inbound() {
-            return this.inbound;
-        }
-
-        private Queue<Throwable> inboundErrors() {
-            return this.inboundErrors;
-        }
-
-        private Queue<Throwable> outboundErrors() {
-            return this.outboundErrors;
-        }
-
-        private void reset() {
-            clearQueue(this.inbound);
-            clearQueue(this.outbound);
-            this.inboundErrors.clear();
-            this.outboundErrors.clear();
-        }
-
-        private static void clearQueue(Queue<Object> queue) {
-            Object item;
-            while ((item = queue.poll()) != null) {
-                releaseQueueItem(item);
-            }
-        }
-
-        private static void releaseQueueItem(Object item) {
-            if (item instanceof ByteBuf) {
-                ByteBuf buffer = (ByteBuf) item;
-                if (!buffer.isFree()) {
-                    buffer.release();
-                }
-                return;
-            }
-            if (item instanceof HttpObject) {
-                ((HttpObject) item).release();
-                return;
-            }
-            if (item instanceof ReferenceCounted) {
-                ((ReferenceCounted) item).release();
-            }
         }
     }
 }

@@ -1,15 +1,14 @@
+/*
+ * Copyright 2015-2022 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0.
+ * See the LICENSE.txt file for the full license.
+ * https://www.apache.org/licenses/LICENSE-2.0
+ */
 package net.hasor.nhttp.server;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
-
-import org.openjdk.jmh.annotations.*;
-import org.openjdk.jmh.runner.Runner;
-import org.openjdk.jmh.runner.RunnerException;
-import org.openjdk.jmh.runner.options.Options;
-import org.openjdk.jmh.runner.options.OptionsBuilder;
-
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.NetManager;
@@ -21,6 +20,11 @@ import net.hasor.neta.codec.http.multipart.MultipartEncoder;
 import net.hasor.neta.leak.LeakMetricSnapshot;
 import net.hasor.nhttp.server.internal.DefaultSessionManager;
 import net.hasor.nhttp.server.internal.StreamingServletRequest;
+import org.openjdk.jmh.annotations.*;
+import org.openjdk.jmh.runner.Runner;
+import org.openjdk.jmh.runner.RunnerException;
+import org.openjdk.jmh.runner.options.Options;
+import org.openjdk.jmh.runner.options.OptionsBuilder;
 
 @Fork(1)
 @State(Scope.Thread)
@@ -30,9 +34,9 @@ import net.hasor.nhttp.server.internal.StreamingServletRequest;
 @Measurement(iterations = 3, time = 2)
 public class NHttpServerLeakBenchmark {
     private final DefaultSessionManager sessionManager = new DefaultSessionManager();
-    private NetManager                  neta;
-    private VrtChannel                  channel;
-    private LeakMetricSnapshot          before;
+    private       NetManager            neta;
+    private       VrtChannel            channel;
+    private       LeakMetricSnapshot    before;
 
     @Setup(Level.Trial)
     public void setupTrial() throws IOException {

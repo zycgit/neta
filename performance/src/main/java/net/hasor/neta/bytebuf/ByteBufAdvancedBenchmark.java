@@ -1,5 +1,9 @@
 /*
- * Advanced ByteBuf Benchmark: Neta vs Netty (Single-Thread)
+ * Copyright 2015-2022 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0.
+ * See the LICENSE.txt file for the full license.
+ * https://www.apache.org/licenses/LICENSE-2.0
  *
  * Complements ByteBufBenchmark.java with NEW scenarios not already covered:
  *   1.  Ring buffer write + read cycle (Neta unique vs Netty unpooled direct)
@@ -22,7 +26,6 @@
  *   - Large payload (64KB) write + read
  */
 package net.hasor.neta.bytebuf;
-
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;

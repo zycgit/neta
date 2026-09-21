@@ -1,39 +1,24 @@
+/*
+ * Copyright 2015-2022 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0.
+ * See the LICENSE.txt file for the full license.
+ * https://www.apache.org/licenses/LICENSE-2.0
+ */
 package net.hasor.neta.http;
-
 import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.NetConfig;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.data.ProtoQueue;
-import net.hasor.neta.codec.http.DefaultFullHttpRequest;
-import net.hasor.neta.codec.http.DefaultHttpContent;
-import net.hasor.neta.codec.http.DefaultHttpRequest;
-import net.hasor.neta.codec.http.DefaultLastHttpContent;
-import net.hasor.neta.codec.http.DefaultLastHttpHeaders;
-import net.hasor.neta.codec.http.HttpHeaderNames;
-import net.hasor.neta.codec.http.HttpHeaderValues;
-import net.hasor.neta.codec.http.HttpMethod;
-import net.hasor.neta.codec.http.HttpObject;
-import net.hasor.neta.codec.http.HttpRequestEncoder;
-import net.hasor.neta.codec.http.HttpVersion;
+import net.hasor.neta.codec.http.*;
 import net.hasor.neta.leak.LeakMetricSnapshot;
-import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.BenchmarkMode;
-import org.openjdk.jmh.annotations.Fork;
-import org.openjdk.jmh.annotations.Level;
-import org.openjdk.jmh.annotations.Measurement;
-import org.openjdk.jmh.annotations.Mode;
-import org.openjdk.jmh.annotations.OutputTimeUnit;
-import org.openjdk.jmh.annotations.Scope;
-import org.openjdk.jmh.annotations.Setup;
-import org.openjdk.jmh.annotations.State;
-import org.openjdk.jmh.annotations.TearDown;
-import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
@@ -46,7 +31,7 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 @Warmup(iterations = 2, time = 1)
 @Measurement(iterations = 3, time = 2)
 public class HttpCodecLeakBenchmark {
-    private static final byte[] BODY = "{\"name\":\"neta\",\"size\":1024}".getBytes(StandardCharsets.UTF_8);
+    private static final byte[]       BODY    = "{\"name\":\"neta\",\"size\":1024}".getBytes(StandardCharsets.UTF_8);
     private static final ProtoContext CONTEXT = createContext();
 
     private LeakMetricSnapshot before;
