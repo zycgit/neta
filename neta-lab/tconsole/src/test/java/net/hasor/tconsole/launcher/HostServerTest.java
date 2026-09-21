@@ -17,7 +17,7 @@ import org.junit.Test;
 
 public class HostServerTest {
     protected void threeCommandToWriter(Writer writer) {
-        LinkedList<String> preCommand = new LinkedList<String>() {{
+        LinkedList<String> preCommand = new LinkedList<>() {{
             this.addAll(Arrays.asList("help", "test", "exit"));
         }};
         while (!preCommand.isEmpty()) {
