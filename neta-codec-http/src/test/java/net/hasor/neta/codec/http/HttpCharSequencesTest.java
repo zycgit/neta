@@ -6,7 +6,6 @@
  * https://www.apache.org/licenses/LICENSE-2.0
  */
 package net.hasor.neta.codec.http;
-
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -14,12 +13,22 @@ import java.util.Random;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import org.junit.Test;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 public class HttpCharSequencesTest {
+    @Test
+    public void allUtf16CharactersPreserveIdentityAndFoldOnlyAsciiCasePairs() {
+        StringBuilder left = new StringBuilder("a");
+        StringBuilder right = new StringBuilder("a");
+        for (int value = 0; value <= Character.MAX_VALUE; value++) {
+            left.setCharAt(0, (char) value);
+            right.setCharAt(0, (char) value);
+            assertTrue(HttpCharSequences.equalsIgnoreCase(left, right));
+            right.setCharAt(0, (char) (value ^ 0x20));
+            assertEquals(fold(value) == fold(value ^ 0x20), HttpCharSequences.equalsIgnoreCase(left, right));
+        }
+    }
+
     @Test
     public void everyBytePairFoldsOnlyAsciiLettersAtDifferentPositions() {
         byte[] bytes = new byte[12];
@@ -108,12 +117,18 @@ public class HttpCharSequencesTest {
             right.setCharAt(0, 'X');
             assertFalse(HttpCharSequences.equalsIgnoreCase(source, 0, 8, right));
             CharSequence firstMismatch = new CharSequence() {
-                public int length() { return 8; }
+                public int length() {
+                    return 8;
+                }
+
                 public char charAt(int index) {
                     assertEquals(0, index);
                     return 'X';
                 }
-                public CharSequence subSequence(int start, int end) { throw new AssertionError(); }
+
+                public CharSequence subSequence(int start, int end) {
+                    throw new AssertionError();
+                }
             };
             assertFalse(HttpCharSequences.equalsIgnoreCase(source, 0, 8, firstMismatch));
         } finally {
@@ -157,8 +172,7 @@ public class HttpCharSequencesTest {
         ByteBuf source = ByteBuf.wrap(value.getBytes(StandardCharsets.US_ASCII));
         try {
             for (String needle : new String[] { "", "prefix", "ABC-name", "suffix", "__", "missing", "AbC_Name" }) {
-                assertEquals(HttpCharSequences.containsIgnoreCase(value.substring(2, value.length() - 2), needle),
-                        HttpCharSequences.containsIgnoreCase(source, 2, value.length() - 4, needle));
+                assertEquals(HttpCharSequences.containsIgnoreCase(value.substring(2, value.length() - 2), needle), HttpCharSequences.containsIgnoreCase(source, 2, value.length() - 4, needle));
             }
             assertFalse(HttpCharSequences.equalsIgnoreCase("\u212A", "k"));
             assertFalse(HttpCharSequences.containsIgnoreCase("\u00C1", "\u00E1"));

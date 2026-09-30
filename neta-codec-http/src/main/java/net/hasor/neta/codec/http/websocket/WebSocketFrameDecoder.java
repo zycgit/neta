@@ -56,6 +56,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
     private static final byte                 MASK_RULE_REQUIRE       = 1;
     private static final byte                 MASK_RULE_REJECT        = 2;
     private static final VarHandle            MASK_INT_BE             = MethodHandles.byteArrayViewVarHandle(int[].class, ByteOrder.BIG_ENDIAN);
+    private static final VarHandle            MASK_LONG_BE            = MethodHandles.byteArrayViewVarHandle(long[].class, ByteOrder.BIG_ENDIAN);
     private final        byte[]               maskKeyBuf              = new byte[4];
     private final        byte[]               headerBuf               = new byte[14]; // 2 base + 8 ext-len + 4 mask-key
     private final        byte[]               xorScratch              = new byte[XOR_SCRATCH_SIZE];
@@ -659,11 +660,18 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
     private static void unmaskPayload(byte[] data, int length, byte[] maskKey, int payloadOffset) {
         int maskOffset = payloadOffset & 3;
         int mask = ((maskKey[maskOffset] & 0xFF) << 24) | ((maskKey[(maskOffset + 1) & 3] & 0xFF) << 16) | ((maskKey[(maskOffset + 2) & 3] & 0xFF) << 8) | (maskKey[(maskOffset + 3) & 3] & 0xFF);
-        int alignedLength = length & ~3;
+        long longMask = mask & 0xFFFFFFFFL;
+        longMask |= longMask << 32;
+        int alignedLength = length & ~7;
         int i = 0;
-        for (; i < alignedLength; i += 4) {
+        for (; i < alignedLength; i += Long.BYTES) {
+            long value = (long) MASK_LONG_BE.get(data, i);
+            MASK_LONG_BE.set(data, i, value ^ longMask);
+        }
+        if (i <= length - Integer.BYTES) {
             int value = (int) MASK_INT_BE.get(data, i);
             MASK_INT_BE.set(data, i, value ^ mask);
+            i += Integer.BYTES;
         }
         for (; i < length; i++) {
             data[i] ^= maskKey[(payloadOffset + i) & 3];

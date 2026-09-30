@@ -6,7 +6,8 @@
  * https://www.apache.org/licenses/LICENSE-2.0
  */
 package net.hasor.neta.codec.http;
-
+import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import net.hasor.neta.bytebuf.ByteBuf;
@@ -14,6 +15,387 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class HeaderEntryStoreTest {
+    @Test
+    public void releaseCoversEveryMaterializedEntryInsertionPath() {
+        for (int operation = 0; operation < 6; operation++) {
+            ByteBuf source = ByteBuf.wrap("Name:42".getBytes(StandardCharsets.US_ASCII));
+            DefaultHttpHeaders headers = new DefaultHttpHeaders();
+            DefaultHttpHeaderEntry entry = new DefaultHttpHeaderEntry("Owned", "value");
+            try {
+                headers.addDecodedHeader(source, 0, 4, 5, 2);
+                headers.addDecodedHeader(source, 0, 4, 5, 2);
+                HeaderEntryStore store = (HeaderEntryStore) headers.headerEntries();
+                switch (operation) {
+                    case 0 -> headers.addHeaderEntry(entry);
+                    case 1 -> store.add(1, entry);
+                    case 2 -> store.set(0, entry).release();
+                    case 3 -> store.addAll(Arrays.asList(null, entry));
+                    case 4 -> store.addAll(1, List.of(entry));
+                    case 5 -> {
+                        HeaderEntryStore other = new HeaderEntryStore(List.of(entry));
+                        store.addAll(other);
+                        other.clear();
+                    }
+                }
+                headers.release();
+                assertEquals(0, entry.refCnt());
+                assertEquals(1, source.refCnt());
+            } finally {
+                headers.release();
+                if (entry.refCnt() > 0)
+                    entry.release();
+                source.release();
+            }
+        }
+    }
+
+    @Test
+    public void transferredExposedEntriesKeepTheirIndependentLifetime() {
+        for (boolean nonemptyTarget : new boolean[] { false, true }) {
+            ByteBuf source = ByteBuf.wrap("Name:42".getBytes(StandardCharsets.US_ASCII));
+            DefaultHttpHeaders original = new DefaultHttpHeaders();
+            DefaultHttpHeaders target = new DefaultHttpHeaders();
+            DefaultHttpHeaderEntry entry = null;
+            try {
+                original.addDecodedHeader(source, 0, 4, 5, 2);
+                original.addDecodedHeader(source, 0, 4, 5, 2);
+                entry = original.headerEntries().get(0).retain();
+                if (nonemptyTarget)
+                    target.addDecodedHeader(source, 0, 4, 5, 2);
+                target.transferHeaders(original);
+                original.release();
+                assertEquals(2, entry.refCnt());
+                target.release();
+                assertEquals(1, entry.refCnt());
+                assertEquals(2, source.refCnt());
+                assertEquals("Name", entry.getName());
+                assertEquals("42", entry.getValue());
+                assertEquals(1, source.refCnt());
+            } finally {
+                original.release();
+                target.release();
+                if (entry != null)
+                    entry.release();
+                source.release();
+            }
+        }
+    }
+
+    @Test
+    public void recycledStoresAndRawTransfersStillReleaseExistingEntries() {
+        DefaultHttpHeaders headers = new DefaultHttpHeaders();
+        for (int cycle = 0; cycle < 4; cycle++) {
+            ByteBuf source = ByteBuf.wrap("Name:42".getBytes(StandardCharsets.US_ASCII));
+            DefaultHttpHeaders raw = new DefaultHttpHeaders();
+            DefaultHttpHeaderEntry entry = new DefaultHttpHeaderEntry("Owned", "value");
+            try {
+                headers.addHeaderEntry(entry);
+                raw.addDecodedHeader(source, 0, 4, 5, 2);
+                headers.transferHeaders(raw);
+                raw.release();
+                assertEquals("42", headers.getString("Name"));
+                headers.release();
+                assertEquals(0, entry.refCnt());
+                assertEquals(1, source.refCnt());
+                headers.addDecodedHeader(source, 0, 4, 5, 2);
+                assertEquals("42", headers.getString("Name"));
+                assertEquals(2, source.refCnt());
+                headers.release();
+                assertEquals(1, source.refCnt());
+            } finally {
+                headers.release();
+                raw.release();
+                if (entry.refCnt() > 0)
+                    entry.release();
+                source.release();
+            }
+        }
+    }
+
+    @Test
+    public void valueLookupPreservesDuplicatesCachingAndEmptyValuesAcrossBuffers() {
+        for (int kind = 0; kind < 3; kind++) {
+            byte[] bytes = "Name:one|NAME:two|Empty:".getBytes(StandardCharsets.US_ASCII);
+            ByteBuffer buffer = kind == 2 ? ByteBuffer.allocateDirect(bytes.length) : ByteBuffer.allocate(bytes.length);
+            buffer.put(bytes).flip();
+            ByteBuf source = kind == 0 ? ByteBuf.wrap(bytes) : ByteBuf.wrap(buffer.asReadOnlyBuffer());
+            DefaultHttpHeaders headers = new DefaultHttpHeaders();
+            try {
+                assertNull(headers.getString("Name"));
+                headers.addHeader("Other", "before");
+                headers.addDecodedHeader(source, 0, 4, 5, 3);
+                headers.addDecodedHeader(source, 9, 4, 14, 3);
+                headers.addDecodedHeader(source, 18, 5, 24, 0);
+                assertNull(headers.getString(null));
+                assertNull(headers.getString("missing"));
+                assertEquals("before", headers.getString("other"));
+                String first = headers.getString("nAmE");
+                assertEquals("one", first);
+                assertSame(first, headers.getString("NAME"));
+                assertEquals("", headers.getString("EMPTY"));
+                assertEquals(List.of("one", "two"), headers.getValues("name"));
+                assertEquals(2, source.refCnt());
+                headers.headerNames();
+                assertEquals(1, source.refCnt());
+                assertSame(first, headers.getString("name"));
+                headers.headerEntries().get(1);
+                assertSame(first, headers.getString("name"));
+            } finally {
+                headers.release();
+                assertEquals(1, source.refCnt());
+                source.release();
+            }
+        }
+    }
+
+    @Test
+    public void valueLookupKeepsUnresolvedNamesLiveAndResolvedValuesStable() {
+        byte[] bytes = "Name:one|NAME:two".getBytes(StandardCharsets.US_ASCII);
+        ByteBuf source = ByteBuf.wrap(bytes);
+        DefaultHttpHeaders headers = new DefaultHttpHeaders();
+        try {
+            headers.addDecodedHeader(source, 0, 4, 5, 3);
+            headers.addDecodedHeader(source, 9, 4, 14, 3);
+            String first = headers.getString("name");
+            bytes[0] = 'G';
+            bytes[5] = 'x';
+            assertEquals("two", headers.getString("name"));
+            assertSame(first, headers.getString("game"));
+            headers.headerNames();
+            assertEquals(1, source.refCnt());
+            bytes[0] = 'F';
+            assertSame(first, headers.getString("GAME"));
+            assertNull(headers.getString("fame"));
+        } finally {
+            headers.release();
+            source.release();
+        }
+    }
+
+    @Test
+    public void rawLookupKeepsFirstLiveNameWhenAnotherRowMaterializes() {
+        byte[] bytes = "Small:0|Name:one|NAME:two|Empty:".getBytes(StandardCharsets.US_ASCII);
+        ByteBuf source = ByteBuf.wrap(bytes);
+        DefaultHttpHeaders headers = new DefaultHttpHeaders();
+        try {
+            headers.addDecodedHeader(source, 0, 5, 6, 1);
+            headers.addDecodedHeader(source, 8, 4, 13, 3);
+            headers.addDecodedHeader(source, 17, 4, 22, 3);
+            headers.addDecodedHeader(source, 26, 5, 32, 0);
+            HeaderEntryStore store = (HeaderEntryStore) headers.headerEntries();
+            assertEquals(1, store.findFirstIndex("NAME"));
+            String first = headers.getString("name");
+            assertEquals("one", first);
+            assertEquals("", headers.getString("empty"));
+            bytes[8] = 'G';
+            bytes[13] = 'x';
+            for (boolean materialize : new boolean[] { false, true }) {
+                if (materialize)
+                    store.get(0);
+                assertEquals(2, store.findFirstIndex("name"));
+                assertEquals(1, store.findFirstIndex("game"));
+                assertEquals("two", headers.getString("name"));
+                assertSame(first, headers.getString("GAME"));
+                assertNull(headers.getString("absent"));
+            }
+            headers.headerNames();
+            bytes[8] = 'F';
+            assertTrue(headers.containsHeader("Game"));
+            assertFalse(headers.containsHeader("Fame"));
+            assertSame(first, headers.getString("game"));
+            assertEquals("0", headers.getString("small"));
+            assertEquals(1, source.refCnt());
+        } finally {
+            headers.release();
+            assertEquals(1, source.refCnt());
+            source.release();
+        }
+    }
+
+    @Test
+    public void transferredRawAndMixedStoresKeepLiveLookupOrder() {
+        for (int targetKind = 0; targetKind < 3; targetKind++) {
+            for (boolean materialize : new boolean[] { false, true }) {
+                byte[] bytes = "Name:one|NAME:two".getBytes(StandardCharsets.US_ASCII);
+                ByteBuf source = ByteBuf.wrap(bytes);
+                ByteBuf prefix = ByteBuf.wrap("Other:0".getBytes(StandardCharsets.US_ASCII));
+                DefaultHttpHeaders original = new DefaultHttpHeaders();
+                DefaultHttpHeaders target = new DefaultHttpHeaders();
+                try {
+                    original.addDecodedHeader(source, 0, 4, 5, 3);
+                    original.addDecodedHeader(source, 9, 4, 14, 3);
+                    if (materialize)
+                        original.headerEntries().get(1);
+                    if (targetKind == 1)
+                        target.addDecodedHeader(prefix, 0, 5, 6, 1);
+                    else if (targetKind == 2)
+                        target.addHeader("Other", "0");
+                    target.transferHeaders(original);
+                    assertEquals(0, original.headerSize());
+                    original.release();
+                    HeaderEntryStore store = (HeaderEntryStore) target.headerEntries();
+                    int first = targetKind == 0 ? 0 : 1;
+                    assertEquals(first, store.findFirstIndex("name"));
+                    String value = target.getString("name");
+                    assertEquals("one", value);
+                    bytes[0] = 'G';
+                    assertEquals(first + 1, store.findFirstIndex("name"));
+                    assertEquals(first, store.findFirstIndex("game"));
+                    assertEquals("two", target.getString("NAME"));
+                    assertSame(value, target.getString("game"));
+                    if (targetKind != 0)
+                        assertEquals("0", target.getString("other"));
+                } finally {
+                    original.release();
+                    target.release();
+                    assertEquals(1, source.refCnt());
+                    assertEquals(1, prefix.refCnt());
+                    source.release();
+                    prefix.release();
+                }
+            }
+        }
+    }
+
+    @Test
+    public void lookupSurvivesEntryRemovalAndRawStorageReuse() {
+        ByteBuf source = ByteBuf.wrap("Name:42".getBytes(StandardCharsets.US_ASCII));
+        DefaultHttpHeaders headers = new DefaultHttpHeaders();
+        try {
+            for (int cycle = 0; cycle < 3; cycle++) {
+                headers.addDecodedHeader(source, 0, 4, 5, 2);
+                headers.addDecodedHeader(source, 0, 4, 5, 2);
+                HeaderEntryStore store = (HeaderEntryStore) headers.headerEntries();
+                assertEquals(0, store.findFirstIndex("NAME"));
+                assertEquals("42", headers.getString("name"));
+                store.remove(0).release();
+                assertEquals(0, store.findFirstIndex("NAME"));
+                assertEquals("42", headers.getString("name"));
+                assertEquals(2, source.refCnt());
+                headers.release();
+                assertEquals(-1, store.findFirstIndex("name"));
+                assertNull(store.findFirstValue("name"));
+                assertEquals(1, source.refCnt());
+            }
+        } finally {
+            headers.release();
+            source.release();
+        }
+    }
+
+    @Test
+    public void lookupPreservesNullAndDeferredRangeFailureSemantics() {
+        HeaderEntryStore store = new HeaderEntryStore();
+        ByteBuf source = ByteBuf.wrap(new byte[] { 'a' });
+        try {
+            store.addDecoded(source, 0, 3, 0, 0);
+            assertEquals(-1, store.findFirstIndex(null));
+            assertNull(store.findFirstValue(null));
+            assertEquals(-1, store.findFirstIndex("different-length"));
+            assertNull(store.findFirstValue("different-length"));
+            assertThrows(IndexOutOfBoundsException.class, () -> store.findFirstIndex("abc"));
+            assertThrows(IndexOutOfBoundsException.class, () -> store.findFirstValue("abc"));
+            store.clear();
+            store.add(null);
+            assertEquals(-1, store.findFirstIndex(null));
+            assertNull(store.findFirstValue(null));
+            assertThrows(NullPointerException.class, () -> store.findFirstIndex("name"));
+            assertThrows(NullPointerException.class, () -> store.findFirstValue("name"));
+        } finally {
+            store.clear();
+            assertEquals(1, source.refCnt());
+            source.release();
+        }
+    }
+
+    @Test
+    public void cachedNameLookupUsesDecodedCharacterLength() {
+        byte[] bytes = { (byte) 0xc3, (byte) 0xa9, ':', '7' };
+        ByteBuf source = ByteBuf.wrap(bytes);
+        DefaultHttpHeaders headers = new DefaultHttpHeaders();
+        try {
+            headers.addDecodedHeader(source, 0, 2, 3, 1);
+            String name = new String(bytes, 0, 2, Charset.defaultCharset());
+            assertEquals(Collections.singleton(name), headers.headerNames());
+            assertTrue(headers.containsHeader(name));
+            assertEquals(7, headers.getLong(name, -1));
+            assertEquals("7", headers.getString(name));
+            assertEquals(1, source.refCnt());
+            headers.addHeader("Other", "0");
+            assertTrue(headers.containsHeader(name));
+            assertEquals("7", headers.getString(name));
+        } finally {
+            headers.release();
+            source.release();
+        }
+    }
+
+    @Test
+    public void transferredResolvedNamesKeepCharacterLengthAndReleasedSources() {
+        for (int targetKind = 0; targetKind < 3; targetKind++) {
+            byte[] bytes = { (byte) 0xc3, (byte) 0xa9, ':', '7' };
+            ByteBuf source = ByteBuf.wrap(bytes);
+            ByteBuf prefix = ByteBuf.wrap("Other:0".getBytes(StandardCharsets.US_ASCII));
+            DefaultHttpHeaders original = new DefaultHttpHeaders();
+            DefaultHttpHeaders target = new DefaultHttpHeaders();
+            try {
+                original.addDecodedHeader(source, 0, 2, 3, 1);
+                String name = new String(bytes, 0, 2, Charset.defaultCharset());
+                assertEquals(Collections.singleton(name), original.headerNames());
+                assertEquals("7", original.getString(name));
+                assertEquals(1, source.refCnt());
+                if (targetKind == 1)
+                    target.addDecodedHeader(prefix, 0, 5, 6, 1);
+                else if (targetKind == 2)
+                    target.addHeader("Other", "0");
+                target.transferHeaders(original);
+                original.release();
+                source.release();
+                HeaderEntryStore store = (HeaderEntryStore) target.headerEntries();
+                assertEquals(targetKind == 0 ? 0 : 1, store.findFirstIndex(name));
+                assertEquals("7", target.getString(name));
+                assertEquals(7, target.getLong(name, -1));
+                if (targetKind != 0)
+                    assertEquals("0", target.getString("other"));
+            } finally {
+                original.release();
+                target.release();
+                if (!source.isFree())
+                    source.release();
+                assertEquals(1, prefix.refCnt());
+                prefix.release();
+            }
+        }
+    }
+
+    @Test
+    public void partiallyResolvedRawStorePreservesLiveNamesAcrossReuse() {
+        HeaderEntryStore store = new HeaderEntryStore();
+        for (int cycle = 0; cycle < 4; cycle++) {
+            byte[] bytes = "Name:one|Other:two".getBytes(StandardCharsets.US_ASCII);
+            ByteBuf source = ByteBuf.wrap(bytes);
+            try {
+                store.addDecoded(source, 0, 4, 5, 3);
+                store.addDecoded(source, 9, 5, 15, 3);
+                assertEquals("Name", store.getName(0));
+                assertEquals("one", store.getValue(0));
+                bytes[0] = 'G';
+                bytes[9] = 'A';
+                assertEquals(0, store.findFirstIndex("name"));
+                assertEquals(-1, store.findFirstIndex("game"));
+                assertEquals(-1, store.findFirstIndex("other"));
+                assertEquals(1, store.findFirstIndex("ather"));
+                assertEquals("one", store.findFirstValue("name"));
+                assertEquals("two", store.findFirstValue("ATHER"));
+                assertEquals(2, source.refCnt());
+            } finally {
+                store.clear();
+                assertEquals(1, source.refCnt());
+                source.release();
+            }
+        }
+    }
+
     @Test
     public void listOperationsMatchArrayListAcrossStorageBoundaries() {
         DefaultHttpHeaderEntry[] pool = new DefaultHttpHeaderEntry[17];

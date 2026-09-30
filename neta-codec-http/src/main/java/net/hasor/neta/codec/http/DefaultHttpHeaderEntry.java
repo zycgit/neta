@@ -17,15 +17,15 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @version : 2026-03-10
  */
 public class DefaultHttpHeaderEntry extends AbstractReferenceHolder {
-    static final RecycleObjectPool.Recycler<DefaultHttpHeaderEntry> RECYCLER = RecycleObjectPool.recycler(//
+    static final RecycleObjectPool<DefaultHttpHeaderEntry> RECYCLER = new RecycleObjectPool<>(//
             DefaultHttpHeaderEntry::new, DefaultHttpHeaderEntry::resetRefCnt, DefaultHttpHeaderEntry::onRecycle);
-    private      CharSequence                                         name;
-    private      CharSequence                                         value;
-    private      ByteBuf                                              source;
-    private      int                                                  nameOffset;
-    private      int                                                  nameLength;
-    private      int                                                  valueOffset;
-    private      int                                                  valueLength;
+    private      CharSequence                              name;
+    private      CharSequence                              value;
+    private      ByteBuf                                   source;
+    private      int                                       nameOffset;
+    private      int                                       nameLength;
+    private      int                                       valueOffset;
+    private      int                                       valueLength;
 
     private DefaultHttpHeaderEntry() {
     }
@@ -79,6 +79,18 @@ public class DefaultHttpHeaderEntry extends AbstractReferenceHolder {
     static DefaultHttpHeaderEntry newOwnedEntry(ByteBuf source, int nameOffset, int nameLength, int valueOffset, int valueLength) {
         DefaultHttpHeaderEntry entry = RECYCLER.get();
         entry.initEntry(source, nameOffset, nameLength, valueOffset, valueLength, false);
+        return entry;
+    }
+
+    static DefaultHttpHeaderEntry materializeDecodedEntry(ByteBuf source, int nameOffset, int nameLength, int valueOffset, int valueLength, String name, String value) {
+        DefaultHttpHeaderEntry entry = RECYCLER.get();
+        entry.name = name;
+        entry.value = value;
+        entry.source = source;
+        entry.nameOffset = nameOffset;
+        entry.nameLength = nameLength;
+        entry.valueOffset = valueOffset;
+        entry.valueLength = valueLength;
         return entry;
     }
 

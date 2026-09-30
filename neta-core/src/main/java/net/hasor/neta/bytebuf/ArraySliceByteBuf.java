@@ -11,11 +11,11 @@ import java.nio.charset.Charset;
 import net.hasor.cobble.ref.RecycleObjectPool;
 
 final class ArraySliceByteBuf extends AbstractByteBuf {
-    private static final RecycleObjectPool.Recycler<ArraySliceByteBuf> RECYCLER = RecycleObjectPool.recycler(//
+    private static final RecycleObjectPool<ArraySliceByteBuf> RECYCLER = new RecycleObjectPool<>(//
             ArraySliceByteBuf::new, ArraySliceByteBuf::resetState, ArraySliceByteBuf::onRecycle);
-    private              ByteBuf                                       source;
-    private              byte[]                                        target;
-    private              int                                           startOffset;
+    private              ByteBuf                              source;
+    private              byte[]                               target;
+    private              int                                  startOffset;
 
     private ArraySliceByteBuf() {
     }

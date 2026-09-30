@@ -39,14 +39,14 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * if it is direct memory).
  * <p><b>Recycle:</b> on {@link #markReader()}, consumed bytes are dropped and
  * the buffer may shrink.  Recycled instances go back to the
- * its dedicated {@link RecycleObjectPool.Recycler}.
+ * its dedicated {@link RecycleObjectPool}.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  * @see AutoArrayByteBuf
  * @see RingByteBuffer
  */
 final class AutoByteBuffer extends AbstractByteBuf {
-    static final RecycleObjectPool.Recycler<AutoByteBuffer> RECYCLER = RecycleObjectPool.recycler(//
+    static final RecycleObjectPool<AutoByteBuffer> RECYCLER = new RecycleObjectPool<>(//
             AutoByteBuffer::new, AutoByteBuffer::resetState, AutoByteBuffer::onRecycle);
     ByteBuffer target;
     private int extensionSize;

@@ -46,16 +46,16 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * @see BasicByteBufAllocator
  */
 final class PooledByteBuf extends AbstractByteBuf {
-    static final ThreadLocal<java.util.ArrayDeque<Buffer>> BUFFER_CACHE     = ThreadLocal.withInitial(java.util.ArrayDeque::new);
+    static final         ThreadLocal<java.util.ArrayDeque<Buffer>> BUFFER_CACHE     = ThreadLocal.withInitial(java.util.ArrayDeque::new);
     /** Thread-local cache for recently freed pooled Buffers (pages stay allocated). */
-    private static final int                               MAX_BUFFER_CACHE = 8;
-    static final RecycleObjectPool.Recycler<PooledByteBuf> RECYCLER        = RecycleObjectPool.recycler(//
+    private static final int                                       MAX_BUFFER_CACHE = 8;
+    static final         RecycleObjectPool<PooledByteBuf>          RECYCLER         = new RecycleObjectPool<>(//
             PooledByteBuf::new, PooledByteBuf::resetState, PooledByteBuf::onRecycle);
-    Buffer                                                 target;
-    private BufferPool                                     pool;
+    Buffer target;
+    private BufferPool pool;
     // Cached heap array + offset for fast-path access (null for direct buffers)
-    private byte[] heapArray;
-    private int    heapOffset;
+    private byte[]     heapArray;
+    private int        heapOffset;
 
     // ------------------------------------------------------------------------
     private int initSize;

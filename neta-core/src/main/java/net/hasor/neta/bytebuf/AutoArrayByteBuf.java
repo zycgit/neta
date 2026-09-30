@@ -35,7 +35,7 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * and the reader has advanced past the start, the consumed prefix is discarded
  * by copying the remaining readable bytes to a smaller array (or the same array
  * starting at offset 0).  A recycled {@code AutoArrayByteBuf} is returned to
- * its dedicated {@link RecycleObjectPool.Recycler} to amortise allocation overhead.
+ * its dedicated {@link RecycleObjectPool} to amortise allocation overhead.
  * <p><b>Use case:</b> suitable for heap-allocated accumulation buffers where the
  * message size is not known in advance (e.g. assembling a delimited frame from
  * multiple incoming chunks).
@@ -45,7 +45,7 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * @see RingArrayByteBuf
  */
 final class AutoArrayByteBuf extends AbstractByteBuf {
-    static final RecycleObjectPool.Recycler<AutoArrayByteBuf> RECYCLER = RecycleObjectPool.recycler(//
+    static final RecycleObjectPool<AutoArrayByteBuf> RECYCLER = new RecycleObjectPool<>(//
             AutoArrayByteBuf::new, AutoArrayByteBuf::resetState, AutoArrayByteBuf::onRecycle);
     byte[] target;
     private int extensionSize;

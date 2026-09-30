@@ -9,6 +9,7 @@ package net.hasor.neta.channel.transport.quic;
 import net.hasor.cobble.function.Release;
 import net.hasor.cobble.ref.RecycleObjectPool;
 import net.hasor.neta.bytebuf.ByteBuf;
+
 /**
  * Reassembled QUIC stream payload delivered on the connection pipeline when {@link QuicChannelMode#CHANNEL} is enabled.
  * <p>
@@ -19,7 +20,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class QuicMessage implements Release {
-    private static final RecycleObjectPool.Recycler<QuicMessage> RECYCLER = RecycleObjectPool.recycler(//
+    private static final RecycleObjectPool<QuicMessage> RECYCLER = new RecycleObjectPool<>(//
             QuicMessage::new, QuicMessage::resetState, QuicMessage::onRecycle);
 
     private long    streamId;

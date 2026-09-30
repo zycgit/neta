@@ -9,6 +9,7 @@ package net.hasor.neta.codec.http.websocket;
 import net.hasor.cobble.ref.RecycleObjectPool;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.codec.http.AbstractHttpObject;
+
 /**
  * Default pooled implementation of {@link WebSocketFrame}.
  * <p>
@@ -18,20 +19,19 @@ import net.hasor.neta.codec.http.AbstractHttpObject;
  * @version : 2026-02-18
  */
 final class DefaultWebSocketFrame extends AbstractHttpObject<WebSocketFrame> implements WebSocketFrame {
-    private static final RecycleObjectPool.Recycler<DefaultWebSocketFrame> RECYCLER = RecycleObjectPool.recycler(//
+    private static final RecycleObjectPool<DefaultWebSocketFrame> RECYCLER   = new RecycleObjectPool<>(//
             DefaultWebSocketFrame::new, DefaultWebSocketFrame::resetState, DefaultWebSocketFrame::onRecycle);
-
-    private boolean         finalFragment;
-    private boolean         rsv1;
-    private boolean         rsv2;
-    private boolean         rsv3;
-    private boolean         masked;
-    private boolean         hasMaskingKey;
-    private boolean         active;
-    private final byte[]    maskingKey = new byte[4];
-    private ByteBuf         content;
-    private int             payloadLength;
-    private WebSocketOpcode opcode;
+    private              boolean                                  finalFragment;
+    private              boolean                                  rsv1;
+    private              boolean                                  rsv2;
+    private              boolean                                  rsv3;
+    private              boolean                                  masked;
+    private              boolean                                  hasMaskingKey;
+    private              boolean                                  active;
+    private final        byte[]                                   maskingKey = new byte[4];
+    private              ByteBuf                                  content;
+    private              int                                      payloadLength;
+    private              WebSocketOpcode                          opcode;
 
     private DefaultWebSocketFrame() {
     }

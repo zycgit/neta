@@ -11,11 +11,9 @@ import java.math.BigInteger;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
-
-import org.junit.Test;
-
 import net.hasor.cobble.RandomUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
+import org.junit.Test;
 
 public class ChunkPoolTest {
     private static boolean checkUsed(int form, int to, byte[] chunksMap) {
@@ -249,9 +247,11 @@ public class ChunkPoolTest {
 
         PageChunkSplit pageList = null;
         while ((pageList = pageLists.poll()) != null) {
-            assert checkUsed(pageList.getFromPage(), pageList.getToPage(), pool.chunksMap);
+            int fromPage = pageList.getFromPage();
+            int toPage = pageList.getToPage();
+            assert checkUsed(fromPage, toPage, pool.chunksMap);
             pageList.free();
-            assert checkFree(pageList.getFromPage(), pageList.getToPage(), pool.chunksMap);
+            assert checkFree(fromPage, toPage, pool.chunksMap);
         }
 
         for (int i = 0; i < pool.chunksMap.length; i++) {

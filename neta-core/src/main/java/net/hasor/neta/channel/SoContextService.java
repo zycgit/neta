@@ -22,6 +22,7 @@ import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
+
 /**
  * Default implementation of {@link SoContext} and the shared runtime container for a single
  * {@link NetManager}.
@@ -264,7 +265,7 @@ public class SoContextService implements SoContext {
             }
         }
 
-        if (!hasProcessed) {
+        if (!hasProcessed && logger.isDebugEnabled()) {
             String msg = prefix + "(" + data.getSource().getChannelId() + ") There are no program at the tail of the ProtoStackChain, Skipping event: ";
             logger.debug(msg + data.getData());
         }

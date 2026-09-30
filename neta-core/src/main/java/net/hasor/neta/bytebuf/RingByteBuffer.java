@@ -9,6 +9,7 @@ package net.hasor.neta.bytebuf;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import net.hasor.cobble.ref.RecycleObjectPool;
+
 /**
  * Fixed-capacity circular {@link ByteBuf} backed by a {@link java.nio.ByteBuffer}.
  * <p>Its semantics match {@link RingArrayByteBuf}: logical read/write indexes
@@ -36,10 +37,10 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * @see AutoByteBuffer
  */
 final class RingByteBuffer extends AbstractByteBuf {
-    static final RecycleObjectPool.Recycler<RingByteBuffer> RECYCLER = RecycleObjectPool.recycler(//
+    static final RecycleObjectPool<RingByteBuffer> RECYCLER = new RecycleObjectPool<>(//
             RingByteBuffer::new, RingByteBuffer::resetState, RingByteBuffer::onRecycle);
-    ByteBuffer                                          target;
-    private int                                         capacityMask;
+    ByteBuffer target;
+    private int capacityMask;
 
     private RingByteBuffer() {
     }

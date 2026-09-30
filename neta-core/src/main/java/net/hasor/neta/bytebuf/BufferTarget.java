@@ -9,6 +9,7 @@ package net.hasor.neta.bytebuf;
 import java.nio.ByteBuffer;
 import java.nio.ReadOnlyBufferException;
 import net.hasor.cobble.ref.RecycleObjectPool;
+
 /**
  * {@link Buffer} implementation backed by a {@link PageChunkSplit} allocated
  * from a {@link PageChunkPool}.
@@ -27,11 +28,11 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * @see PooledByteBuf
  */
 class BufferTarget implements Buffer {
-    static final RecycleObjectPool.Recycler<BufferTarget> RECYCLER = RecycleObjectPool.recycler(//
+    static final RecycleObjectPool<BufferTarget> RECYCLER = new RecycleObjectPool<>(//
             BufferTarget::new, BufferTarget::resetState, BufferTarget::onRecycle);
-    private Buffer                                    memory;
-    private PageChunkSplit                            pages;
-    private int                                       pageSize;
+    private      Buffer                          memory;
+    private      PageChunkSplit                  pages;
+    private      int                             pageSize;
 
     // ------------------------------------------------------------------------
     private boolean readOnly;

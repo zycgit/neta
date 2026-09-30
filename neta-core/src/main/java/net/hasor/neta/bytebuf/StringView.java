@@ -9,6 +9,7 @@ package net.hasor.neta.bytebuf;
 import java.nio.charset.StandardCharsets;
 import net.hasor.cobble.function.Release;
 import net.hasor.cobble.ref.RecycleObjectPool;
+
 /**
  * A lightweight {@link CharSequence} view over a visible range of a {@link ByteBuf}.
  * <p>
@@ -23,13 +24,12 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * stability of the underlying buffer content.
  */
 public class StringView implements CharSequence, Release {
-    private static final RecycleObjectPool.Recycler<StringView> RECYCLER = RecycleObjectPool.recycler(//
+    private static final RecycleObjectPool<StringView> RECYCLER = new RecycleObjectPool<>(//
             StringView::new, StringView::resetState, StringView::onRecycle);
-
-    private int     offset;
-    private int     length;
-    private ByteBuf source;
-    private String  cachedValue;
+    private              int                           offset;
+    private              int                           length;
+    private              ByteBuf                       source;
+    private              String                        cachedValue;
 
     protected StringView() {
     }

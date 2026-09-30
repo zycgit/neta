@@ -17,10 +17,10 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @version : 2026-02-18
  */
 public class DefaultHttpByteBuf extends AbstractHttpObject<HttpByteBuf> implements HttpByteBuf {
-    private static final RecycleObjectPool.Recycler<DefaultHttpByteBuf> RECYCLER = RecycleObjectPool.recycler(//
+    private static final RecycleObjectPool<DefaultHttpByteBuf> RECYCLER = new RecycleObjectPool<>(//
             DefaultHttpByteBuf::new, DefaultHttpByteBuf::resetState, DefaultHttpByteBuf::onRecycle);
-    private              ByteBuf                                          content;
-    private              boolean                                          active;
+    private              ByteBuf                               content;
+    private              boolean                               active;
 
     private DefaultHttpByteBuf() {
     }

@@ -6,7 +6,10 @@
  * https://www.apache.org/licenses/LICENSE-2.0
  */
 package net.hasor.neta.channel;
+import java.lang.reflect.Field;
+import java.util.Map;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import net.hasor.neta.channel.transport.virtual.VrtSoConfig;
 import net.hasor.neta.channel.transport.virtual.VrtSocketAddress;
 import org.junit.Test;
@@ -101,6 +104,175 @@ public class ProtoContextAttachmentTest {
             } finally {
                 workers.shutdownNow();
                 assertTrue(workers.awaitTermination(5, TimeUnit.SECONDS));
+            }
+        }
+    }
+
+    @Test
+    public void removedAttachmentsDoNotRetainTheirTypeKeys() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            Field storageField = ProtoContextService.class.getDeclaredField("contextData");
+            storageField.setAccessible(true);
+            Map<?, ?> storage = (Map<?, ?>) storageField.get(fixture.root);
+            for (int i = 0; i < 1000; i++) {
+                Payload payload = new Payload(i);
+                fixture.root.context(Payload.class, payload);
+                assertTrue(storage.containsKey(Payload.class));
+                fixture.root.context(Payload.class, null);
+                assertFalse(storage.containsKey(Payload.class));
+            }
+        }
+    }
+
+    @Test(timeout = 15000)
+    public void concurrentRemoveUpdateAndReadHistoriesAreLinearizable() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            ExecutorService workers = Executors.newFixedThreadPool(2);
+            try {
+                for (int round = 0; round < 500; round++) {
+                    Payload initial = new Payload(round);
+                    fixture.root.context(Payload.class, initial);
+                    AtomicInteger clock = new AtomicInteger();
+                    CountDownLatch start = new CountDownLatch(1);
+                    Operation[] history = { new Operation(Operation.WRITE, new Payload(round + 1)), new Operation(Operation.READ, null), new Operation(Operation.WRITE, null), new Operation(Operation.WRITE, new Payload(round + 2)), new Operation(Operation.READ, null) };
+                    Future<?> first = workers.submit(() -> {
+                        start.await();
+                        history[0].run(fixture.root, clock);
+                        history[1].run(fixture.root, clock);
+                        return null;
+                    });
+                    Future<?> second = workers.submit(() -> {
+                        start.await();
+                        history[2].run(fixture.root, clock);
+                        history[3].run(fixture.root, clock);
+                        return null;
+                    });
+                    start.countDown();
+                    first.get(5, TimeUnit.SECONDS);
+                    second.get(5, TimeUnit.SECONDS);
+                    history[4].run(fixture.root, clock);
+                    assertTrue("No legal sequential history in round " + round, linearizable(history, 0, initial));
+                }
+            } finally {
+                workers.shutdownNow();
+                assertTrue(workers.awaitTermination(5, TimeUnit.SECONDS));
+            }
+        }
+    }
+
+    @Test(timeout = 15000)
+    public void twoRemoversWriterAndReaderHaveLinearizableHistories() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            ExecutorService workers = Executors.newFixedThreadPool(4);
+            try {
+                for (int round = 0; round < 250; round++) {
+                    Payload initial = new Payload(round);
+                    fixture.root.context(Payload.class, initial);
+                    AtomicInteger clock = new AtomicInteger();
+                    CountDownLatch ready = new CountDownLatch(4);
+                    CountDownLatch start = new CountDownLatch(1);
+                    Operation[] history = { new Operation(Operation.WRITE, null), new Operation(Operation.WRITE, null), new Operation(Operation.WRITE, new Payload(round + 1)), new Operation(Operation.READ, null), new Operation(Operation.READ, null) };
+                    Future<?>[] tasks = new Future<?>[4];
+                    for (int worker = 0; worker < tasks.length; worker++) {
+                        Operation operation = history[worker];
+                        tasks[worker] = workers.submit(() -> {
+                            ready.countDown();
+                            start.await();
+                            operation.run(fixture.root, clock);
+                            return null;
+                        });
+                    }
+                    assertTrue(ready.await(5, TimeUnit.SECONDS));
+                    start.countDown();
+                    for (Future<?> task : tasks) {
+                        task.get(5, TimeUnit.SECONDS);
+                    }
+                    history[4].run(fixture.root, clock);
+                    assertTrue("No legal two-remover history in round " + round, linearizable(history, 0, initial));
+                }
+            } finally {
+                workers.shutdownNow();
+                assertTrue(workers.awaitTermination(5, TimeUnit.SECONDS));
+            }
+        }
+    }
+
+    @Test(timeout = 15000)
+    public void mutableAttachmentIdentitySurvivesExternallySynchronizedUpdates() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            Payload value = new Payload(0);
+            fixture.root.context(Payload.class, value);
+            ExecutorService workers = Executors.newSingleThreadExecutor();
+            try {
+                for (int i = 1; i <= 500; i++) {
+                    final int nextValue = i;
+                    // Future.get orders these threads; this checks identity and API behavior, not publication strength.
+                    workers.submit(() -> {
+                        value.value = nextValue;
+                        value.check = nextValue ^ 0x5a5a5a5a;
+                        assertSame(value, fixture.root.context(Payload.class, value));
+                    }).get(5, TimeUnit.SECONDS);
+                    Payload observed = fixture.root.context(Payload.class);
+                    assertSame(value, observed);
+                    assertEquals(i, observed.value);
+                    assertEquals(i ^ 0x5a5a5a5a, observed.check);
+                }
+            } finally {
+                workers.shutdownNow();
+                assertTrue(workers.awaitTermination(5, TimeUnit.SECONDS));
+            }
+        }
+    }
+
+    private static boolean linearizable(Operation[] history, int selected, Payload value) {
+        if (selected == (1 << history.length) - 1) {
+            return true;
+        }
+        for (int i = 0; i < history.length; i++) {
+            if ((selected & (1 << i)) != 0) {
+                continue;
+            }
+            Operation operation = history[i];
+            boolean predecessorMissing = false;
+            for (int j = 0; j < history.length; j++) {
+                if ((selected & (1 << j)) == 0 && history[j].completed < operation.started) {
+                    predecessorMissing = true;
+                    break;
+                }
+            }
+            if (predecessorMissing || (operation.kind == Operation.READ && operation.observed != value)) {
+                continue;
+            }
+            Payload nextValue = operation.kind == Operation.WRITE ? operation.value : value;
+            if (linearizable(history, selected | (1 << i), nextValue)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static final class Operation {
+        private static final int     READ  = 0;
+        private static final int     WRITE = 1;
+        private final        int     kind;
+        private final        Payload value;
+        private              Payload observed;
+        private              int     started;
+        private              int     completed;
+
+        private Operation(int kind, Payload value) {
+            this.kind = kind;
+            this.value = value;
+        }
+
+        private void run(ProtoContextService context, AtomicInteger clock) {
+            this.started = clock.incrementAndGet();
+            this.observed = this.kind == READ ? context.context(Payload.class) : context.context(Payload.class, this.value);
+            this.completed = clock.incrementAndGet();
+            if (this.kind == WRITE) {
+                assertSame(this.value, this.observed);
+            } else if (this.observed != null) {
+                assertEquals(this.observed.value ^ 0x5a5a5a5a, this.observed.check);
             }
         }
     }

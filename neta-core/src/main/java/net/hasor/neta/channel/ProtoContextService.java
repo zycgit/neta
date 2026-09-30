@@ -8,10 +8,12 @@
 package net.hasor.neta.channel;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.concurrent.future.Futures;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
+
 /**
  * Default {@link ProtoContext} implementation for one logical channel pipeline.
  * <p>It holds the channel-oriented {@link ProtoStackChain}, the typed attachments exposed through
@@ -23,21 +25,22 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
  * @see ProtoStackChain
  */
 class ProtoContextService implements ProtoBuildContext {
-    private final    SoChannel<?>          channel;
-    private final    SoContext             soContext;
-    private final    Map<Class<?>, Object> contextData;  // local to this ctx; upward lookup via context(Class<T>)
-    private final    ProtoStackChain       chainRoot;
-    private final    Map<String, Object>   namedHandlerMap;
-    private final    ProtoContextService   parentCtx;
-    private final    String                parentPrevStackName; // node before Router in parent chain (SND direction); null if Router is head-most
-    private final    String                parentNextStackName; // node after Router in parent chain (RCV direction); null if Router is tail-most
+    private static final Object                                 REMOVED_CONTEXT = new Object();
+    private final        SoChannel<?>                           channel;
+    private final        SoContext                              soContext;
+    private final        Map<Class<?>, AtomicReference<Object>> contextData;  // local to this ctx; upward lookup via context(Class<T>)
+    private final        ProtoStackChain                        chainRoot;
+    private final        Map<String, Object>                    namedHandlerMap;
+    private final        ProtoContextService                    parentCtx;
+    private final        String                                 parentPrevStackName; // node before Router in parent chain (SND direction); null if Router is head-most
+    private final        String                                 parentNextStackName; // node after Router in parent chain (RCV direction); null if Router is tail-most
     //
-    private final    Map<String, Object>   flashMap;
-    private          Deque<ProtoStatus>    statusStack;
-    private          ProtoStatus           statusPrevious;
-    private          ProtoStatus           freeStatus;
-    private volatile ProtoStatus           statusCurrent;
-    private final    ProtoRecoveryState    recoveryState;
+    private final        Map<String, Object>                    flashMap;
+    private              Deque<ProtoStatus>                     statusStack;
+    private              ProtoStatus                            statusPrevious;
+    private              ProtoStatus                            freeStatus;
+    private volatile     ProtoStatus                            statusCurrent;
+    private final        ProtoRecoveryState                     recoveryState;
 
     ProtoContextService(SoChannel<?> channel, SoContext soContext) {
         this.channel = channel;
@@ -147,7 +150,9 @@ class ProtoContextService implements ProtoBuildContext {
     /** {@inheritDoc} */
     @Override
     public <T> T context(Class<T> attachment) {
-        T val = (T) this.contextData.get(attachment);
+        AtomicReference<Object> slot = this.contextData.get(attachment);
+        Object stored = slot != null ? slot.get() : null;
+        T val = stored != REMOVED_CONTEXT ? (T) stored : null;
         if (val == null && this.parentCtx != null) {
             return this.parentCtx.context(attachment);
         } else {
@@ -158,12 +163,34 @@ class ProtoContextService implements ProtoBuildContext {
     /** {@inheritDoc} */
     @Override
     public <T> T context(Class<T> attachmentType, T attachment) {
+        AtomicReference<Object> slot = this.contextData.get(attachmentType);
         if (attachment == null) {
-            this.contextData.remove(attachmentType);
-        } else {
-            this.contextData.put(attachmentType, attachment);
+            if (slot != null) {
+                // The marker linearizes removal and prevents writers holding this slot from reviving it.
+                slot.getAndSet(REMOVED_CONTEXT);
+                this.contextData.remove(attachmentType, slot);
+            }
+            return null;
         }
-        return attachment;
+
+        for (; ; ) {
+            if (slot == null) {
+                AtomicReference<Object> created = new AtomicReference<>(attachment);
+                slot = this.contextData.putIfAbsent(attachmentType, created);
+                if (slot == null) {
+                    return attachment;
+                }
+            }
+            Object previous = slot.get();
+            if (previous == REMOVED_CONTEXT) {
+                // Help unlink a removed slot before retrying; the conditional remove cannot delete its replacement.
+                this.contextData.remove(attachmentType, slot);
+                slot = this.contextData.get(attachmentType);
+            } else if (slot.compareAndSet(previous, attachment)) {
+                // Even an identical value must be published again for callers that mutate attachments.
+                return attachment;
+            }
+        }
     }
 
     /** {@inheritDoc} */

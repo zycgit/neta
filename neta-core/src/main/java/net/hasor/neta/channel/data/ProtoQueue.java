@@ -9,6 +9,7 @@ package net.hasor.neta.channel.data;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import net.hasor.cobble.ref.CursorArrayList;
 import net.hasor.neta.channel.ProtoFullException;
 import net.hasor.neta.channel.SoUtils;
 
@@ -109,7 +110,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
      */
     public ProtoQueue(int capacity) {
         this.capacity = capacity < 0 ? Integer.MAX_VALUE : capacity;
-        this.linkedList = new ArrayList<>();
+        this.linkedList = new CursorArrayList<>();
         this.totalOwned = 0;
     }
 
@@ -352,11 +353,19 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
         if (fixCnt == 0) {
             return EMPTY_ARRAY;
         }
-        Object[] result = new Object[fixCnt];
-        for (int i = 0; i < fixCnt; i++) {
-            result[i] = this.linkedList.get(i);
+
+        Object[] result;
+        if (fixCnt == this.linkedList.size()) {
+            result = this.linkedList.toArray();
+            this.linkedList.clear();
+        } else {
+            result = new Object[fixCnt];
+            for (int i = 0; i < fixCnt; i++) {
+                result[i] = this.linkedList.get(i);
+            }
+            this.linkedList.subList(0, fixCnt).clear();
         }
-        this.linkedList.subList(0, fixCnt).clear();
+
         this.totalOwned -= fixCnt;
         return result;
     }
@@ -604,7 +613,7 @@ class ProtoQueueRcvSubQueue<T> implements ProtoRcvQueueView<T> {
     ProtoQueueRcvSubQueue(ProtoQueue<T> owner, String key) {
         this.owner = owner;
         this.key = key;
-        this.linkedList = new ArrayList<T>();
+        this.linkedList = new CursorArrayList<>();
     }
 
     ProtoQueue<T> owner() {
@@ -691,12 +700,18 @@ class ProtoQueueRcvSubQueue<T> implements ProtoRcvQueueView<T> {
             return new Object[0];
         }
 
-        Object[] result = new Object[fixCnt];
-        for (int i = 0; i < fixCnt; i++) {
-            result[i] = this.linkedList.get(i);
+        Object[] result;
+        if (fixCnt == this.linkedList.size()) {
+            result = this.linkedList.toArray();
+            this.linkedList.clear();
+        } else {
+            result = new Object[fixCnt];
+            for (int i = 0; i < fixCnt; i++) {
+                result[i] = this.linkedList.get(i);
+            }
+            this.linkedList.subList(0, fixCnt).clear();
         }
 
-        this.linkedList.subList(0, fixCnt).clear();
         this.owner.adjustOwnedSize(-fixCnt);
         this.closeIfEmpty();
         return result;
@@ -784,9 +799,8 @@ class ProtoQueueRcvSubQueue<T> implements ProtoRcvQueueView<T> {
         }
 
         if (cnt == 1) {
-            T moved = this.owner.mainTakeOne();
-            if (moved != null) {
-                this.linkedList.add(moved);
+            if (this.owner.queueSize() > 0) {
+                this.linkedList.add(this.owner.mainTakeOne());
             }
             this.closeIfEmpty();
             return;

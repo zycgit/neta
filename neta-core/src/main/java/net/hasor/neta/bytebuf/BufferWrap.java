@@ -8,6 +8,7 @@
 package net.hasor.neta.bytebuf;
 import java.nio.ByteBuffer;
 import net.hasor.cobble.ref.RecycleObjectPool;
+
 /**
  * Unpooled {@link Buffer} implementation that wraps an existing heap array or
  * {@link ByteBuffer}.
@@ -25,12 +26,12 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * @see BufferCleaner
  */
 class BufferWrap implements Buffer {
-    static final RecycleObjectPool.Recycler<BufferWrap> RECYCLER = RecycleObjectPool.recycler(//
+    static final RecycleObjectPool<BufferWrap> RECYCLER = new RecycleObjectPool<>(//
             BufferWrap::new, BufferWrap::resetState, BufferWrap::onRecycle);
-    private ByteBuffer                              buffer;
-    private byte[]                                  heapArray;   // direct heap array (avoids ByteBuffer.wrap)
-    private boolean                                 available;
-    private boolean                                 fromSmallCache;
+    private      ByteBuffer                    buffer;
+    private      byte[]                        heapArray;   // direct heap array (avoids ByteBuffer.wrap)
+    private      boolean                       available;
+    private      boolean                       fromSmallCache;
 
     // ------------------------------------------------------------------------
 

@@ -249,6 +249,8 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                         }
                         if (trailers.headerSize() > 0) {
                             this.offerResponseObject(context, dst, respCtx, trailers, channelID, printLog);
+                        } else {
+                            trailers.release();
                         }
 
                         respCtx.decoderPhase = this.nextState(respCtx);
@@ -476,7 +478,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         return respCtx.currentHeaders;
     }
 
-    private static boolean decodeHeaderLine(HttpContext.ResponseDecodeState respCtx, ByteBuf line, int nameStart, int nameLength, int valueStart, int valueLength) {
+    private static void decodeHeaderLine(HttpContext.ResponseDecodeState respCtx, ByteBuf line, int nameStart, int nameLength, int valueStart, int valueLength) {
         if (HttpCharSequences.equalsIgnoreCase(line, nameStart, nameLength, HttpHeaderNames.TRANSFER_ENCODING) && !respCtx.chunked && HttpCharSequences.containsIgnoreCase(line, valueStart, valueLength, HttpHeaderValues.CHUNKED)) {
             respCtx.chunked = true;
             respCtx.contentLength = -1;
@@ -496,8 +498,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         if (respCtx.headerEntries == null) {
             respCtx.headerEntries = new HeaderEntryStore(4);
         }
-        respCtx.headerEntries.add(DefaultHttpHeaderEntry.newOwnedEntry(line, nameStart, nameLength, valueStart, valueLength));
-        return true;
+        respCtx.headerEntries.addDecoded(line, nameStart, nameLength, valueStart, valueLength);
     }
 
     // body
@@ -593,8 +594,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
             respCtx.currentHeadersTrailer = true;
         }
         boolean complete = HttpHeaderStreamingScanner.scan(src, respCtx, this.maxHeaderSize, (state, line, nameStart, nameLength, valueStart, valueLength) -> {
-            state.currentHeaders.addHeaderEntry(DefaultHttpHeaderEntry.newOwnedEntry(line, nameStart, nameLength, valueStart, valueLength));
-            return true;
+            state.currentHeaders.addDecodedHeader(line, nameStart, nameLength, valueStart, valueLength);
         });
         if (!complete) {
             return null;
@@ -749,20 +749,16 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
 
     private static String packetSummary(HttpContext.ResponseDecodeState respCtx, HttpObject httpObject) {
         String responseSummary = responseSummary(respCtx.currentMessage);
-        if (httpObject instanceof HttpResponse) {
-            HttpResponse response = (HttpResponse) httpObject;
+        if (httpObject instanceof HttpResponse response) {
             return "version=" + response.protocolVersion().text() + " status=" + response.statusText() + " reason=" + response.reasonText();
         }
-        if (httpObject instanceof TrailerHttpHeaders) {
-            TrailerHttpHeaders trailers = (TrailerHttpHeaders) httpObject;
+        if (httpObject instanceof TrailerHttpHeaders trailers) {
             return responseSummary + " trailerCount=" + trailers.headerSize();
         }
-        if (httpObject instanceof HttpHeaders) {
-            HttpHeaders headers = (HttpHeaders) httpObject;
+        if (httpObject instanceof HttpHeaders headers) {
             return responseSummary + " headerCount=" + headers.headerSize() + " end=" + (httpObject instanceof LastHttpHeaders);
         }
-        if (httpObject instanceof HttpContent) {
-            HttpContent content = (HttpContent) httpObject;
+        if (httpObject instanceof HttpContent content) {
             int readableBytes = content.content() == null ? 0 : content.content().readableBytes();
             return responseSummary + " bytes=" + readableBytes + " end=" + (httpObject instanceof LastHttpContent);
         }

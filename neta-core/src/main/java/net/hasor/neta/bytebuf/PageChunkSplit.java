@@ -9,6 +9,7 @@ package net.hasor.neta.bytebuf;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.hasor.cobble.ref.RecycleObjectPool;
+
 /**
  * Live allocation descriptor returned by {@link PageChunkPool}.
  * <p>{@link PageChunk} models free ranges inside the buddy tree, while
@@ -29,15 +30,15 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * @see PageRange
  */
 class PageChunkSplit implements PageRange {
-    static final RecycleObjectPool.Recycler<PageChunkSplit> RECYCLER = RecycleObjectPool.recycler(//
+    static final  RecycleObjectPool<PageChunkSplit> RECYCLER  = new RecycleObjectPool<>(//
             PageChunkSplit::new, PageChunkSplit::resetState, PageChunkSplit::onRecycle);
-    private final AtomicBoolean                         available       = new AtomicBoolean(false);
-    private int                                         fromPage;
-    private int                                         toPage;
+    private final AtomicBoolean                     available = new AtomicBoolean(false);
+    private       int                               fromPage;
+    private       int                               toPage;
     // ------------------------------------------------------------------------
-    private int           capacity;
-    private PageChunkPool chunkPool;
-    private AtomicInteger refCount;
+    private       int                               capacity;
+    private       PageChunkPool                     chunkPool;
+    private       AtomicInteger                     refCount;
 
     private PageChunkSplit() {
     }

@@ -7,6 +7,7 @@
  */
 package net.hasor.neta.codec.http;
 import java.util.*;
+import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
  * Default implementation of {@link HttpHeaders} backed by plain string header entries.
@@ -48,12 +49,7 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
     @Override
     public void release() {
         if (this.releasableEntries) {
-            for (int i = 0; i < this.entries.size(); i++) {
-                DefaultHttpHeaderEntry entry = this.entries.get(i);
-                if (entry != null) {
-                    entry.release();
-                }
-            }
+            this.entries.releaseEntries();
         }
         this.entries.clear();
         this.releasableEntries = false;
@@ -87,6 +83,12 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
         }
     }
 
+    // Borrow the scanner view; the store groups ownership for all rows using it.
+    void addDecodedHeader(ByteBuf source, int nameOffset, int nameLength, int valueOffset, int valueLength) {
+        this.entries.addDecoded(source, nameOffset, nameLength, valueOffset, valueLength);
+        this.releasableEntries = true;
+    }
+
     DefaultHttpHeaders appendOrTransferHeaders(HttpHeaders headers) {
         if (headers == null || headers.headerSize() == 0) {
             return this;
@@ -105,13 +107,12 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
             return this.appendHeaders(source);
         }
 
-        this.entries.addAll(source.entries);
+        this.entries.transferFrom(source.entries);
         this.releasableEntries = true;
         if (source.isBad()) {
             this.setBadState(source.badReason());
         }
 
-        source.entries.clear();
         source.releasableEntries = false;
         return this;
     }
@@ -165,10 +166,10 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
         DefaultHttpHeaderEntry replacement;
         boolean replaced = false;
         for (int i = this.entries.size() - 1; i >= 0; i--) {
-            DefaultHttpHeaderEntry entry = this.entries.get(i);
-            if (!entry.matchesName(name)) {
+            if (!this.entries.matchesName(i, name)) {
                 continue;
             }
+            DefaultHttpHeaderEntry entry = this.entries.get(i);
 
             if (!replaced) {
                 replacement = DefaultHttpHeaderEntry.newEntry(name, value);
@@ -200,8 +201,8 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
         }
 
         for (int i = this.entries.size() - 1; i >= 0; i--) {
-            DefaultHttpHeaderEntry entry = this.entries.get(i);
-            if (entry.matchesName(name)) {
+            if (this.entries.matchesName(i, name)) {
+                DefaultHttpHeaderEntry entry = this.entries.get(i);
                 if (this.releasableEntries) {
                     entry.release();
                 }
@@ -224,16 +225,16 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
 
         String first = null;
         List<String> result = null;
-        for (DefaultHttpHeaderEntry entry : this.entries) {
-            if (entry.matchesName(name)) {
+        for (int i = 0; i < this.entries.size(); i++) {
+            if (this.entries.matchesName(i, name)) {
                 if (first == null) {
-                    first = entry.getValue();
+                    first = this.entries.getValue(i);
                 } else {
                     if (result == null) {
                         result = new ArrayList<>(4);
                         result.add(first);
                     }
-                    result.add(entry.getValue());
+                    result.add(this.entries.getValue(i));
                 }
             }
         }
@@ -246,8 +247,7 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
 
     @Override
     public String getString(String name) {
-        DefaultHttpHeaderEntry entry = this.findFirstEntry(name);
-        return entry != null ? entry.getValue() : null;
+        return this.entries.findFirstValue(name);
     }
 
     @Override
@@ -265,15 +265,12 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
 
     @Override
     public long getLong(String name, long defaultValue) {
-        if (name != null) {
-            for (DefaultHttpHeaderEntry entry : this.entries) {
-                if (entry.matchesName(name)) {
-                    try {
-                        return entry.parseLongValue();
-                    } catch (NumberFormatException e) {
-                        return defaultValue;
-                    }
-                }
+        int index = this.entries.findFirstIndex(name);
+        if (index >= 0) {
+            try {
+                return this.entries.parseLongValue(index);
+            } catch (NumberFormatException e) {
+                return defaultValue;
             }
         }
         return defaultValue;
@@ -281,14 +278,7 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
 
     @Override
     public boolean containsHeader(String name) {
-        if (name != null) {
-            for (DefaultHttpHeaderEntry entry : this.entries) {
-                if (entry.matchesName(name)) {
-                    return true;
-                }
-            }
-        }
-        return false;
+        return this.entries.findFirstIndex(name) >= 0;
     }
 
     @Override
@@ -298,8 +288,8 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
         }
 
         Set<String> result = new LinkedHashSet<>(this.entries.size());
-        for (DefaultHttpHeaderEntry entry : this.entries) {
-            result.add(entry.getName());
+        for (int i = 0; i < this.entries.size(); i++) {
+            result.add(this.entries.getName(i));
         }
 
         return Collections.unmodifiableSet(result);
@@ -311,15 +301,8 @@ public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implemen
     }
 
     DefaultHttpHeaderEntry findFirstEntry(String name) {
-        if (name != null) {
-            for (int i = 0; i < this.entries.size(); i++) {
-                DefaultHttpHeaderEntry entry = this.entries.get(i);
-                if (entry.matchesName(name)) {
-                    return entry;
-                }
-            }
-        }
-        return null;
+        int index = this.entries.findFirstIndex(name);
+        return index >= 0 ? this.entries.get(index) : null;
     }
 
     List<DefaultHttpHeaderEntry> headerEntries() {

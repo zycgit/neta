@@ -8,6 +8,7 @@
 package net.hasor.neta.codec.http.websocket;
 import net.hasor.cobble.ref.RecycleObjectPool;
 import net.hasor.neta.bytebuf.ByteBuf;
+
 /**
  * Pooled binary message chunk.
  * <p>
@@ -16,7 +17,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @version : 2026-03-15
  */
 public final class BinaryWebSocketMessage extends AbstractWebSocketMessage {
-    private static final RecycleObjectPool.Recycler<BinaryWebSocketMessage> RECYCLER = RecycleObjectPool.recycler(//
+    private static final RecycleObjectPool<BinaryWebSocketMessage> RECYCLER = new RecycleObjectPool<>(//
             BinaryWebSocketMessage::new, BinaryWebSocketMessage::resetState, BinaryWebSocketMessage::onRecycle);
 
     private BinaryWebSocketMessage() {

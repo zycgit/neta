@@ -121,6 +121,8 @@ class HttpContext {
         ByteBuf            initialLineBuffer;
         int                initialLineFeedIndex;
         byte[]             headerLineScratch;
+        ByteBuf            headerLineView;
+        int                headerLineStart;
         int                headerLineLength;
         HeaderEntryStore   headerEntries;
         private QueueByteBuf           accumulator;
@@ -235,16 +237,21 @@ class HttpContext {
 
         void releaseHeaderEntries() {
             if (this.headerEntries != null) {
-                for (DefaultHttpHeaderEntry entry : this.headerEntries) {
-                    entry.release();
-                }
+                this.headerEntries.releaseEntries();
+                this.headerEntries.clear();
                 this.headerEntries = null;
             }
         }
 
         void releaseHeaderLineScratch() {
+            ByteBuf view = this.headerLineView;
             this.headerLineScratch = null;
+            this.headerLineView = null;
+            this.headerLineStart = 0;
             this.headerLineLength = 0;
+            if (view != null) {
+                view.release();
+            }
         }
 
         void releaseInitialLine() {

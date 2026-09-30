@@ -33,9 +33,9 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * @version : 2022-11-01
  */
 class WrapByteBuffer extends AbstractByteBuf {
-    static final RecycleObjectPool.Recycler<WrapByteBuffer> RECYCLER = RecycleObjectPool.recycler(//
+    static final RecycleObjectPool<WrapByteBuffer> RECYCLER = new RecycleObjectPool<>(//
             WrapByteBuffer::new, WrapByteBuffer::resetState, WrapByteBuffer::onRecycle);
-    protected    ByteBuffer                                 target;
+    protected    ByteBuffer                        target;
 
     private WrapByteBuffer() {
     }
