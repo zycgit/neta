@@ -9,6 +9,8 @@ dependencies {
     implementation project(':neta-codec-http')
     implementation project(':nhttp-server')
     implementation "io.netty:netty-all:${property('lib.netty')}"
+
+    testImplementation "junit:junit:${property('lib.junit')}"
 }
 
 tasks.withType(JavaCompile).configureEach {

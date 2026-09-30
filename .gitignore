@@ -37,3 +37,6 @@ logs/*
 .cache-loader
 neta-doc/build/
 **/build/
+
+# Local profiler installations
+performance/tools/
